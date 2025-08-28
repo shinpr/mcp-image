@@ -45,6 +45,50 @@ export class FileOperationError extends AppError {
 }
 
 /**
+ * Error for Gemini API failures
+ */
+export class GeminiAPIError extends AppError {
+  readonly code = 'GEMINI_API_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string,
+    public readonly statusCode?: number
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * Error for network-related failures
+ */
+export class NetworkError extends AppError {
+  readonly code = 'NETWORK_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string,
+    public readonly cause?: Error
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * Error for configuration failures
+ */
+export class ConfigError extends AppError {
+  readonly code = 'CONFIG_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string
+  ) {
+    super(message)
+  }
+}
+
+/**
  * Result type for operations that may fail
  */
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }
