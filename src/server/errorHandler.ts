@@ -78,7 +78,12 @@ function convertErrorToStructured(error: Error): {
   code: string
   message: string
   suggestion: string
+  timestamp: string
 } {
+  const baseError = {
+    timestamp: new Date().toISOString(),
+  }
+
   if (
     error instanceof InputValidationError ||
     error instanceof FileOperationError ||
@@ -87,6 +92,7 @@ function convertErrorToStructured(error: Error): {
     error instanceof ConfigError
   ) {
     return {
+      ...baseError,
       code: error.code,
       message: error.message,
       suggestion: error.suggestion,
@@ -95,6 +101,7 @@ function convertErrorToStructured(error: Error): {
 
   // Handle unknown errors
   return {
+    ...baseError,
     code: 'INTERNAL_ERROR',
     message: error.message || 'An unknown error occurred',
     suggestion: 'Contact system administrator',

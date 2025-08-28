@@ -17,7 +17,6 @@ import {
   type NetworkError,
 } from '../utils/errors'
 import { Logger } from '../utils/logger'
-import { FileManager } from './fileManager'
 import { validateImageFile, validatePrompt } from './inputValidator'
 import { PerformanceManager } from './performanceManager'
 import { URLExtractor } from './urlExtractor'
@@ -80,6 +79,11 @@ export interface ImageGeneratorParams {
   enableUrlContext?: boolean
   inputImagePath?: string
   outputPath?: string
+  outputFormat?: string
+  aspectRatio?: 'square' | 'portrait' | 'landscape'
+  guidance?: number
+  seed?: number
+  outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
   // Gemini 2.5 Flash Image new feature parameters
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
@@ -118,11 +122,11 @@ export class ImageGenerator {
     if (!validationResult.success) {
       return Err(validationResult.error)
     }
+    const validatedParams = validationResult.data
 
     // Step 2: Initialize metadata tracking variables
     let contextMethod: ContextMethod = 'prompt_only'
     let extractedUrls: string[] = []
-    let urlContextUsed = false
     let finalPrompt = params.prompt
 
     // Step 3: URL Context processing (if enabled)
@@ -130,7 +134,6 @@ export class ImageGenerator {
     finalPrompt = urlContextResult.finalPrompt
     contextMethod = urlContextResult.contextMethod
     extractedUrls = urlContextResult.extractedUrls
-    urlContextUsed = urlContextResult.urlContextUsed
     const fallbackReason = urlContextResult.fallbackReason
     const retryCount = urlContextResult.retryCount
 
@@ -149,11 +152,11 @@ export class ImageGenerator {
       processingTime,
       contextMethod,
       extractedUrls,
-      urlContextUsed,
-      params.enableUrlContext || false,
+      urlContextResult.urlContextUsed,
+      validatedParams.enableUrlContext || false,
       fallbackReason,
       retryCount,
-      params
+      validatedParams
     )
 
     return Ok({
@@ -171,7 +174,7 @@ export class ImageGenerator {
     finalPrompt: string
     contextMethod: ContextMethod
     extractedUrls: string[]
-    urlContextUsed: boolean
+    urlContextUsed: boolean | undefined
     fallbackReason: string | undefined
     retryCount: number | undefined
   }> {
@@ -179,7 +182,7 @@ export class ImageGenerator {
     let finalPrompt = params.prompt
     let contextMethod: ContextMethod = 'prompt_only'
     let extractedUrls: string[] = []
-    let urlContextUsed = false
+    let urlContextUsed: boolean | undefined = undefined
     let fallbackReason: string | undefined
     let retryCount: number | undefined
 
@@ -288,6 +291,22 @@ export class ImageGenerator {
     // Return validated parameters in GenerateImageParams format
     const validatedParams: GenerateImageParams = {
       prompt: promptResult.data,
+      ...(params.inputImagePath && { inputImagePath: params.inputImagePath }),
+      ...(params.outputPath && { outputPath: params.outputPath }),
+      ...(params.outputFormat && { outputFormat: params.outputFormat }),
+      ...(params.enableUrlContext !== undefined && { enableUrlContext: params.enableUrlContext }),
+      ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
+      ...(params.guidance !== undefined && { guidance: params.guidance }),
+      ...(params.seed !== undefined && { seed: params.seed }),
+      ...(params.outputMimeType && { outputMimeType: params.outputMimeType }),
+      // New feature parameters
+      ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
+      ...(params.maintainCharacterConsistency !== undefined && {
+        maintainCharacterConsistency: params.maintainCharacterConsistency,
+      }),
+      ...(params.useWorldKnowledge !== undefined && {
+        useWorldKnowledge: params.useWorldKnowledge,
+      }),
     }
 
     return Ok(validatedParams)
@@ -346,11 +365,11 @@ export class ImageGenerator {
     processingTime: number,
     contextMethod: ContextMethod,
     extractedUrls: string[],
-    urlContextUsed: boolean,
+    urlContextUsed: boolean | undefined,
     urlContextEnabled: boolean,
     fallbackReason: string | undefined,
     retryCount: number | undefined,
-    params: ImageGeneratorParams
+    params: GenerateImageParams
   ): GenerationMetadata {
     const metadata: GenerationMetadata = {
       model: this.modelName,
@@ -364,8 +383,8 @@ export class ImageGenerator {
       metadata.extractedUrls = extractedUrls
     }
 
-    // Include urlContextUsed when URL context was enabled and URLs were found
-    if (urlContextEnabled && extractedUrls.length > 0) {
+    // Include urlContextUsed when URL context processing was attempted
+    if (urlContextEnabled && extractedUrls.length > 0 && urlContextUsed !== undefined) {
       metadata.urlContextUsed = urlContextUsed
     }
 
@@ -413,7 +432,6 @@ export class ImageGenerator {
 export class OptimizedImageGenerator extends ImageGenerator {
   private performanceManager = new PerformanceManager()
   private concurrencyManager = ConcurrencyManager.getInstance()
-  private fileManager = new FileManager()
   private logger = new Logger()
 
   /**
@@ -475,12 +493,7 @@ export class OptimizedImageGenerator extends ImageGenerator {
       tracker.checkpoint('processing-end')
       if (!processedResult.success) return Err(processedResult.error)
 
-      // Phase 5: Optimized file operations
-      const fileResult = await this.optimizedFileSave(processedResult.data, params.outputPath)
-      tracker.checkpoint('file-end')
-      if (!fileResult.success) return Err(fileResult.error)
-
-      // Phase 6: Performance analysis and metadata generation
+      // Phase 5: Performance analysis and metadata generation
       const metrics = tracker.finish()
       const analysis = PerformanceManager.analyzeBottlenecks(metrics)
 
@@ -501,14 +514,13 @@ export class OptimizedImageGenerator extends ImageGenerator {
         params.enableUrlContext || false,
         fallbackReason,
         retryCount,
-        params
+        validationResult.data
       )
 
       const enhancedMetadata: GenerationMetadata = {
         ...baseMetadata,
         performance: {
-          internalProcessingTime:
-            metrics.validationTime + metrics.processingTime + metrics.fileOperationTime,
+          internalProcessingTime: metrics.validationTime + metrics.processingTime,
           totalTime: metrics.totalTime,
           memoryPeak: metrics.memoryUsage.peak,
           withinLimits: PerformanceManager.isWithinLimits(metrics),
@@ -556,6 +568,22 @@ export class OptimizedImageGenerator extends ImageGenerator {
     // Return validated parameters
     const validatedParams: GenerateImageParams = {
       prompt: params.prompt,
+      ...(params.inputImagePath && { inputImagePath: params.inputImagePath }),
+      ...(params.outputPath && { outputPath: params.outputPath }),
+      ...(params.outputFormat && { outputFormat: params.outputFormat }),
+      ...(params.enableUrlContext !== undefined && { enableUrlContext: params.enableUrlContext }),
+      ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
+      ...(params.guidance !== undefined && { guidance: params.guidance }),
+      ...(params.seed !== undefined && { seed: params.seed }),
+      ...(params.outputMimeType && { outputMimeType: params.outputMimeType }),
+      // New feature parameters
+      ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
+      ...(params.maintainCharacterConsistency !== undefined && {
+        maintainCharacterConsistency: params.maintainCharacterConsistency,
+      }),
+      ...(params.useWorldKnowledge !== undefined && {
+        useWorldKnowledge: params.useWorldKnowledge,
+      }),
     }
 
     return Ok(validatedParams)
@@ -615,30 +643,6 @@ export class OptimizedImageGenerator extends ImageGenerator {
     // For now, return the data as-is
     // Future optimizations: streaming processing, memory-efficient transformations
     return Ok(data)
-  }
-
-  /**
-   * Optimized file save operations
-   * @param data Image data to save
-   * @param outputPath Optional output path
-   * @returns File save result
-   */
-  private async optimizedFileSave(
-    data: Buffer,
-    outputPath?: string
-  ): Promise<Result<string, FileOperationError>> {
-    const finalPath = outputPath || this.generateDefaultPath()
-    return this.fileManager.saveImage(data, finalPath, 'PNG')
-  }
-
-  /**
-   * Generate default output path
-   * @returns Default file path
-   */
-  private generateDefaultPath(): string {
-    const outputDir = process.env['IMAGE_OUTPUT_DIR'] || './output'
-    const fileName = this.fileManager.generateFileName()
-    return `${outputDir}/${fileName}`
   }
 
   /**

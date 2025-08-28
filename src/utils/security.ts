@@ -13,8 +13,9 @@ import { SecurityError } from './errors'
 export class SecurityManager {
   private readonly allowedBasePaths = [
     process.cwd(),
-    path.resolve('./output'),
+    path.resolve(process.env['IMAGE_OUTPUT_DIR'] || './output'),
     path.resolve('./temp'),
+    path.resolve('./tmp'),
     '/tmp',
   ]
 

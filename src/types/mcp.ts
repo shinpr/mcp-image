@@ -13,12 +13,12 @@
 export interface GenerateImageParams {
   /** Prompt for image generation */
   prompt: string
-  /** Output path (auto-generated if omitted) */
-  outputPath?: string
   /** Image path to edit (for image editing) */
   inputImagePath?: string
-  /** Output format */
-  outputFormat?: 'PNG' | 'JPEG' | 'WebP'
+  /** Output path for generated image */
+  outputPath?: string
+  /** Output format for generated image */
+  outputFormat?: string
   /** Enable URL context extraction and processing (default: false) */
   enableUrlContext?: boolean
 
@@ -29,6 +29,16 @@ export interface GenerateImageParams {
   maintainCharacterConsistency?: boolean
   /** Use world knowledge integration for more accurate context (default: false) */
   useWorldKnowledge?: boolean
+
+  // Additional Gemini 2.5 Flash Image parameters
+  /** Aspect ratio for the generated image */
+  aspectRatio?: 'square' | 'portrait' | 'landscape'
+  /** Guidance scale (default: auto) */
+  guidance?: number
+  /** Random seed for reproducible results */
+  seed?: number
+  /** Output MIME type */
+  outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
 }
 
 /**
@@ -37,8 +47,8 @@ export interface GenerateImageParams {
 export interface GenerateImageResult {
   /** Success flag */
   success: boolean
-  /** Path of the generated image */
-  imagePath?: string
+  /** Base64 encoded image data */
+  imageData?: string
   /** Error message */
   error?: string
   /** Execution time (milliseconds) */

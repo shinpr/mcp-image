@@ -24,8 +24,11 @@ interface StructuredLogEntry {
 export class Logger {
   private readonly sensitivePatterns = [
     /GEMINI_API_KEY=([^\s]+)/gi,
-    /api[_-]key[^\s]*[:=]\s*([^\s]+)/gi,
+    /api[_-]?key[^\s]*[:=]\s*([^\s]+)/gi,
     /password[^\s]*[:=]\s*([^\s]+)/gi,
+    /bearer\s+([a-zA-Z0-9\-._~+/]+=*)/gi,
+    /secret[^\s]*[:=]\s*([^\s]+)/gi,
+    /token[^\s]*[:=]\s*([^\s]+)/gi,
   ]
 
   private readonly urlPatterns = [
@@ -40,11 +43,13 @@ export class Logger {
   ]
 
   private readonly keyBasedSensitivePatterns = [
-    /api_?key/i,
+    /api[_-]?key/i,
+    /gemini[_-]?api[_-]?key/i,
     /secret/i,
     /password/i,
     /token/i,
     /credential/i,
+    /bearer/i,
   ]
 
   private currentTraceId?: string
@@ -153,6 +158,14 @@ export class Logger {
     for (const pattern of this.sensitivePatterns) {
       sanitized = sanitized.replace(pattern, (match, group1) => match.replace(group1, '[REDACTED]'))
     }
+
+    // Additional broad filter for API key-like strings in text
+    // Remove any reference to API key terms even in plain text
+    sanitized = sanitized.replace(/\bapi[_-]?key\b/gi, '[REDACTED]')
+    sanitized = sanitized.replace(/\bgemini[_-]?api[_-]?key\b/gi, '[REDACTED]')
+
+    // Remove long alphanumeric strings that might be API keys or secrets
+    sanitized = sanitized.replace(/\b[A-Za-z0-9]{20,}\b/g, '[REDACTED]')
 
     // Redact URLs with specific label
     for (const pattern of this.urlPatterns) {

@@ -63,7 +63,20 @@ export interface GenerationMetadata {
 }
 
 /**
- * Parameters for image generation
+ * Parameters for MCP server image generation request (includes file paths)
+ */
+export interface McpGenerateImageParams {
+  prompt: string
+  inputImagePath?: string
+  outputFormat?: string
+  // Gemini 2.5 Flash Image new feature parameters
+  blendImages?: boolean
+  maintainCharacterConsistency?: boolean
+  useWorldKnowledge?: boolean
+}
+
+/**
+ * Parameters for Gemini API image generation (with processed data)
  */
 export interface GenerateImageParams {
   prompt: string

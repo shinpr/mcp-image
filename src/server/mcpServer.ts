@@ -4,7 +4,6 @@
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { createGeminiClient } from '../api/geminiClient'
-import { FileManager } from '../business/fileManager'
 import { ImageGenerator } from '../business/imageGenerator'
 import { validateGenerateImageParams } from '../business/inputValidator'
 import { ResponseBuilder } from '../business/responseBuilder'
@@ -19,7 +18,7 @@ import { ErrorHandler } from './errorHandler'
 const DEFAULT_CONFIG: MCPServerConfig = {
   name: 'gemini-image-generator-mcp-server',
   version: '0.1.0',
-  defaultOutputDir: './output',
+  defaultOutputDir: '', // No longer used, kept for backward compatibility
 }
 
 /**
@@ -70,18 +69,9 @@ export class MCPServerImpl {
                 type: 'string' as const,
                 description: 'The prompt for image generation',
               },
-              outputPath: {
-                type: 'string' as const,
-                description: 'Optional output path for the generated image',
-              },
               inputImagePath: {
                 type: 'string' as const,
                 description: 'Optional input image path for image editing',
-              },
-              outputFormat: {
-                type: 'string' as const,
-                enum: ['PNG', 'JPEG', 'WebP'],
-                description: 'Output image format',
               },
             },
             required: ['prompt'],
@@ -120,9 +110,7 @@ export class MCPServerImpl {
     const result = await ErrorHandler.wrapWithResultType(async () => {
       this.logger.info('image-generation', 'Processing image generation request', {
         promptLength: params.prompt?.length || 0,
-        outputPath: params.outputPath,
         inputImagePath: params.inputImagePath,
-        outputFormat: params.outputFormat,
       })
 
       // Step 1: Validate input parameters
@@ -144,33 +132,38 @@ export class MCPServerImpl {
       }
 
       const imageGenerator = new ImageGenerator(geminiClientResult.data)
-      const fileManager = new FileManager()
       const responseBuilder = new ResponseBuilder()
 
-      // Step 4: Generate image
+      // Step 4: Generate image with all parameters
       const generationResult = await imageGenerator.generateImage({
         prompt: params.prompt,
+        ...(params.inputImagePath !== undefined && { inputImagePath: params.inputImagePath }),
+        ...(params.outputPath !== undefined && { outputPath: params.outputPath }),
+        ...(params.outputFormat !== undefined && { outputFormat: params.outputFormat }),
+        ...(params.aspectRatio !== undefined && { aspectRatio: params.aspectRatio }),
+        ...(params.guidance !== undefined && { guidance: params.guidance }),
+        ...(params.seed !== undefined && { seed: params.seed }),
+        ...(params.outputMimeType !== undefined && { outputMimeType: params.outputMimeType }),
+        ...(params.enableUrlContext !== undefined && { enableUrlContext: params.enableUrlContext }),
+        // Gemini 2.5 Flash Image new feature parameters
+        ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
+        ...(params.maintainCharacterConsistency !== undefined && {
+          maintainCharacterConsistency: params.maintainCharacterConsistency,
+        }),
+        ...(params.useWorldKnowledge !== undefined && {
+          useWorldKnowledge: params.useWorldKnowledge,
+        }),
       })
       if (!generationResult.success) {
         throw generationResult.error
       }
 
-      // Step 5: Save image to file
-      const outputPath =
-        params.outputPath || `${this.config.defaultOutputDir}/${fileManager.generateFileName()}`
-
-      const saveResult = await fileManager.saveImage(generationResult.data.imageData, outputPath)
-      if (!saveResult.success) {
-        throw saveResult.error
-      }
-
       this.logger.info('image-generation', 'Image generation completed successfully', {
-        imagePath: saveResult.data,
         processingTime: generationResult.data.metadata.processingTime,
       })
 
-      // Step 6: Build structured response
-      return responseBuilder.buildSuccessResponse(generationResult.data, saveResult.data)
+      // Step 5: Build structured response with base64 data
+      return responseBuilder.buildSuccessResponse(generationResult.data)
     }, 'image-generation')
 
     // Handle the result

@@ -21,9 +21,10 @@ describe('ResponseBuilder', () => {
   })
 
   describe('buildSuccessResponse', () => {
-    it('should create structured content response with correct format', () => {
+    it('should create structured content response with base64 data URI', () => {
+      const testImageData = Buffer.from('fake-image-data')
       const generationResult: GenerationResult = {
-        imageData: Buffer.from('fake-image-data'),
+        imageData: testImageData,
         metadata: {
           model: 'gemini-2.5-flash-image-preview',
           processingTime: 1250,
@@ -31,9 +32,8 @@ describe('ResponseBuilder', () => {
           timestamp: '2025-08-28T12:00:00Z',
         },
       }
-      const filePath = '/absolute/path/to/image.png'
 
-      const response = responseBuilder.buildSuccessResponse(generationResult, filePath)
+      const response = responseBuilder.buildSuccessResponse(generationResult)
 
       expect(response.isError).toBe(false)
       expect(response.content).toHaveLength(1)
@@ -41,36 +41,37 @@ describe('ResponseBuilder', () => {
 
       const contentData = JSON.parse(response.content[0].text)
       expect(contentData.type).toBe('resource')
-      expect(contentData.resource.uri).toBe(`file://${filePath}`)
-      expect(contentData.resource.name).toBe('image.png')
+
+      // Verify data URI format
+      const expectedBase64 = testImageData.toString('base64')
+      expect(contentData.resource.uri).toBe(`data:image/png;base64,${expectedBase64}`)
+
+      // Verify name includes timestamp
+      expect(contentData.resource.name).toMatch(/^image-\d+\.png$/)
       expect(contentData.resource.mimeType).toBe('image/png')
       expect(contentData.metadata).toEqual(generationResult.metadata)
     })
 
-    it('should set correct MIME type for different image formats', () => {
+    it('should encode large image data correctly', () => {
+      // Test with larger image data to ensure proper base64 encoding
+      const largeImageData = Buffer.from(new Array(1000).fill('test-data').join(''))
       const generationResult: GenerationResult = {
-        imageData: Buffer.from('fake-image-data'),
+        imageData: largeImageData,
         metadata: {
           model: 'gemini-2.5-flash-image-preview',
-          processingTime: 1250,
-          contextMethod: 'prompt_only',
+          processingTime: 2000,
+          contextMethod: 'url_context',
           timestamp: '2025-08-28T12:00:00Z',
         },
       }
 
-      const jpegResponse = responseBuilder.buildSuccessResponse(
-        generationResult,
-        '/path/image.jpeg'
-      )
-      const jpegContent = JSON.parse(jpegResponse.content[0].text)
-      expect(jpegContent.resource.mimeType).toBe('image/jpeg')
+      const response = responseBuilder.buildSuccessResponse(generationResult)
+      const contentData = JSON.parse(response.content[0].text)
 
-      const webpResponse = responseBuilder.buildSuccessResponse(
-        generationResult,
-        '/path/image.webp'
-      )
-      const webpContent = JSON.parse(webpResponse.content[0].text)
-      expect(webpContent.resource.mimeType).toBe('image/webp')
+      // Verify base64 encoding is correct
+      const expectedBase64 = largeImageData.toString('base64')
+      expect(contentData.resource.uri).toBe(`data:image/png;base64,${expectedBase64}`)
+      expect(contentData.resource.mimeType).toBe('image/png')
     })
   })
 

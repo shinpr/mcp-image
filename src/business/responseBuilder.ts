@@ -3,7 +3,6 @@
  * Converts generation results and errors into MCP-compatible response format
  */
 
-import * as path from 'node:path'
 import type { McpToolResponse, StructuredContent, StructuredError } from '../types/mcp'
 import {
   type AppError,
@@ -22,12 +21,6 @@ const MIME_TYPES = {
   WEBP: 'image/webp',
 } as const
 
-const FILE_EXTENSIONS = {
-  PNG: ['.png'],
-  JPEG: ['.jpg', '.jpeg'],
-  WEBP: ['.webp'],
-} as const
-
 const DEFAULT_MIME_TYPE = MIME_TYPES.PNG
 const UNKNOWN_ERROR_CODE = 'UNKNOWN_ERROR'
 const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the problem persists'
@@ -38,20 +31,23 @@ const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the pro
  */
 export class ResponseBuilder {
   /**
-   * Builds a successful structured content response
-   * @param generationResult Result from image generation
-   * @param filePath Absolute path to the saved image file
+   * Builds a successful structured content response with base64 data URI
+   * @param generationResult Result from image generation containing image data
    * @returns MCP tool response with structured content
    */
-  buildSuccessResponse(generationResult: GenerationResult, filePath: string): McpToolResponse {
-    const fileName = path.basename(filePath)
-    const mimeType = this.getMimeTypeFromPath(filePath)
+  buildSuccessResponse(generationResult: GenerationResult): McpToolResponse {
+    // Determine MIME type from metadata or default to PNG
+    const mimeType = this.getMimeTypeFromMetadata(generationResult.metadata)
+
+    // Convert image buffer to base64 data URI
+    const base64Data = generationResult.imageData.toString('base64')
+    const dataUri = `data:${mimeType};base64,${base64Data}`
 
     const structuredContent: StructuredContent = {
       type: 'resource',
       resource: {
-        uri: `file://${filePath}`,
-        name: fileName,
+        uri: dataUri,
+        name: `image-${Date.now()}.${this.getExtensionFromMimeType(mimeType)}`,
         mimeType,
       },
       metadata: generationResult.metadata,
@@ -90,24 +86,31 @@ export class ResponseBuilder {
   }
 
   /**
-   * Determines MIME type based on file extension
-   * @param filePath Path to the image file
+   * Determines MIME type from generation metadata
+   * @param metadata Generation metadata that might contain format info
    * @returns MIME type string
    */
-  private getMimeTypeFromPath(filePath: string): string {
-    const ext = path.extname(filePath).toLowerCase()
-
-    if (FILE_EXTENSIONS.PNG.includes(ext as '.png')) {
-      return MIME_TYPES.PNG
-    }
-    if (FILE_EXTENSIONS.JPEG.includes(ext as '.jpg' | '.jpeg')) {
-      return MIME_TYPES.JPEG
-    }
-    if (FILE_EXTENSIONS.WEBP.includes(ext as '.webp')) {
-      return MIME_TYPES.WEBP
-    }
-
+  private getMimeTypeFromMetadata(_metadata: GenerationResult['metadata']): string {
+    // For now, default to PNG. In future, could read from metadata if available
     return DEFAULT_MIME_TYPE
+  }
+
+  /**
+   * Gets file extension from MIME type
+   * @param mimeType MIME type string
+   * @returns File extension without dot
+   */
+  private getExtensionFromMimeType(mimeType: string): string {
+    switch (mimeType) {
+      case MIME_TYPES.PNG:
+        return 'png'
+      case MIME_TYPES.JPEG:
+        return 'jpg'
+      case MIME_TYPES.WEBP:
+        return 'webp'
+      default:
+        return 'png'
+    }
   }
 
   /**
@@ -119,7 +122,12 @@ export class ResponseBuilder {
     code: string
     message: string
     suggestion: string
+    timestamp: string
   } {
+    const baseError = {
+      timestamp: new Date().toISOString(),
+    }
+
     if (
       error instanceof InputValidationError ||
       error instanceof FileOperationError ||
@@ -128,6 +136,7 @@ export class ResponseBuilder {
       error instanceof ConfigError
     ) {
       return {
+        ...baseError,
         code: error.code,
         message: error.message,
         suggestion: error.suggestion,
@@ -136,6 +145,7 @@ export class ResponseBuilder {
 
     // Handle unknown errors
     return {
+      ...baseError,
       code: UNKNOWN_ERROR_CODE,
       message: error.message || 'An unknown error occurred',
       suggestion: DEFAULT_ERROR_SUGGESTION,

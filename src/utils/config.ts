@@ -44,7 +44,7 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     return Err(
       new ConfigError(
         'GEMINI_API_KEY appears to be invalid - must be at least 10 characters',
-        'Verify your Google AI API key is correct and complete'
+        'Set the GEMINI_API_KEY environment variable to your valid Google AI API key'
       )
     )
   }

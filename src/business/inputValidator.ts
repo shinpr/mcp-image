@@ -118,6 +118,54 @@ export function validateOutputFormat(format?: string): Result<string, InputValid
 }
 
 /**
+ * Validates output path for generated image
+ */
+export function validateOutputPath(
+  outputPath?: string
+): Result<string | undefined, InputValidationError> {
+  if (!outputPath) {
+    return Ok(undefined)
+  }
+
+  // Check for path traversal attacks
+  if (outputPath.includes('../') || outputPath.includes('..\\')) {
+    return Err(
+      new InputValidationError(
+        'Path traversal detected in output path',
+        'Please use a safe output path without "../" or "..\\" sequences'
+      )
+    )
+  }
+
+  // Check for null bytes
+  if (outputPath.includes('\0')) {
+    return Err(
+      new InputValidationError(
+        'Null bytes detected in output path',
+        'Please use a valid file path without null byte characters'
+      )
+    )
+  }
+
+  // Validate output file extension
+  const supportedExtensions = ['.png', '.jpg', '.jpeg', '.webp']
+  const hasValidExtension = supportedExtensions.some((ext) =>
+    outputPath.toLowerCase().endsWith(ext)
+  )
+
+  if (!hasValidExtension) {
+    return Err(
+      new InputValidationError(
+        `Invalid output format: ${outputPath}. Supported extensions: ${supportedExtensions.join(', ')}`,
+        `Please use a valid file extension (${supportedExtensions.join(', ')}) for the output path`
+      )
+    )
+  }
+
+  return Ok(outputPath)
+}
+
+/**
  * Validates new Gemini 2.5 Flash Image feature parameters
  */
 export function validateNewFeatureParams(
@@ -175,6 +223,12 @@ export function validateGenerateImageParams(
   const imageFileResult = validateImageFile(params.inputImagePath)
   if (!imageFileResult.success) {
     return Err(imageFileResult.error)
+  }
+
+  // Validate output path if provided
+  const outputPathResult = validateOutputPath(params.outputPath)
+  if (!outputPathResult.success) {
+    return Err(outputPathResult.error)
   }
 
   // Validate output format
