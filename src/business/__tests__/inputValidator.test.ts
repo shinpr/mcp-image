@@ -17,8 +17,8 @@ describe('inputValidator', () => {
       const result = validatePrompt(emptyPrompt)
 
       // Assert
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
         expect(result.error.message).toContain('Prompt must be between 1 and 4000 characters')
       }
@@ -32,8 +32,8 @@ describe('inputValidator', () => {
       const result = validatePrompt(longPrompt)
 
       // Assert
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
         expect(result.error.message).toContain('Prompt must be between 1 and 4000 characters')
       }
@@ -47,9 +47,9 @@ describe('inputValidator', () => {
       const result = validatePrompt(validPrompt)
 
       // Assert
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe(validPrompt)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(validPrompt)
       }
     })
 
@@ -61,9 +61,9 @@ describe('inputValidator', () => {
       const result = validatePrompt(boundaryPrompt)
 
       // Assert
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe(boundaryPrompt)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(boundaryPrompt)
       }
     })
 
@@ -75,9 +75,9 @@ describe('inputValidator', () => {
       const result = validatePrompt(boundaryPrompt)
 
       // Assert
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe(boundaryPrompt)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(boundaryPrompt)
       }
     })
   })
@@ -91,8 +91,8 @@ describe('inputValidator', () => {
       const result = validateImageFile(bmpFilePath)
 
       // Assert
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
         expect(result.error.message).toContain('Unsupported file format')
         expect(result.error.message).toContain('PNG')
@@ -109,8 +109,8 @@ describe('inputValidator', () => {
       const result = validateImageFile(nonExistentFile)
 
       // Assert
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.code).toBe('FILE_OPERATION_ERROR')
         expect(result.error.message).toContain('File not found')
       }
@@ -121,9 +121,9 @@ describe('inputValidator', () => {
       const result = validateImageFile(undefined)
 
       // Assert
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBeNull()
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
       }
     })
 
@@ -144,8 +144,8 @@ describe('inputValidator', () => {
       const result = validateOutputFormat(invalidFormat)
 
       // Assert
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
         expect(result.error.message).toContain('Invalid output format')
         expect(result.error.message).toContain('PNG')
@@ -159,9 +159,9 @@ describe('inputValidator', () => {
       const result = validateOutputFormat(undefined)
 
       // Assert
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe('PNG')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('PNG')
       }
     })
 
@@ -173,9 +173,9 @@ describe('inputValidator', () => {
         const result = validateOutputFormat(format)
 
         // Assert
-        expect(result.ok).toBe(true)
-        if (result.ok) {
-          expect(result.value).toBe(format)
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data).toBe(format)
         }
       }
     })
@@ -193,8 +193,8 @@ describe('inputValidator', () => {
       const result = validateGenerateImageParams(invalidParams)
 
       // Assert
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.message).toContain('Prompt must be between 1 and 4000 characters')
       }
     })
@@ -210,9 +210,9 @@ describe('inputValidator', () => {
       const result = validateGenerateImageParams(validParams)
 
       // Assert
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toEqual(validParams)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual(validParams)
       }
     })
   })
