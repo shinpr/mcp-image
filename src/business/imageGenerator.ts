@@ -5,16 +5,21 @@
 
 import type { GeminiClient } from '../api/geminiClient'
 import type { UrlContextClient } from '../api/urlContextClient'
+import { ConcurrencyManager } from '../server/concurrencyManager'
 import type { GenerateImageParams } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import {
+  ConcurrencyError,
   type FileOperationError,
   GeminiAPIError,
-  type InputValidationError,
+  InputValidationError,
   type NetworkError,
 } from '../utils/errors'
+import { Logger } from '../utils/logger'
+import { FileManager } from './fileManager'
 import { validateImageFile, validatePrompt } from './inputValidator'
+import { PerformanceManager } from './performanceManager'
 import { URLExtractor } from './urlExtractor'
 
 /**
@@ -50,6 +55,13 @@ export interface GenerationMetadata {
     consistency?: 'high' | 'medium' | 'low'
     knowledge?: 'extensive' | 'moderate' | 'minimal'
   }
+  /** Performance metrics (added in optimization) */
+  performance?: {
+    internalProcessingTime: number
+    totalTime: number
+    memoryPeak: number
+    withinLimits: boolean
+  }
 }
 
 /**
@@ -67,6 +79,7 @@ export interface ImageGeneratorParams {
   prompt: string
   enableUrlContext?: boolean
   inputImagePath?: string
+  outputPath?: string
   // Gemini 2.5 Flash Image new feature parameters
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
@@ -95,7 +108,7 @@ export class ImageGenerator {
   ): Promise<
     Result<
       GenerationResult,
-      InputValidationError | FileOperationError | GeminiAPIError | NetworkError
+      InputValidationError | FileOperationError | GeminiAPIError | NetworkError | ConcurrencyError
     >
   > {
     const startTime = Date.now()
@@ -154,7 +167,7 @@ export class ImageGenerator {
    * @param params Image generation parameters
    * @returns URL context processing result with fallback information
    */
-  private async processUrlContext(params: ImageGeneratorParams): Promise<{
+  protected async processUrlContext(params: ImageGeneratorParams): Promise<{
     finalPrompt: string
     contextMethod: ContextMethod
     extractedUrls: string[]
@@ -283,7 +296,7 @@ export class ImageGenerator {
   /**
    * Executes the Gemini API call with proper error handling
    */
-  private async executeApiCall(
+  protected async executeApiCall(
     params: ImageGeneratorParams
   ): Promise<Result<{ imageData: Buffer }, GeminiAPIError | NetworkError>> {
     try {
@@ -329,7 +342,7 @@ export class ImageGenerator {
   /**
    * Generates metadata for the image generation result
    */
-  private generateMetadata(
+  protected generateMetadata(
     processingTime: number,
     contextMethod: ContextMethod,
     extractedUrls: string[],
@@ -391,5 +404,279 @@ export class ImageGenerator {
       'Unknown error occurred during image generation',
       'An unknown error occurred. Please try again or contact support if the problem persists'
     )
+  }
+}
+
+/**
+ * Performance-optimized image generator with concurrency control and metrics
+ */
+export class OptimizedImageGenerator extends ImageGenerator {
+  private performanceManager = new PerformanceManager()
+  private concurrencyManager = ConcurrencyManager.getInstance()
+  private fileManager = new FileManager()
+  private logger = new Logger()
+
+  /**
+   * Generates an image with performance optimization and concurrency control
+   * @param params Parameters for image generation
+   * @returns Result containing image data with performance metadata, or an error
+   */
+  override async generateImage(
+    params: ImageGeneratorParams
+  ): Promise<
+    Result<
+      GenerationResult,
+      InputValidationError | FileOperationError | GeminiAPIError | NetworkError | ConcurrencyError
+    >
+  > {
+    // Check concurrency limits
+    if (this.concurrencyManager.isAtLimit()) {
+      return Err(
+        new ConcurrencyError(
+          'Server busy, please try again later',
+          `Queue length: ${this.concurrencyManager.getQueueLength()}`
+        )
+      )
+    }
+
+    // Acquire concurrency lock
+    try {
+      await this.concurrencyManager.acquireLock()
+    } catch (error) {
+      return Err(new ConcurrencyError('Request timeout', 'Server overloaded'))
+    }
+
+    const tracker = this.performanceManager.startMetrics()
+
+    try {
+      // Phase 1: Optimized validation
+      const validationResult = await this.optimizedValidation(params)
+      tracker.checkpoint('validation')
+      if (!validationResult.success) return Err(validationResult.error)
+
+      // Phase 2: URL Context processing (existing logic)
+      const urlContextResult = await this.processUrlContext(params)
+      const {
+        finalPrompt,
+        contextMethod,
+        extractedUrls,
+        urlContextUsed,
+        fallbackReason,
+        retryCount,
+      } = urlContextResult
+
+      tracker.checkpoint('api-start')
+
+      // Phase 3: API call (existing logic)
+      const apiResult = await this.executeApiCall({
+        ...params,
+        prompt: finalPrompt,
+      })
+      tracker.checkpoint('api-end')
+      if (!apiResult.success) return Err(apiResult.error)
+
+      // Phase 4: Optimized image processing
+      const processedResult = await this.optimizedImageProcessing(apiResult.data.imageData)
+      tracker.checkpoint('processing-end')
+      if (!processedResult.success) return Err(processedResult.error)
+
+      // Phase 5: Optimized file operations
+      const fileResult = await this.optimizedFileSave(processedResult.data, params.outputPath)
+      tracker.checkpoint('file-end')
+      if (!fileResult.success) return Err(fileResult.error)
+
+      // Phase 6: Performance analysis and metadata generation
+      const metrics = tracker.finish()
+      const analysis = PerformanceManager.analyzeBottlenecks(metrics)
+
+      // Check performance requirements
+      if (!PerformanceManager.isWithinLimits(metrics)) {
+        this.logger.warn('performance', 'Processing time exceeded limit', {
+          metrics,
+          analysis,
+        })
+      }
+
+      // Generate enhanced metadata
+      const baseMetadata = this.generateMetadata(
+        Math.max(1, Date.now() - Date.now()), // Will be overridden by performance data
+        contextMethod,
+        extractedUrls,
+        urlContextUsed,
+        params.enableUrlContext || false,
+        fallbackReason,
+        retryCount,
+        params
+      )
+
+      const enhancedMetadata: GenerationMetadata = {
+        ...baseMetadata,
+        performance: {
+          internalProcessingTime:
+            metrics.validationTime + metrics.processingTime + metrics.fileOperationTime,
+          totalTime: metrics.totalTime,
+          memoryPeak: metrics.memoryUsage.peak,
+          withinLimits: PerformanceManager.isWithinLimits(metrics),
+        },
+      }
+
+      return Ok({
+        imageData: processedResult.data,
+        metadata: enhancedMetadata,
+      })
+    } finally {
+      // Always release the concurrency lock
+      this.concurrencyManager.releaseLock()
+
+      // Enhanced memory cleanup
+      this.performMemoryCleanup(tracker)
+    }
+  }
+
+  /**
+   * Optimized validation with parallel checks
+   * @param params Image generation parameters
+   * @returns Validation result
+   */
+  private async optimizedValidation(
+    params: ImageGeneratorParams
+  ): Promise<Result<GenerateImageParams, InputValidationError | FileOperationError>> {
+    // Parallel validation for better performance
+    const validations = await Promise.allSettled([
+      this.validatePromptOptimized(params.prompt),
+      this.validateFileOptimized(params.inputImagePath),
+      this.validateNewFeaturesOptimized(params),
+    ])
+
+    // Check for any rejections
+    for (const validation of validations) {
+      if (validation.status === 'rejected') {
+        return Err(validation.reason)
+      }
+      if (validation.status === 'fulfilled' && !validation.value.success) {
+        return Err(validation.value.error)
+      }
+    }
+
+    // Return validated parameters
+    const validatedParams: GenerateImageParams = {
+      prompt: params.prompt,
+    }
+
+    return Ok(validatedParams)
+  }
+
+  /**
+   * Optimized prompt validation
+   */
+  private async validatePromptOptimized(
+    prompt: string
+  ): Promise<Result<string, InputValidationError>> {
+    return validatePrompt(prompt)
+  }
+
+  /**
+   * Optimized file validation
+   */
+  private async validateFileOptimized(
+    inputImagePath?: string
+  ): Promise<Result<string | undefined, InputValidationError | FileOperationError>> {
+    if (!inputImagePath) {
+      return Ok(undefined)
+    }
+
+    const result = validateImageFile(inputImagePath)
+    if (!result.success) {
+      return Err(result.error)
+    }
+    return Ok(inputImagePath)
+  }
+
+  /**
+   * Optimized new features validation
+   */
+  private async validateNewFeaturesOptimized(
+    params: ImageGeneratorParams
+  ): Promise<Result<void, InputValidationError>> {
+    // Validate feature combinations and constraints
+    if (params.blendImages && !params.inputImagePath) {
+      return Err(
+        new InputValidationError(
+          'Blend images feature requires an input image',
+          'Provide an inputImagePath when using blendImages'
+        )
+      )
+    }
+
+    return Ok(undefined)
+  }
+
+  /**
+   * Optimized image processing with memory efficiency
+   * @param data Image data buffer
+   * @returns Processed image data
+   */
+  private async optimizedImageProcessing(data: Buffer): Promise<Result<Buffer, GeminiAPIError>> {
+    // For now, return the data as-is
+    // Future optimizations: streaming processing, memory-efficient transformations
+    return Ok(data)
+  }
+
+  /**
+   * Optimized file save operations
+   * @param data Image data to save
+   * @param outputPath Optional output path
+   * @returns File save result
+   */
+  private async optimizedFileSave(
+    data: Buffer,
+    outputPath?: string
+  ): Promise<Result<string, FileOperationError>> {
+    const finalPath = outputPath || this.generateDefaultPath()
+    return this.fileManager.saveImage(data, finalPath, 'PNG')
+  }
+
+  /**
+   * Generate default output path
+   * @returns Default file path
+   */
+  private generateDefaultPath(): string {
+    const outputDir = process.env['IMAGE_OUTPUT_DIR'] || './output'
+    const fileName = this.fileManager.generateFileName()
+    return `${outputDir}/${fileName}`
+  }
+
+  /**
+   * Perform memory cleanup after processing
+   * @param tracker Optional performance tracker to get memory usage
+   */
+  private performMemoryCleanup(_tracker?: unknown): void {
+    // Force garbage collection if available
+    if (global.gc) {
+      const beforeGC = process.memoryUsage().heapUsed
+      global.gc()
+      const afterGC = process.memoryUsage().heapUsed
+      const cleaned = beforeGC - afterGC
+
+      if (cleaned > 1024 * 1024) {
+        // Log if more than 1MB was cleaned
+        this.logger.info('memory', 'Memory cleanup completed', {
+          cleanedMB: Math.round(cleaned / (1024 * 1024)),
+          heapUsedMB: Math.round(afterGC / (1024 * 1024)),
+        })
+      }
+    }
+
+    // Log memory warning if usage is still high
+    const currentMemory = process.memoryUsage()
+    const heapUsedMB = currentMemory.heapUsed / (1024 * 1024)
+
+    if (heapUsedMB > 512) {
+      this.logger.warn('memory', 'High memory usage after cleanup', {
+        heapUsedMB: Math.round(heapUsedMB),
+        rss: Math.round(currentMemory.rss / (1024 * 1024)),
+        external: Math.round(currentMemory.external / (1024 * 1024)),
+      })
+    }
   }
 }

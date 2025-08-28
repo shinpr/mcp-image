@@ -133,6 +133,20 @@ export class SecurityError extends AppError {
 }
 
 /**
+ * Error for concurrency limit violations
+ */
+export class ConcurrencyError extends AppError {
+  readonly code = 'CONCURRENCY_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string
+  ) {
+    super(message)
+  }
+}
+
+/**
  * Result type for operations that may fail
  */
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }

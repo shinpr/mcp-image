@@ -35,7 +35,8 @@ export class FileManager {
    */
   async saveImage(
     imageData: Buffer,
-    outputPath: string
+    outputPath: string,
+    _format?: string
   ): Promise<Result<string, FileOperationError>> {
     try {
       // Ensure the directory exists
