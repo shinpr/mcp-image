@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "MCP server for AI image generation",
   "main": "dist/index.js",
+  "type": "module",
   "keywords": [
     "mcp",
     "image-generation",
@@ -36,7 +37,10 @@
     "cleanup:processes": "bash ./scripts/cleanup-test-processes.sh",
     "test:safe": "npm test && npm run cleanup:processes"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@google/genai": "^1.16.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@testing-library/jest-dom": "^6.6.3",
