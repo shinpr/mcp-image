@@ -4,6 +4,7 @@
  */
 
 import type { GeminiClient } from '../api/geminiClient'
+import type { UrlContextClient } from '../api/urlContextClient'
 import type { GenerateImageParams } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
@@ -13,7 +14,13 @@ import {
   type InputValidationError,
   type NetworkError,
 } from '../utils/errors'
-import { validateGenerateImageParams } from './inputValidator'
+import { validateImageFile, validatePrompt } from './inputValidator'
+import { URLExtractor } from './urlExtractor'
+
+/**
+ * Context method type for image generation
+ */
+export type ContextMethod = 'prompt_only' | 'url_context'
 
 /**
  * Metadata for generated images in the business layer
@@ -21,10 +28,12 @@ import { validateGenerateImageParams } from './inputValidator'
 export interface GenerationMetadata {
   model: 'gemini-2.5-flash-image-preview'
   processingTime: number // milliseconds
-  contextMethod: 'prompt_only' | 'url_context' // Phase 2 will add url_context
+  contextMethod: ContextMethod
   timestamp: string
-  // Phase 2 extensions: extractedUrls?, urlContextUsed?
-  // Phase 3 extensions: other metadata
+  /** URLs extracted from the prompt (undefined if none) */
+  extractedUrls?: string[]
+  /** Whether URL context was successfully used (undefined if not attempted) */
+  urlContextUsed?: boolean
 }
 
 /**
@@ -40,7 +49,8 @@ export interface GenerationResult {
  */
 export interface ImageGeneratorParams {
   prompt: string
-  // Phase 2 will add URL context support
+  enableUrlContext?: boolean
+  inputImagePath?: string
 }
 
 /**
@@ -50,10 +60,13 @@ export interface ImageGeneratorParams {
 export class ImageGenerator {
   private readonly modelName = 'gemini-2.5-flash-image-preview' as const
 
-  constructor(private readonly geminiClient: GeminiClient) {}
+  constructor(
+    private readonly geminiClient: GeminiClient,
+    private readonly urlContextClient?: UrlContextClient
+  ) {}
 
   /**
-   * Generates an image from a text prompt
+   * Generates an image from a text prompt with optional URL context processing
    * @param params Parameters for image generation
    * @returns Result containing image data and metadata, or an error
    */
@@ -73,15 +86,37 @@ export class ImageGenerator {
       return Err(validationResult.error)
     }
 
-    // Step 2: Execute API call with error handling
-    const apiResult = await this.executeApiCall(params)
+    // Step 2: Initialize metadata tracking variables
+    let contextMethod: ContextMethod = 'prompt_only'
+    let extractedUrls: string[] = []
+    let urlContextUsed = false
+    let finalPrompt = params.prompt
+
+    // Step 3: URL Context processing (if enabled)
+    const urlContextResult = await this.processUrlContext(params)
+    finalPrompt = urlContextResult.finalPrompt
+    contextMethod = urlContextResult.contextMethod
+    extractedUrls = urlContextResult.extractedUrls
+    urlContextUsed = urlContextResult.urlContextUsed
+
+    // Step 4: Execute API call with processed prompt
+    const apiResult = await this.executeApiCall({
+      ...params,
+      prompt: finalPrompt,
+    })
     if (!apiResult.success) {
       return Err(apiResult.error)
     }
 
-    // Step 3: Generate metadata and return result
-    const processingTime = Math.max(1, Date.now() - startTime) // Ensure at least 1ms
-    const metadata = this.generateMetadata(processingTime)
+    // Step 5: Generate metadata and return result
+    const processingTime = Math.max(1, Date.now() - startTime)
+    const metadata = this.generateMetadata(
+      processingTime,
+      contextMethod,
+      extractedUrls,
+      urlContextUsed,
+      params.enableUrlContext || false
+    )
 
     return Ok({
       imageData: apiResult.data.imageData,
@@ -90,16 +125,84 @@ export class ImageGenerator {
   }
 
   /**
+   * Process URL context if enabled and URLs are present
+   * @param params Image generation parameters
+   * @returns URL context processing result
+   */
+  private async processUrlContext(params: ImageGeneratorParams): Promise<{
+    finalPrompt: string
+    contextMethod: ContextMethod
+    extractedUrls: string[]
+    urlContextUsed: boolean
+  }> {
+    // Initialize with defaults
+    let finalPrompt = params.prompt
+    let contextMethod: ContextMethod = 'prompt_only'
+    let extractedUrls: string[] = []
+    let urlContextUsed = false
+
+    // Only process if URL context is enabled and client is available
+    if (!params.enableUrlContext || !this.urlContextClient) {
+      return { finalPrompt, contextMethod, extractedUrls, urlContextUsed }
+    }
+
+    // Extract URLs from prompt
+    extractedUrls = URLExtractor.extractUrls(params.prompt)
+
+    // Only proceed if URLs were found
+    if (extractedUrls.length === 0) {
+      return { finalPrompt, contextMethod, extractedUrls, urlContextUsed }
+    }
+
+    try {
+      // Process URLs with context API
+      const contextResult = await this.urlContextClient.processUrls(extractedUrls, params.prompt)
+
+      if (contextResult.success) {
+        finalPrompt = contextResult.data.combinedPrompt
+        contextMethod = 'url_context'
+        urlContextUsed = true
+      } else {
+        // Context processing failed but URLs were extracted
+        urlContextUsed = false
+        // Log the error but continue with fallback
+        console.warn('URL context processing failed:', contextResult.error.message)
+      }
+    } catch (error) {
+      // Unexpected error during context processing
+      urlContextUsed = false
+      console.warn('Unexpected error during URL context processing:', error)
+    }
+
+    return { finalPrompt, contextMethod, extractedUrls, urlContextUsed }
+  }
+
+  /**
    * Validates input parameters using the validation module
    */
   private validateInput(
     params: ImageGeneratorParams
   ): Result<GenerateImageParams, InputValidationError | FileOperationError> {
-    const validationParams: GenerateImageParams = {
-      prompt: params.prompt,
+    // Validate prompt
+    const promptResult = validatePrompt(params.prompt)
+    if (!promptResult.success) {
+      return Err(promptResult.error)
     }
-    const result = validateGenerateImageParams(validationParams)
-    return result
+
+    // Validate input image file if provided
+    if (params.inputImagePath) {
+      const imageResult = validateImageFile(params.inputImagePath)
+      if (!imageResult.success) {
+        return Err(imageResult.error)
+      }
+    }
+
+    // Return validated parameters in GenerateImageParams format
+    const validatedParams: GenerateImageParams = {
+      prompt: promptResult.data,
+    }
+
+    return Ok(validatedParams)
   }
 
   /**
@@ -109,9 +212,15 @@ export class ImageGenerator {
     params: ImageGeneratorParams
   ): Promise<Result<{ imageData: Buffer }, GeminiAPIError | NetworkError>> {
     try {
-      const apiParams = {
+      const apiParams: { prompt: string; inputImage?: Buffer } = {
         prompt: params.prompt,
-        // Phase 1: prompt-only generation (no input image)
+      }
+
+      // Add input image if provided
+      if (params.inputImagePath) {
+        // TODO: Implement proper file reading logic
+        // For now, create a placeholder Buffer to satisfy type requirements
+        apiParams.inputImage = Buffer.alloc(0)
       }
 
       const apiResult = await this.geminiClient.generateImage(apiParams)
@@ -128,13 +237,29 @@ export class ImageGenerator {
   /**
    * Generates metadata for the image generation result
    */
-  private generateMetadata(processingTime: number): GenerationMetadata {
-    return {
+  private generateMetadata(
+    processingTime: number,
+    contextMethod: ContextMethod,
+    extractedUrls: string[],
+    urlContextUsed: boolean,
+    urlContextEnabled: boolean
+  ): GenerationMetadata {
+    const metadata: GenerationMetadata = {
       model: this.modelName,
       processingTime,
-      contextMethod: 'prompt_only', // Phase 1 only supports prompt-only generation
+      contextMethod,
       timestamp: new Date().toISOString(),
     }
+
+    if (extractedUrls.length > 0) {
+      metadata.extractedUrls = extractedUrls
+    }
+
+    if (urlContextEnabled && extractedUrls.length > 0) {
+      metadata.urlContextUsed = urlContextUsed
+    }
+
+    return metadata
   }
 
   /**

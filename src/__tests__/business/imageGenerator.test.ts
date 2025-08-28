@@ -15,12 +15,14 @@ const mockGeminiClient: GeminiClient = {
   generateImage: vi.fn(),
 }
 
-// Mock validation function
-const mockValidateGenerateImageParams = vi.fn()
+// Mock validation functions
+const mockValidatePrompt = vi.fn()
+const mockValidateImageFile = vi.fn()
 
 // Mock the validation module
 vi.mock('../../business/inputValidator', () => ({
-  validateGenerateImageParams: (params: unknown) => mockValidateGenerateImageParams(params),
+  validatePrompt: (prompt: string) => mockValidatePrompt(prompt),
+  validateImageFile: (filePath: string) => mockValidateImageFile(filePath),
 }))
 
 describe('ImageGenerator', () => {
@@ -28,6 +30,11 @@ describe('ImageGenerator', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+
+    // Mock validation functions to always succeed
+    mockValidatePrompt.mockReturnValue(Ok('test prompt'))
+    mockValidateImageFile.mockReturnValue(Ok('/path/to/input.jpg'))
+
     // This will fail until we implement the ImageGenerator class
     imageGenerator = new ImageGenerator(mockGeminiClient)
   })
@@ -46,7 +53,7 @@ describe('ImageGenerator', () => {
       }
 
       // Mock validation success
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
 
       // Mock API success with slight delay to ensure measurable processing time
       vi.mocked(mockGeminiClient.generateImage).mockImplementation(async () => {
@@ -88,7 +95,7 @@ describe('ImageGenerator', () => {
         },
       }
 
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
       vi.mocked(mockGeminiClient.generateImage).mockImplementation(async () => {
         // Simulate API delay
         await new Promise((resolve) => setTimeout(resolve, 100))
@@ -118,7 +125,7 @@ describe('ImageGenerator', () => {
         'Please provide a descriptive prompt for image generation.'
       )
 
-      mockValidateGenerateImageParams.mockReturnValue(Err(validationError))
+      mockValidatePrompt.mockReturnValue(Err(validationError))
 
       // Act
       const result = await imageGenerator.generateImage(invalidParams)
@@ -144,7 +151,7 @@ describe('ImageGenerator', () => {
         'Please shorten your prompt by 1 characters.'
       )
 
-      mockValidateGenerateImageParams.mockReturnValue(Err(validationError))
+      mockValidatePrompt.mockReturnValue(Err(validationError))
 
       // Act
       const result = await imageGenerator.generateImage(invalidParams)
@@ -167,7 +174,7 @@ describe('ImageGenerator', () => {
         'Check that your GEMINI_API_KEY is valid and has the necessary permissions'
       )
 
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
       vi.mocked(mockGeminiClient.generateImage).mockResolvedValue(Err(apiError))
 
       // Act
@@ -191,7 +198,7 @@ describe('ImageGenerator', () => {
         'Check your internet connection and try again'
       )
 
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
       vi.mocked(mockGeminiClient.generateImage).mockResolvedValue(Err(networkError))
 
       // Act
@@ -214,7 +221,7 @@ describe('ImageGenerator', () => {
         'You have exceeded your API quota or rate limit. Wait before making more requests or upgrade your plan'
       )
 
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
       vi.mocked(mockGeminiClient.generateImage).mockResolvedValue(Err(quotaError))
 
       // Act
@@ -235,7 +242,7 @@ describe('ImageGenerator', () => {
       // Arrange
       const testParams = { prompt: 'Test prompt' }
 
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
       vi.mocked(mockGeminiClient.generateImage).mockResolvedValue(
         Ok({
           imageData: Buffer.from('test'),
@@ -253,8 +260,8 @@ describe('ImageGenerator', () => {
       await imageGenerator.generateImage(testParams)
 
       // Assert
-      expect(mockValidateGenerateImageParams).toHaveBeenCalledWith(testParams)
-      expect(mockValidateGenerateImageParams).toHaveBeenCalledTimes(1)
+      expect(mockValidatePrompt).toHaveBeenCalledWith(testParams.prompt)
+      expect(mockValidatePrompt).toHaveBeenCalledTimes(1)
     })
 
     it('should pass correct params to GeminiClient', async () => {
@@ -262,7 +269,7 @@ describe('ImageGenerator', () => {
       const testParams = { prompt: 'Test prompt' }
       const expectedGeminiParams = { prompt: testParams.prompt }
 
-      mockValidateGenerateImageParams.mockReturnValue(Ok(testParams))
+      mockValidatePrompt.mockReturnValue(Ok(testParams.prompt))
       vi.mocked(mockGeminiClient.generateImage).mockResolvedValue(
         Ok({
           imageData: Buffer.from('test'),
