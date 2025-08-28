@@ -3,8 +3,13 @@
  * Basic structure of MCP server using @modelcontextprotocol/sdk
  */
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import type { GenerateImageParams, GenerateImageResult, MCPServerConfig } from '../types/mcp'
-import { InputValidationError } from '../utils/errors'
+import { createGeminiClient } from '../api/geminiClient'
+import { FileManager } from '../business/fileManager'
+import { ImageGenerator } from '../business/imageGenerator'
+import { validateGenerateImageParams } from '../business/inputValidator'
+import { ResponseBuilder } from '../business/responseBuilder'
+import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
+import { getConfig } from '../utils/config'
 import { Logger } from '../utils/logger'
 import { ErrorHandler } from './errorHandler'
 
@@ -113,57 +118,69 @@ export class MCPServerImpl {
   private async handleGenerateImage(params: GenerateImageParams) {
     // Use ErrorHandler.wrapWithResultType for safe execution
     const result = await ErrorHandler.wrapWithResultType(async () => {
-      // Basic validation with proper error handling
-      if (typeof params.prompt !== 'string') {
-        throw new InputValidationError(
-          'Invalid prompt: prompt must be a string',
-          'Please provide a valid string prompt for image generation'
-        )
-      }
-
-      if (params.prompt.trim().length === 0) {
-        throw new InputValidationError(
-          'Empty prompt provided',
-          'Prompt must contain at least 1 character'
-        )
-      }
-
       this.logger.info('image-generation', 'Processing image generation request', {
-        promptLength: params.prompt.length,
+        promptLength: params.prompt?.length || 0,
         outputPath: params.outputPath,
         inputImagePath: params.inputImagePath,
         outputFormat: params.outputFormat,
       })
 
-      // Stub implementation - return success response
-      const generationResult: GenerateImageResult = {
-        success: true,
-        imagePath: `${this.config.defaultOutputDir}/generated-image-${Date.now()}.png`,
-        executionTime: 1000, // Fixed value (for testing)
+      // Step 1: Validate input parameters
+      const validationResult = validateGenerateImageParams(params)
+      if (!validationResult.success) {
+        throw validationResult.error
+      }
+
+      // Step 2: Load configuration
+      const configResult = getConfig()
+      if (!configResult.success) {
+        throw configResult.error
+      }
+
+      // Step 3: Initialize components
+      const geminiClientResult = createGeminiClient(configResult.data)
+      if (!geminiClientResult.success) {
+        throw geminiClientResult.error
+      }
+
+      const imageGenerator = new ImageGenerator(geminiClientResult.data)
+      const fileManager = new FileManager()
+      const responseBuilder = new ResponseBuilder()
+
+      // Step 4: Generate image
+      const generationResult = await imageGenerator.generateImage({
+        prompt: params.prompt,
+      })
+      if (!generationResult.success) {
+        throw generationResult.error
+      }
+
+      // Step 5: Save image to file
+      const outputPath =
+        params.outputPath || `${this.config.defaultOutputDir}/${fileManager.generateFileName()}`
+
+      const saveResult = await fileManager.saveImage(generationResult.data.imageData, outputPath)
+      if (!saveResult.success) {
+        throw saveResult.error
       }
 
       this.logger.info('image-generation', 'Image generation completed successfully', {
-        imagePath: generationResult.imagePath,
-        executionTime: generationResult.executionTime,
+        imagePath: saveResult.data,
+        processingTime: generationResult.data.metadata.processingTime,
       })
 
-      return generationResult
+      // Step 6: Build structured response
+      return responseBuilder.buildSuccessResponse(generationResult.data, saveResult.data)
     }, 'image-generation')
 
     // Handle the result
     if (result.ok) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result.value),
-          },
-        ],
-        isError: false,
-      }
+      return result.value
     }
-    // Error is already logged by ErrorHandler.wrapWithResultType
-    return ErrorHandler.handleError(result.error)
+
+    // Build error response using ResponseBuilder
+    const responseBuilder = new ResponseBuilder()
+    return responseBuilder.buildErrorResponse(result.error)
   }
 
   /**

@@ -5,6 +5,7 @@
 
 import type { McpToolResponse } from '../types/mcp'
 import {
+  ConfigError,
   FileOperationError,
   GeminiAPIError,
   InputValidationError,
@@ -82,7 +83,8 @@ function convertErrorToStructured(error: Error): {
     error instanceof InputValidationError ||
     error instanceof FileOperationError ||
     error instanceof GeminiAPIError ||
-    error instanceof NetworkError
+    error instanceof NetworkError ||
+    error instanceof ConfigError
   ) {
     return {
       code: error.code,

@@ -1,8 +1,50 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MCPServerImpl, createMCPServer } from '../mcpServer'
+
+// Mock the Gemini client for unit tests
+vi.mock('../../api/geminiClient', () => {
+  return {
+    createGeminiClient: vi.fn().mockImplementation(() => {
+      const mockClient = {
+        generateImage: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            imageData: Buffer.from('mock-image-data', 'utf-8'),
+            metadata: {
+              model: 'gemini-2.5-flash-image-preview',
+              prompt: 'test prompt',
+              mimeType: 'image/png',
+              timestamp: new Date(),
+              inputImageProvided: false,
+              processingTime: 1500,
+            },
+          },
+        }),
+      }
+      return { success: true, data: mockClient }
+    }),
+  }
+})
 
 // Basic tests for MCP server startup and tool registration
 describe('MCP Server', () => {
+  let originalApiKey: string | undefined
+
+  beforeEach(() => {
+    // Set up environment for testing
+    originalApiKey = process.env.GEMINI_API_KEY
+    process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
+    process.env.IMAGE_OUTPUT_DIR = './test-output'
+  })
+
+  // Restore environment after tests
+  afterEach(() => {
+    if (originalApiKey !== undefined) {
+      process.env.GEMINI_API_KEY = originalApiKey
+    } else {
+      process.env.GEMINI_API_KEY = undefined
+    }
+  })
   it('should create MCP server instance', async () => {
     // Arrange & Act
     const mcpServer = createMCPServer()
@@ -56,13 +98,13 @@ describe('MCP Server', () => {
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
 
-    // Verify response is valid JSON
+    // Verify response structure
     const responseData = JSON.parse(result.content[0].text)
-    expect(responseData).toHaveProperty('success')
-    expect(typeof responseData.success).toBe('boolean')
-    expect(responseData.success).toBe(true)
-    expect(responseData).toHaveProperty('imagePath')
-    expect(responseData).toHaveProperty('executionTime')
+    expect(responseData).toHaveProperty('type')
+    expect(responseData.type).toBe('resource')
+    expect(responseData).toHaveProperty('resource')
+    expect(responseData).toHaveProperty('metadata')
+    expect(responseData.metadata.model).toBe('gemini-2.5-flash-image-preview')
   })
 
   it('should handle invalid tool request', async () => {
@@ -105,7 +147,7 @@ describe('MCP Server', () => {
     const responseData = JSON.parse(result.content[0].text)
     expect(responseData).toHaveProperty('error')
     expect(responseData.error.code).toBe('INPUT_VALIDATION_ERROR')
-    expect(responseData.error.message).toContain('Empty prompt provided')
-    expect(responseData.error.suggestion).toBe('Prompt must contain at least 1 character')
+    expect(responseData.error.message).toContain('1 and 4000 characters')
+    expect(responseData.error.suggestion).toContain('descriptive prompt')
   })
 })

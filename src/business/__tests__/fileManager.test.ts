@@ -6,7 +6,7 @@
 import { promises as fs } from 'node:fs'
 import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { isErr, isOk } from '../../types/result'
+// Remove unused import - using .success property directly
 import { FileOperationError } from '../../utils/errors'
 import { FileManager } from '../fileManager'
 
@@ -34,8 +34,8 @@ describe('FileManager', () => {
 
       const result = await fileManager.saveImage(testImageData, outputPath)
 
-      expect(isOk(result)).toBe(true)
-      if (isOk(result)) {
+      expect(result.success).toBe(true)
+      if (result.success) {
         expect(result.data).toBe(outputPath)
         // Verify file was actually created
         const savedData = await fs.readFile(outputPath)
@@ -48,8 +48,8 @@ describe('FileManager', () => {
 
       const result = await fileManager.saveImage(testImageData, nestedPath)
 
-      expect(isOk(result)).toBe(true)
-      if (isOk(result)) {
+      expect(result.success).toBe(true)
+      if (result.success) {
         expect(result.data).toBe(nestedPath)
         // Verify file and directories were created
         const savedData = await fs.readFile(nestedPath)
@@ -62,8 +62,8 @@ describe('FileManager', () => {
 
       const result = await fileManager.saveImage(testImageData, invalidPath)
 
-      expect(isErr(result)).toBe(true)
-      if (isErr(result)) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error).toBeInstanceOf(FileOperationError)
         expect(result.error.code).toBe('FILE_OPERATION_ERROR')
         expect(result.error.message).toContain('Failed to create directory')
@@ -77,7 +77,7 @@ describe('FileManager', () => {
 
       const result = fileManager.ensureDirectoryExists(newDirPath)
 
-      expect(isOk(result)).toBe(true)
+      expect(result.success).toBe(true)
     })
 
     it('should succeed if directory already exists', async () => {
@@ -85,7 +85,7 @@ describe('FileManager', () => {
 
       const result = fileManager.ensureDirectoryExists(testOutputDir)
 
-      expect(isOk(result)).toBe(true)
+      expect(result.success).toBe(true)
     })
 
     it('should return error for invalid directory path', () => {
@@ -93,8 +93,8 @@ describe('FileManager', () => {
 
       const result = fileManager.ensureDirectoryExists(invalidPath)
 
-      expect(isErr(result)).toBe(true)
-      if (isErr(result)) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error).toBeInstanceOf(FileOperationError)
         expect(result.error.code).toBe('FILE_OPERATION_ERROR')
       }

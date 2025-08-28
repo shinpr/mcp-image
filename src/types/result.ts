@@ -39,25 +39,3 @@ export function Err<E extends Error>(error: E): Result<never, E> {
     error,
   }
 }
-
-/**
- * Type predicate to check if a Result is successful
- * @param result The Result to check
- * @returns true if the Result is successful, false otherwise
- */
-export function isOk<T, E extends Error>(
-  result: Result<T, E>
-): result is { success: true; data: T } {
-  return result.success
-}
-
-/**
- * Type predicate to check if a Result is an error
- * @param result The Result to check
- * @returns true if the Result is an error, false otherwise
- */
-export function isErr<T, E extends Error>(
-  result: Result<T, E>
-): result is { success: false; error: E } {
-  return !result.success
-}

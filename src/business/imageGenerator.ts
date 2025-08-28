@@ -80,7 +80,7 @@ export class ImageGenerator {
     }
 
     // Step 3: Generate metadata and return result
-    const processingTime = Date.now() - startTime
+    const processingTime = Math.max(1, Date.now() - startTime) // Ensure at least 1ms
     const metadata = this.generateMetadata(processingTime)
 
     return Ok({

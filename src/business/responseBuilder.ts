@@ -7,6 +7,7 @@ import * as path from 'node:path'
 import type { McpToolResponse, StructuredContent, StructuredError } from '../types/mcp'
 import {
   type AppError,
+  ConfigError,
   FileOperationError,
   GeminiAPIError,
   InputValidationError,
@@ -123,7 +124,8 @@ export class ResponseBuilder {
       error instanceof InputValidationError ||
       error instanceof FileOperationError ||
       error instanceof GeminiAPIError ||
-      error instanceof NetworkError
+      error instanceof NetworkError ||
+      error instanceof ConfigError
     ) {
       return {
         code: error.code,
