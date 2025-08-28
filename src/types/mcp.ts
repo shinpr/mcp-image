@@ -15,6 +15,8 @@ export interface GenerateImageParams {
   inputImagePath?: string
   /** Output format */
   outputFormat?: 'PNG' | 'JPEG' | 'WebP'
+  /** Enable URL context extraction and processing (default: false) */
+  enableUrlContext?: boolean
 }
 
 /**

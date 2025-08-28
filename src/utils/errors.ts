@@ -89,6 +89,36 @@ export class ConfigError extends AppError {
 }
 
 /**
+ * Error for URL Context API failures
+ */
+export class URLContextError extends AppError {
+  readonly code = 'URL_CONTEXT_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string,
+    public readonly statusCode?: number
+  ) {
+    super(message)
+  }
+}
+
+/**
+ * Error for invalid URL format
+ */
+export class InvalidUrlError extends AppError {
+  readonly code = 'INVALID_URL_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string,
+    public readonly invalidUrl?: string
+  ) {
+    super(message)
+  }
+}
+
+/**
  * Result type for operations that may fail
  */
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }
