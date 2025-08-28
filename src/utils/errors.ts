@@ -119,6 +119,20 @@ export class InvalidUrlError extends AppError {
 }
 
 /**
+ * Error for security violations and attacks
+ */
+export class SecurityError extends AppError {
+  readonly code = 'SECURITY_ERROR'
+
+  constructor(
+    message: string,
+    public readonly suggestion: string
+  ) {
+    super(message)
+  }
+}
+
+/**
  * Result type for operations that may fail
  */
 export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }

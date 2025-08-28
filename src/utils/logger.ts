@@ -3,16 +3,19 @@
  * Provides consistent logging format across the application
  */
 
+import * as crypto from 'node:crypto'
+
 /**
  * Log entry structure for consistent formatting
  */
-interface LogEntry {
+interface StructuredLogEntry {
   timestamp: string
-  level: 'info' | 'warn' | 'error'
+  level: 'debug' | 'info' | 'warn' | 'error'
   context: string
   message: string
   metadata?: Record<string, unknown>
-  error?: string
+  traceId?: string
+  sessionId?: string
 }
 
 /**
@@ -20,12 +23,48 @@ interface LogEntry {
  */
 export class Logger {
   private readonly sensitivePatterns = [
+    /GEMINI_API_KEY=([^\s]+)/gi,
+    /api[_-]key[^\s]*[:=]\s*([^\s]+)/gi,
+    /password[^\s]*[:=]\s*([^\s]+)/gi,
+  ]
+
+  private readonly urlPatterns = [
+    /(https?:\/\/[^\s]+)/gi, // URLs - separate to handle differently
+  ]
+
+  private readonly filterPatterns = [
+    /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, // Credit card numbers
+    /\b\d{3}-\d{2}-\d{4}\b/g, // SSN
+    /\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b/g, // Phone numbers
+    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi, // Emails
+  ]
+
+  private readonly keyBasedSensitivePatterns = [
     /api_?key/i,
     /secret/i,
     /password/i,
     /token/i,
     /credential/i,
   ]
+
+  private currentTraceId?: string
+  private currentSessionId?: string
+
+  constructor() {
+    // Initialize session ID once per logger instance
+    this.currentSessionId = this.generateId()
+  }
+
+  /**
+   * Log a debug message (only in development mode)
+   * @param context Context or module where the log originates
+   * @param message Log message
+   * @param metadata Optional metadata object
+   */
+  debug(context: string, message: string, metadata?: Record<string, unknown>): void {
+    if (process.env['NODE_ENV'] === 'production') return
+    this.writeLog('debug', context, message, metadata)
+  }
 
   /**
    * Log an info message
@@ -34,18 +73,7 @@ export class Logger {
    * @param metadata Optional metadata object
    */
   info(context: string, message: string, metadata?: Record<string, unknown>): void {
-    const logEntry: LogEntry = {
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      context,
-      message,
-    }
-
-    if (metadata) {
-      logEntry.metadata = this.sanitizeMetadata(metadata)
-    }
-
-    console.log(JSON.stringify(logEntry))
+    this.writeLog('info', context, message, metadata)
   }
 
   /**
@@ -55,18 +83,7 @@ export class Logger {
    * @param metadata Optional metadata object
    */
   warn(context: string, message: string, metadata?: Record<string, unknown>): void {
-    const logEntry: LogEntry = {
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      context,
-      message,
-    }
-
-    if (metadata) {
-      logEntry.metadata = this.sanitizeMetadata(metadata)
-    }
-
-    console.warn(JSON.stringify(logEntry))
+    this.writeLog('warn', context, message, metadata)
   }
 
   /**
@@ -77,22 +94,77 @@ export class Logger {
    * @param metadata Optional metadata object
    */
   error(context: string, message: string, error?: Error, metadata?: Record<string, unknown>): void {
-    const logEntry: LogEntry = {
+    const enhancedMetadata = {
+      ...metadata,
+      ...(error && {
+        errorName: error.name,
+        errorMessage: this.sanitizeString(error.message),
+        errorStack: process.env['NODE_ENV'] !== 'production' ? error.stack : undefined,
+      }),
+    }
+    this.writeLog('error', context, message, enhancedMetadata)
+  }
+
+  /**
+   * Core log writing method with structured format
+   */
+  private writeLog(
+    level: StructuredLogEntry['level'],
+    context: string,
+    message: string,
+    metadata?: Record<string, unknown>
+  ): void {
+    const logEntry: StructuredLogEntry = {
       timestamp: new Date().toISOString(),
-      level: 'error',
+      level,
       context,
-      message,
+      message: this.sanitizeString(message),
+      ...(metadata && { metadata: this.sanitizeMetadata(metadata) }),
+      traceId: this.getCurrentTraceId(),
+      sessionId: this.getCurrentSessionId(),
     }
 
-    if (error) {
-      logEntry.error = error.message
+    // JSON format structured log output
+    const logOutput = JSON.stringify(logEntry)
+
+    if (level === 'debug') {
+      console.log(logOutput)
+    } else if (level === 'info') {
+      console.log(logOutput)
+    } else if (level === 'warn') {
+      console.warn(logOutput)
+    } else if (level === 'error') {
+      console.error(logOutput)
     }
 
-    if (metadata) {
-      logEntry.metadata = this.sanitizeMetadata(metadata)
+    // Optional file output
+    this.writeToFile(logEntry)
+  }
+
+  /**
+   * Sanitize string content by redacting sensitive information
+   * @param input String to sanitize
+   * @returns Sanitized string
+   */
+  private sanitizeString(input: string): string {
+    let sanitized = input
+
+    // Redact sensitive data patterns (API keys, passwords, etc.)
+    for (const pattern of this.sensitivePatterns) {
+      sanitized = sanitized.replace(pattern, (match, group1) => match.replace(group1, '[REDACTED]'))
     }
 
-    console.error(JSON.stringify(logEntry))
+    // Redact URLs with specific label
+    for (const pattern of this.urlPatterns) {
+      sanitized = sanitized.replace(pattern, '[URL_REDACTED]')
+    }
+
+    // Filter personal information patterns
+    for (const pattern of this.filterPatterns) {
+      sanitized = sanitized.replace(pattern, '[FILTERED]')
+    }
+
+    return sanitized
   }
 
   /**
@@ -106,6 +178,8 @@ export class Logger {
     for (const [key, value] of Object.entries(metadata)) {
       if (this.isSensitiveKey(key)) {
         sanitized[key] = '[REDACTED]'
+      } else if (typeof value === 'string') {
+        sanitized[key] = this.sanitizeString(value)
       } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
         sanitized[key] = this.sanitizeMetadata(value as Record<string, unknown>)
       } else {
@@ -122,6 +196,39 @@ export class Logger {
    * @returns True if the key contains sensitive information
    */
   private isSensitiveKey(key: string): boolean {
-    return this.sensitivePatterns.some((pattern) => pattern.test(key))
+    return this.keyBasedSensitivePatterns.some((pattern) => pattern.test(key))
+  }
+
+  /**
+   * Generate unique ID for trace/session tracking
+   */
+  private generateId(): string {
+    return crypto.randomUUID().substring(0, 8)
+  }
+
+  /**
+   * Get or generate current trace ID
+   */
+  private getCurrentTraceId(): string {
+    if (!this.currentTraceId) {
+      this.currentTraceId = this.generateId()
+    }
+    return this.currentTraceId
+  }
+
+  /**
+   * Get current session ID
+   */
+  private getCurrentSessionId(): string {
+    return this.currentSessionId!
+  }
+
+  /**
+   * Optional file logging (can be configured to write to log files)
+   */
+  private writeToFile(_logEntry: StructuredLogEntry): void {
+    // Implementation for file logging can be added here if needed
+    // For now, we only output to console
+    // Future enhancement: Write to rotating log files
   }
 }

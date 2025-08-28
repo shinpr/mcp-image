@@ -92,7 +92,7 @@ describe('Logger', () => {
         expect.stringContaining('"message":"API call failed"')
       )
       expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('"error":"Network timeout"')
+        expect.stringContaining('"errorMessage":"Network timeout"')
       )
     })
 
@@ -106,7 +106,7 @@ describe('Logger', () => {
 
       // Assert
       expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"level":"error"'))
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('"error":"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('"errorMessage"'))
     })
   })
 
@@ -163,9 +163,182 @@ describe('Logger', () => {
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"[REDACTED]"'))
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('secret-key'))
       expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('user-password'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[URL_REDACTED]'))
+    })
+
+    it('should redact GEMINI_API_KEY in environment variable format', () => {
+      // Arrange
+      const message = 'Starting service with GEMINI_API_KEY=AIzaSyABCDEF123456789'
+
+      // Act
+      logger.info('config', message)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[REDACTED]'))
       expect(mockConsoleLog).toHaveBeenCalledWith(
-        expect.stringContaining('https://api.example.com')
+        expect.not.stringContaining('AIzaSyABCDEF123456789')
       )
+    })
+
+    it('should redact URLs in log messages', () => {
+      // Arrange
+      const message = 'Fetching data from https://api.example.com/v1/data?key=secret'
+
+      // Act
+      logger.info('network', message)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[URL_REDACTED]'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(
+        expect.not.stringContaining('https://api.example.com')
+      )
+    })
+
+    it('should filter credit card numbers in log messages', () => {
+      // Arrange
+      const message = 'Payment processed for card 4532-1234-5678-9012'
+
+      // Act
+      logger.info('payment', message)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(
+        expect.not.stringContaining('4532-1234-5678-9012')
+      )
+    })
+
+    it('should filter email addresses in log messages', () => {
+      // Arrange
+      const message = 'Sending notification to user@example.com'
+
+      // Act
+      logger.info('notification', message)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('user@example.com'))
+    })
+
+    it('should filter phone numbers in log messages', () => {
+      // Arrange
+      const message = 'SMS sent to +1-555-123-4567'
+
+      // Act
+      logger.info('sms', message)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('+1-555-123-4567'))
+    })
+
+    it('should filter SSN in log messages', () => {
+      // Arrange
+      const message = 'Processing SSN 123-45-6789'
+
+      // Act
+      logger.info('processing', message)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('123-45-6789'))
+    })
+  })
+
+  describe('debug logging', () => {
+    const originalNodeEnv = process.env.NODE_ENV
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv
+    })
+
+    it('should log debug message in development mode', () => {
+      // Arrange
+      process.env.NODE_ENV = 'development'
+      const context = 'debug-test'
+      const message = 'Debug message'
+      const metadata = { debug: true }
+
+      // Act
+      logger.debug(context, message, metadata)
+
+      // Assert
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"level":"debug"'))
+      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"context":"debug-test"'))
+    })
+
+    it('should not log debug message in production mode', () => {
+      // Arrange
+      process.env.NODE_ENV = 'production'
+      const context = 'debug-test'
+      const message = 'Debug message'
+
+      // Act
+      logger.debug(context, message)
+
+      // Assert
+      expect(mockConsoleLog).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('trace and session IDs', () => {
+    it('should include traceId and sessionId in log entries', () => {
+      // Arrange
+      const context = 'trace-test'
+      const message = 'Test message with trace'
+
+      // Act
+      logger.info(context, message)
+
+      // Assert
+      const logOutput = mockConsoleLog.mock.calls[0][0]
+      const parsedLog = JSON.parse(logOutput)
+
+      expect(parsedLog).toHaveProperty('traceId')
+      expect(parsedLog).toHaveProperty('sessionId')
+      expect(typeof parsedLog.traceId).toBe('string')
+      expect(typeof parsedLog.sessionId).toBe('string')
+    })
+  })
+
+  describe('error logging with stack traces', () => {
+    const originalNodeEnv = process.env.NODE_ENV
+
+    afterEach(() => {
+      process.env.NODE_ENV = originalNodeEnv
+    })
+
+    it('should include error stack in development mode', () => {
+      // Arrange
+      process.env.NODE_ENV = 'development'
+      const error = new Error('Test error')
+      error.stack = 'Error: Test error\n    at Object.<anonymous> (test.js:1:1)'
+
+      // Act
+      logger.error('test', 'Error occurred', error)
+
+      // Assert
+      const logOutput = mockConsoleError.mock.calls[0][0]
+      const parsedLog = JSON.parse(logOutput)
+
+      expect(parsedLog.metadata).toHaveProperty('errorStack')
+      expect(parsedLog.metadata.errorStack).toContain('Error: Test error')
+    })
+
+    it('should not include error stack in production mode', () => {
+      // Arrange
+      process.env.NODE_ENV = 'production'
+      const error = new Error('Test error')
+      error.stack = 'Error: Test error\n    at Object.<anonymous> (test.js:1:1)'
+
+      // Act
+      logger.error('test', 'Error occurred', error)
+
+      // Assert
+      const logOutput = mockConsoleError.mock.calls[0][0]
+      const parsedLog = JSON.parse(logOutput)
+
+      expect(parsedLog.metadata?.errorStack).toBeUndefined()
     })
   })
 
