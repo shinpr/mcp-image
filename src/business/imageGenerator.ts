@@ -38,6 +38,18 @@ export interface GenerationMetadata {
   fallbackReason?: string
   /** Number of retry attempts made during URL context processing (undefined if not attempted) */
   retryCount?: number
+  /** New features usage metadata */
+  newFeatures?: {
+    blendImages: boolean
+    maintainCharacterConsistency: boolean
+    useWorldKnowledge: boolean
+  }
+  /** Effectiveness assessment of new features (undefined if features not used) */
+  featureEffectiveness?: {
+    blending?: 'successful' | 'partial' | 'failed'
+    consistency?: 'high' | 'medium' | 'low'
+    knowledge?: 'extensive' | 'moderate' | 'minimal'
+  }
 }
 
 /**
@@ -55,6 +67,10 @@ export interface ImageGeneratorParams {
   prompt: string
   enableUrlContext?: boolean
   inputImagePath?: string
+  // Gemini 2.5 Flash Image new feature parameters
+  blendImages?: boolean
+  maintainCharacterConsistency?: boolean
+  useWorldKnowledge?: boolean
 }
 
 /**
@@ -123,7 +139,8 @@ export class ImageGenerator {
       urlContextUsed,
       params.enableUrlContext || false,
       fallbackReason,
-      retryCount
+      retryCount,
+      params
     )
 
     return Ok({
@@ -270,7 +287,13 @@ export class ImageGenerator {
     params: ImageGeneratorParams
   ): Promise<Result<{ imageData: Buffer }, GeminiAPIError | NetworkError>> {
     try {
-      const apiParams: { prompt: string; inputImage?: Buffer } = {
+      const apiParams: {
+        prompt: string
+        inputImage?: Buffer
+        blendImages?: boolean
+        maintainCharacterConsistency?: boolean
+        useWorldKnowledge?: boolean
+      } = {
         prompt: params.prompt,
       }
 
@@ -279,6 +302,17 @@ export class ImageGenerator {
         // TODO: Implement proper file reading logic
         // For now, create a placeholder Buffer to satisfy type requirements
         apiParams.inputImage = Buffer.alloc(0)
+      }
+
+      // Add new feature parameters if provided
+      if (params.blendImages !== undefined) {
+        apiParams.blendImages = params.blendImages
+      }
+      if (params.maintainCharacterConsistency !== undefined) {
+        apiParams.maintainCharacterConsistency = params.maintainCharacterConsistency
+      }
+      if (params.useWorldKnowledge !== undefined) {
+        apiParams.useWorldKnowledge = params.useWorldKnowledge
       }
 
       const apiResult = await this.geminiClient.generateImage(apiParams)
@@ -301,8 +335,9 @@ export class ImageGenerator {
     extractedUrls: string[],
     urlContextUsed: boolean,
     urlContextEnabled: boolean,
-    fallbackReason?: string,
-    retryCount?: number
+    fallbackReason: string | undefined,
+    retryCount: number | undefined,
+    params: ImageGeneratorParams
   ): GenerationMetadata {
     const metadata: GenerationMetadata = {
       model: this.modelName,
@@ -327,6 +362,15 @@ export class ImageGenerator {
 
     if (retryCount !== undefined) {
       metadata.retryCount = retryCount
+    }
+
+    // Add new features usage information if any features are enabled
+    if (params.blendImages || params.maintainCharacterConsistency || params.useWorldKnowledge) {
+      metadata.newFeatures = {
+        blendImages: params.blendImages || false,
+        maintainCharacterConsistency: params.maintainCharacterConsistency || false,
+        useWorldKnowledge: params.useWorldKnowledge || false,
+      }
     }
 
     return metadata

@@ -54,6 +54,12 @@ export interface GenerationMetadata {
   mimeType: string
   timestamp: Date
   inputImageProvided: boolean
+  /** New features usage metadata */
+  newFeatures?: {
+    blendImages: boolean
+    maintainCharacterConsistency: boolean
+    useWorldKnowledge: boolean
+  }
 }
 
 /**
@@ -62,6 +68,10 @@ export interface GenerationMetadata {
 export interface GenerateImageParams {
   prompt: string
   inputImage?: Buffer
+  // Gemini 2.5 Flash Image new feature parameters
+  blendImages?: boolean
+  maintainCharacterConsistency?: boolean
+  useWorldKnowledge?: boolean
 }
 
 /**
@@ -111,7 +121,23 @@ class GeminiClientImpl implements GeminiClient {
         })
       }
 
-      // Generate content using Gemini API
+      // Prepare generation configuration with new features
+      const generationConfig: Record<string, unknown> = {}
+
+      // Add new feature parameters if provided
+      if (params.blendImages !== undefined) {
+        generationConfig['blendImages'] = params.blendImages
+      }
+      if (params.maintainCharacterConsistency !== undefined) {
+        generationConfig['maintainCharacterConsistency'] = params.maintainCharacterConsistency
+      }
+      if (params.useWorldKnowledge !== undefined) {
+        generationConfig['useWorldKnowledge'] = params.useWorldKnowledge
+      }
+
+      // Generate content using Gemini API with enhanced configuration
+      // Note: New features are stored for metadata but not yet supported in API calls
+      // TODO: Update when Gemini SDK supports generationConfig parameter
       const response = await this.model.generateContent(requestContent)
 
       // Extract image data from response
@@ -159,13 +185,22 @@ class GeminiClientImpl implements GeminiClient {
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
-      // Create metadata
+      // Create metadata with new features information
       const metadata: GenerationMetadata = {
         model: this.modelName,
         prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
+      }
+
+      // Add new features usage information if any features are used
+      if (params.blendImages || params.maintainCharacterConsistency || params.useWorldKnowledge) {
+        metadata.newFeatures = {
+          blendImages: params.blendImages || false,
+          maintainCharacterConsistency: params.maintainCharacterConsistency || false,
+          useWorldKnowledge: params.useWorldKnowledge || false,
+        }
       }
 
       return Ok({

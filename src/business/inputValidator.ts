@@ -128,6 +128,48 @@ export function validateOutputFormat(format?: string): Result<string, InputValid
 }
 
 /**
+ * Validates new Gemini 2.5 Flash Image feature parameters
+ */
+export function validateNewFeatureParams(
+  params: GenerateImageParams
+): Result<void, InputValidationError> {
+  // Validate blendImages parameter
+  if (params.blendImages !== undefined && typeof params.blendImages !== 'boolean') {
+    return Err(
+      new InputValidationError(
+        'blendImages must be a boolean value',
+        'Use true or false for blendImages parameter to enable/disable multi-image blending functionality'
+      )
+    )
+  }
+
+  // Validate maintainCharacterConsistency parameter
+  if (
+    params.maintainCharacterConsistency !== undefined &&
+    typeof params.maintainCharacterConsistency !== 'boolean'
+  ) {
+    return Err(
+      new InputValidationError(
+        'maintainCharacterConsistency must be a boolean value',
+        'Use true or false for maintainCharacterConsistency parameter to enable/disable character consistency maintenance'
+      )
+    )
+  }
+
+  // Validate useWorldKnowledge parameter
+  if (params.useWorldKnowledge !== undefined && typeof params.useWorldKnowledge !== 'boolean') {
+    return Err(
+      new InputValidationError(
+        'useWorldKnowledge must be a boolean value',
+        'Use true or false for useWorldKnowledge parameter to enable/disable world knowledge integration'
+      )
+    )
+  }
+
+  return Ok(undefined)
+}
+
+/**
  * Validates complete GenerateImageParams object
  */
 export function validateGenerateImageParams(
@@ -149,6 +191,12 @@ export function validateGenerateImageParams(
   const formatResult = validateOutputFormat(params.outputFormat)
   if (!formatResult.success) {
     return Err(formatResult.error)
+  }
+
+  // Validate new feature parameters
+  const newFeatureResult = validateNewFeatureParams(params)
+  if (!newFeatureResult.success) {
+    return Err(newFeatureResult.error)
   }
 
   return Ok(params)

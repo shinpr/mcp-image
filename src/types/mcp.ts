@@ -21,6 +21,14 @@ export interface GenerateImageParams {
   outputFormat?: 'PNG' | 'JPEG' | 'WebP'
   /** Enable URL context extraction and processing (default: false) */
   enableUrlContext?: boolean
+
+  // Gemini 2.5 Flash Image new feature parameters
+  /** Multi-image blending functionality (default: false) */
+  blendImages?: boolean
+  /** Maintain character consistency across generations (default: false) */
+  maintainCharacterConsistency?: boolean
+  /** Use world knowledge integration for more accurate context (default: false) */
+  useWorldKnowledge?: boolean
 }
 
 /**

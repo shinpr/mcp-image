@@ -3,6 +3,7 @@ import type { GenerateImageParams } from '../../types/mcp'
 import {
   validateGenerateImageParams,
   validateImageFile,
+  validateNewFeatureParams,
   validateOutputFormat,
   validatePrompt,
 } from '../inputValidator'
@@ -214,6 +215,167 @@ describe('inputValidator', () => {
       if (result.success) {
         expect(result.data).toEqual(validParams)
       }
+    })
+
+    it('should return error for invalid new feature parameters', () => {
+      // Arrange
+      const invalidParams: GenerateImageParams = {
+        prompt: 'Generate a beautiful landscape',
+        blendImages: 'true' as any, // Invalid: should be boolean
+      }
+
+      // Act
+      const result = validateGenerateImageParams(invalidParams)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.message).toContain('blendImages must be a boolean value')
+      }
+    })
+
+    it('should return success for valid new feature parameters', () => {
+      // Arrange
+      const validParams: GenerateImageParams = {
+        prompt: 'Generate a beautiful landscape',
+        blendImages: true,
+        maintainCharacterConsistency: false,
+        useWorldKnowledge: true,
+      }
+
+      // Act
+      const result = validateGenerateImageParams(validParams)
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual(validParams)
+      }
+    })
+  })
+
+  describe('validateNewFeatureParams', () => {
+    it('should return success for undefined parameters', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(true)
+    })
+
+    it('should return success for valid boolean parameters', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+        blendImages: true,
+        maintainCharacterConsistency: false,
+        useWorldKnowledge: true,
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(true)
+    })
+
+    it('should return error for invalid blendImages parameter', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+        blendImages: 'yes' as any,
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
+        expect(result.error.message).toBe('blendImages must be a boolean value')
+        expect(result.error.suggestion).toContain('Use true or false for blendImages parameter')
+      }
+    })
+
+    it('should return error for invalid maintainCharacterConsistency parameter', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+        maintainCharacterConsistency: 1 as any,
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
+        expect(result.error.message).toBe('maintainCharacterConsistency must be a boolean value')
+        expect(result.error.suggestion).toContain(
+          'Use true or false for maintainCharacterConsistency parameter'
+        )
+      }
+    })
+
+    it('should return error for invalid useWorldKnowledge parameter', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+        useWorldKnowledge: 'false' as any,
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
+        expect(result.error.message).toBe('useWorldKnowledge must be a boolean value')
+        expect(result.error.suggestion).toContain(
+          'Use true or false for useWorldKnowledge parameter'
+        )
+      }
+    })
+
+    it('should return error for multiple invalid parameters (first one)', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+        blendImages: 'invalid' as any,
+        maintainCharacterConsistency: 123 as any,
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
+        expect(result.error.message).toBe('blendImages must be a boolean value')
+      }
+    })
+
+    it('should return success when only one feature is specified', () => {
+      // Arrange
+      const params: GenerateImageParams = {
+        prompt: 'Test prompt',
+        blendImages: true,
+      }
+
+      // Act
+      const result = validateNewFeatureParams(params)
+
+      // Assert
+      expect(result.success).toBe(true)
     })
   })
 })

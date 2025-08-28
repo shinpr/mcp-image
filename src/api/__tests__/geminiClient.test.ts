@@ -247,5 +247,219 @@ describe('geminiClient', () => {
         expect(result.error.message).toContain('No image generated')
       }
     })
+
+    it('should generate image with new feature parameters', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-enhanced-image-data',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate character with blending',
+        blendImages: true,
+        maintainCharacterConsistency: true,
+        useWorldKnowledge: false,
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.imageData).toBeInstanceOf(Buffer)
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
+        expect(result.data.metadata.newFeatures).toEqual({
+          blendImages: true,
+          maintainCharacterConsistency: true,
+          useWorldKnowledge: false,
+        })
+      }
+
+      // Verify API was called with basic parameters (generationConfig not yet supported)
+      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
+        'Generate character with blending',
+      ])
+    })
+
+    it('should generate image with only some new features enabled', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-world-knowledge-image',
+                      mimeType: 'image/webp',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate factually accurate historical scene',
+        useWorldKnowledge: true,
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.newFeatures).toEqual({
+          blendImages: false,
+          maintainCharacterConsistency: false,
+          useWorldKnowledge: true,
+        })
+      }
+
+      // Verify API was called with basic parameters (generationConfig not yet supported)
+      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
+        'Generate factually accurate historical scene',
+      ])
+    })
+
+    it('should generate image without new features when not specified', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-standard-image',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate simple landscape',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.newFeatures).toBeUndefined()
+      }
+
+      // Verify API was called without generation config
+      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
+        'Generate simple landscape',
+      ])
+    })
+
+    it('should generate image with new features and input image', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-blended-image',
+                      mimeType: 'image/jpeg',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      const inputBuffer = Buffer.from('test-image-data')
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Blend this character with fantasy elements',
+        inputImage: inputBuffer,
+        blendImages: true,
+        maintainCharacterConsistency: true,
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.inputImageProvided).toBe(true)
+        expect(result.data.metadata.newFeatures).toEqual({
+          blendImages: true,
+          maintainCharacterConsistency: true,
+          useWorldKnowledge: false,
+        })
+      }
+
+      // Verify API was called with input image (generationConfig not yet supported)
+      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
+        'Blend this character with fantasy elements',
+        {
+          inlineData: {
+            data: inputBuffer.toString('base64'),
+            mimeType: 'image/jpeg',
+          },
+        },
+      ])
+    })
   })
 })
