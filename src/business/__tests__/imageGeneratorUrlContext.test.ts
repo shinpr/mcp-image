@@ -196,7 +196,8 @@ describe('ImageGenerator - URL Context Integration (Task-09)', () => {
 
         // Should record prompt_only metadata
         expect(result.data.metadata.contextMethod).toBe('prompt_only')
-        expect(result.data.metadata.extractedUrls).toBeUndefined()
+        // URLs are always extracted for metadata tracking, even when URL context is disabled
+        expect(result.data.metadata.extractedUrls).toEqual(['https://example.com'])
         expect(result.data.metadata.urlContextUsed).toBeUndefined()
       }
     })
@@ -230,7 +231,8 @@ describe('ImageGenerator - URL Context Integration (Task-09)', () => {
 
         // Should record prompt_only metadata (default)
         expect(result.data.metadata.contextMethod).toBe('prompt_only')
-        expect(result.data.metadata.extractedUrls).toBeUndefined()
+        // URLs are always extracted for metadata tracking, even when URL context is disabled/undefined
+        expect(result.data.metadata.extractedUrls).toEqual(['https://example.com'])
         expect(result.data.metadata.urlContextUsed).toBeUndefined()
       }
     })

@@ -34,6 +34,10 @@ export interface GenerationMetadata {
   extractedUrls?: string[]
   /** Whether URL context was successfully used (undefined if not attempted) */
   urlContextUsed?: boolean
+  /** Reason for fallback to prompt_only processing (undefined if no fallback) */
+  fallbackReason?: string
+  /** Number of retry attempts made during URL context processing (undefined if not attempted) */
+  retryCount?: number
 }
 
 /**
@@ -98,6 +102,8 @@ export class ImageGenerator {
     contextMethod = urlContextResult.contextMethod
     extractedUrls = urlContextResult.extractedUrls
     urlContextUsed = urlContextResult.urlContextUsed
+    const fallbackReason = urlContextResult.fallbackReason
+    const retryCount = urlContextResult.retryCount
 
     // Step 4: Execute API call with processed prompt
     const apiResult = await this.executeApiCall({
@@ -115,7 +121,9 @@ export class ImageGenerator {
       contextMethod,
       extractedUrls,
       urlContextUsed,
-      params.enableUrlContext || false
+      params.enableUrlContext || false,
+      fallbackReason,
+      retryCount
     )
 
     return Ok({
@@ -127,32 +135,54 @@ export class ImageGenerator {
   /**
    * Process URL context if enabled and URLs are present
    * @param params Image generation parameters
-   * @returns URL context processing result
+   * @returns URL context processing result with fallback information
    */
   private async processUrlContext(params: ImageGeneratorParams): Promise<{
     finalPrompt: string
     contextMethod: ContextMethod
     extractedUrls: string[]
     urlContextUsed: boolean
+    fallbackReason: string | undefined
+    retryCount: number | undefined
   }> {
     // Initialize with defaults
     let finalPrompt = params.prompt
     let contextMethod: ContextMethod = 'prompt_only'
     let extractedUrls: string[] = []
     let urlContextUsed = false
+    let fallbackReason: string | undefined
+    let retryCount: number | undefined
+
+    // Extract URLs from prompt regardless of client availability for metadata tracking
+    extractedUrls = URLExtractor.extractUrls(params.prompt)
 
     // Only process if URL context is enabled and client is available
     if (!params.enableUrlContext || !this.urlContextClient) {
-      return { finalPrompt, contextMethod, extractedUrls, urlContextUsed }
+      return {
+        finalPrompt,
+        contextMethod,
+        extractedUrls,
+        urlContextUsed,
+        fallbackReason,
+        retryCount,
+      }
     }
-
-    // Extract URLs from prompt
-    extractedUrls = URLExtractor.extractUrls(params.prompt)
 
     // Only proceed if URLs were found
     if (extractedUrls.length === 0) {
-      return { finalPrompt, contextMethod, extractedUrls, urlContextUsed }
+      return {
+        finalPrompt,
+        contextMethod,
+        extractedUrls,
+        urlContextUsed,
+        fallbackReason,
+        retryCount,
+      }
     }
+
+    console.log(`[ImageGenerator] Processing ${extractedUrls.length} URLs for context`, {
+      urls: extractedUrls,
+    })
 
     try {
       // Process URLs with context API
@@ -162,19 +192,47 @@ export class ImageGenerator {
         finalPrompt = contextResult.data.combinedPrompt
         contextMethod = 'url_context'
         urlContextUsed = true
+
+        // Extract retry information from the result
+        if (contextResult.data.extractedInfo && 'retryCount' in contextResult.data.extractedInfo) {
+          retryCount = contextResult.data.extractedInfo['retryCount'] as number
+        }
+
+        console.log('[ImageGenerator] URL context processing succeeded', {
+          urlCount: extractedUrls.length,
+          retryCount: retryCount || 0,
+          promptLength: finalPrompt.length,
+        })
       } else {
         // Context processing failed but URLs were extracted
         urlContextUsed = false
-        // Log the error but continue with fallback
-        console.warn('URL context processing failed:', contextResult.error.message)
+        fallbackReason = contextResult.error.message
+
+        console.warn(
+          '[ImageGenerator] URL context processing failed, falling back to prompt-only',
+          {
+            reason: fallbackReason,
+            urls: extractedUrls,
+            errorType: contextResult.error.constructor.name,
+          }
+        )
       }
     } catch (error) {
       // Unexpected error during context processing
       urlContextUsed = false
-      console.warn('Unexpected error during URL context processing:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      fallbackReason = `Unexpected error: ${errorMessage}`
+
+      console.warn(
+        '[ImageGenerator] Unexpected error during URL context processing, falling back to prompt-only',
+        {
+          error: errorMessage,
+          urls: extractedUrls,
+        }
+      )
     }
 
-    return { finalPrompt, contextMethod, extractedUrls, urlContextUsed }
+    return { finalPrompt, contextMethod, extractedUrls, urlContextUsed, fallbackReason, retryCount }
   }
 
   /**
@@ -242,7 +300,9 @@ export class ImageGenerator {
     contextMethod: ContextMethod,
     extractedUrls: string[],
     urlContextUsed: boolean,
-    urlContextEnabled: boolean
+    urlContextEnabled: boolean,
+    fallbackReason?: string,
+    retryCount?: number
   ): GenerationMetadata {
     const metadata: GenerationMetadata = {
       model: this.modelName,
@@ -251,12 +311,22 @@ export class ImageGenerator {
       timestamp: new Date().toISOString(),
     }
 
+    // Always include extractedUrls if any were found, regardless of URL context processing
     if (extractedUrls.length > 0) {
       metadata.extractedUrls = extractedUrls
     }
 
+    // Include urlContextUsed when URL context was enabled and URLs were found
     if (urlContextEnabled && extractedUrls.length > 0) {
       metadata.urlContextUsed = urlContextUsed
+    }
+
+    if (fallbackReason) {
+      metadata.fallbackReason = fallbackReason
+    }
+
+    if (retryCount !== undefined) {
+      metadata.retryCount = retryCount
     }
 
     return metadata

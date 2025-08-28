@@ -38,6 +38,16 @@ export class UrlContextClient {
    */
   private static readonly MAX_URLS = 10
 
+  /**
+   * Maximum number of retry attempts
+   */
+  private readonly MAX_RETRIES = 2
+
+  /**
+   * Timeout for URL context processing in milliseconds
+   */
+  private readonly TIMEOUT_MS = 15000
+
   constructor(private textClient: TextGenerationClient) {}
 
   /**
@@ -64,34 +74,146 @@ export class UrlContextClient {
       // Limit URLs to maximum allowed
       const limitedUrls = urls.slice(0, UrlContextClient.MAX_URLS)
 
-      // Process all URLs in a single context extraction request
-      const contextPrompt = this.buildContextPrompt(limitedUrls, originalPrompt)
-      const result = await this.textClient.generateText(contextPrompt)
-
-      if (!result.success) {
-        return Err(this.createContextError(result.error))
-      }
-
-      const contextContent = result.data.text || ''
-
-      // Combine context with original prompt
-      const combinedPrompt = this.combineContextWithPrompt(
-        [contextContent],
-        originalPrompt,
-        limitedUrls
-      )
-
-      const extractedInfo = this.parseExtractedInfo(contextContent, limitedUrls.length)
-
-      return Ok({
-        contextContent,
-        combinedPrompt,
-        extractedInfo,
-        success: true,
-      })
+      // Use retry mechanism with timeout
+      const result = await this.processUrlsWithRetry(limitedUrls, originalPrompt)
+      return result
     } catch (error) {
       return Err(this.createProcessingError(error))
     }
+  }
+
+  /**
+   * Process URLs with retry mechanism and timeout
+   * @param urls Array of URLs to process
+   * @param originalPrompt Original prompt containing URLs
+   * @returns Result containing URL context response with retry information
+   */
+  async processUrlsWithRetry(
+    urls: string[],
+    originalPrompt: string
+  ): Promise<Result<UrlContextResponse, URLContextError | NetworkError>> {
+    let lastError: Error | undefined
+
+    for (let attempt = 0; attempt <= this.MAX_RETRIES; attempt++) {
+      try {
+        const result = await this.processUrlsWithTimeout(urls, originalPrompt)
+        if (result.success) {
+          // Add retry information to extracted info
+          const enrichedExtractedInfo = {
+            ...result.data.extractedInfo,
+            retryCount: attempt,
+            finalAttempt: attempt + 1,
+            maxRetries: this.MAX_RETRIES,
+          }
+
+          return Ok({
+            ...result.data,
+            extractedInfo: enrichedExtractedInfo,
+          })
+        }
+
+        lastError = result.error
+
+        // Check if error is retryable
+        if (attempt < this.MAX_RETRIES && this.isRetryableError(result.error)) {
+          await this.delay(1000 * 2 ** attempt) // Exponential backoff
+          continue
+        }
+
+        return Err(result.error)
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error')
+
+        if (attempt === this.MAX_RETRIES) {
+          return Err(
+            new URLContextError(
+              `Max retries exceeded: ${lastError.message}`,
+              'Try again later or check your network connection'
+            )
+          )
+        }
+
+        if (this.isRetryableError(lastError)) {
+          await this.delay(1000 * 2 ** attempt) // Exponential backoff
+        } else {
+          return Err(this.createProcessingError(lastError))
+        }
+      }
+    }
+
+    return Err(
+      new URLContextError(
+        `Max retries exceeded: ${lastError?.message || 'Unknown error'}`,
+        'Check your network connection and try again'
+      )
+    )
+  }
+
+  /**
+   * Process URLs with timeout protection
+   * @param urls Array of URLs to process
+   * @param originalPrompt Original prompt containing URLs
+   * @returns Result with timeout protection
+   */
+  private async processUrlsWithTimeout(
+    urls: string[],
+    originalPrompt: string
+  ): Promise<Result<UrlContextResponse, URLContextError | NetworkError>> {
+    return new Promise((resolve) => {
+      const timeoutId = setTimeout(() => {
+        resolve(
+          Err(
+            new NetworkError(
+              'URL context processing timed out',
+              'Try reducing the number of URLs or check your network connection'
+            )
+          )
+        )
+      }, this.TIMEOUT_MS)
+
+      this.processUrlsCore(urls, originalPrompt)
+        .then((result) => {
+          clearTimeout(timeoutId)
+          resolve(result)
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId)
+          resolve(Err(this.createProcessingError(error)))
+        })
+    })
+  }
+
+  /**
+   * Core URL processing logic without retry/timeout
+   * @param urls Array of URLs to process
+   * @param originalPrompt Original prompt containing URLs
+   * @returns Result containing URL context response
+   */
+  private async processUrlsCore(
+    urls: string[],
+    originalPrompt: string
+  ): Promise<Result<UrlContextResponse, URLContextError | NetworkError>> {
+    // Process all URLs in a single context extraction request
+    const contextPrompt = this.buildContextPrompt(urls, originalPrompt)
+    const result = await this.textClient.generateText(contextPrompt)
+
+    if (!result.success) {
+      return Err(this.createContextError(result.error))
+    }
+
+    const contextContent = result.data.text || ''
+
+    // Combine context with original prompt
+    const combinedPrompt = this.combineContextWithPrompt([contextContent], originalPrompt, urls)
+
+    const extractedInfo = this.parseExtractedInfo(contextContent, urls.length)
+
+    return Ok({
+      contextContent,
+      combinedPrompt,
+      extractedInfo,
+      success: true,
+    })
   }
 
   /**
@@ -275,5 +397,39 @@ Provide a concise summary of the most relevant visual information.
       )
     }
     return false
+  }
+
+  /**
+   * Check if an error is retryable
+   * @param error The error to check
+   * @returns True if the error should trigger a retry
+   */
+  private isRetryableError(error: Error): boolean {
+    // Network errors are retryable
+    if (this.isNetworkError(error)) {
+      return true
+    }
+
+    // Rate limit and temporary errors are retryable
+    const retryableKeywords = [
+      'rate limit',
+      'temporary',
+      'throttle',
+      'service unavailable',
+      '503',
+      '429',
+    ]
+    const errorMessage = error.message.toLowerCase()
+
+    return retryableKeywords.some((keyword) => errorMessage.includes(keyword))
+  }
+
+  /**
+   * Add a delay for exponential backoff
+   * @param ms Milliseconds to delay
+   * @returns Promise that resolves after the delay
+   */
+  private async delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms))
   }
 }

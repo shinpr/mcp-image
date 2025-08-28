@@ -85,24 +85,3 @@ export function getConfig(): Result<Config, ConfigError> {
 
   return validateConfig(config)
 }
-
-/**
- * Type guard to check if config is loaded and valid
- * @param config The config to check
- * @returns true if config is valid
- */
-export function isValidConfig(config: unknown): config is Config {
-  if (!config || typeof config !== 'object') {
-    return false
-  }
-
-  const c = config as Partial<Config>
-  return (
-    typeof c.geminiApiKey === 'string' &&
-    c.geminiApiKey.length >= 10 &&
-    typeof c.imageOutputDir === 'string' &&
-    c.imageOutputDir.length > 0 &&
-    typeof c.apiTimeout === 'number' &&
-    c.apiTimeout > 0
-  )
-}

@@ -6,7 +6,6 @@
 /**
  * Context method type for image generation metadata
  */
-export type ContextMethod = 'prompt_only' | 'url_context'
 
 /**
  * Parameters for image generation using Gemini API
