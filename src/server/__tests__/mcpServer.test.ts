@@ -69,10 +69,21 @@ describe('MCP Server', () => {
     // Arrange
     const mcpServer = createMCPServer()
 
-    // Act & Assert: Verify that error is thrown for invalid tool
-    await expect(mcpServer.callTool('invalid_tool', {})).rejects.toThrow(
-      'Unknown tool: invalid_tool'
-    )
+    // Act: Execute request with invalid tool name
+    const result = await mcpServer.callTool('invalid_tool', {})
+
+    // Assert: Verify that structured error is returned
+    expect(result).toBeDefined()
+    expect(result.isError).toBe(true)
+    expect(result.content).toHaveLength(1)
+    expect(result.content[0].type).toBe('text')
+
+    // Verify error structure
+    const responseData = JSON.parse(result.content[0].text)
+    expect(responseData).toHaveProperty('error')
+    expect(responseData.error.code).toBe('INTERNAL_ERROR')
+    expect(responseData.error.message).toContain('Unknown tool: invalid_tool')
+    expect(responseData.error.suggestion).toBe('Contact system administrator')
   })
 
   it('should validate prompt parameter', async () => {
@@ -84,9 +95,17 @@ describe('MCP Server', () => {
       prompt: '',
     })
 
-    // Assert: Verify that validation error is returned
+    // Assert: Verify that structured validation error is returned
+    expect(result).toBeDefined()
+    expect(result.isError).toBe(true)
+    expect(result.content).toHaveLength(1)
+    expect(result.content[0].type).toBe('text')
+
+    // Verify error structure
     const responseData = JSON.parse(result.content[0].text)
-    expect(responseData.success).toBe(false)
-    expect(responseData.error).toContain('Invalid prompt')
+    expect(responseData).toHaveProperty('error')
+    expect(responseData.error.code).toBe('INPUT_VALIDATION_ERROR')
+    expect(responseData.error.message).toContain('Empty prompt provided')
+    expect(responseData.error.suggestion).toBe('Prompt must contain at least 1 character')
   })
 })
