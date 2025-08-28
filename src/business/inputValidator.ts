@@ -74,12 +74,7 @@ export function validateImageFile(
 
   // Check file existence
   if (!existsSync(filePath)) {
-    return Err(
-      new FileOperationError(
-        `File not found: ${filePath}`,
-        'Please check the file path for typos and ensure the file exists. Use absolute paths to avoid confusion.'
-      )
-    )
+    return Err(new FileOperationError(`File not found: ${filePath}`))
   }
 
   // Check file size
@@ -96,12 +91,7 @@ export function validateImageFile(
       )
     }
   } catch (error) {
-    return Err(
-      new FileOperationError(
-        `Failed to read file: ${filePath}`,
-        'Please check file permissions, ensure the file is not corrupted, and verify you have read access to the file location.'
-      )
-    )
+    return Err(new FileOperationError(`Failed to read file: ${filePath}`))
   }
 
   return Ok(filePath)

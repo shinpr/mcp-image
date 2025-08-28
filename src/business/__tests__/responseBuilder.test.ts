@@ -94,10 +94,7 @@ describe('ResponseBuilder', () => {
     })
 
     it('should create error response for FileOperationError', () => {
-      const error = new FileOperationError(
-        'Failed to save image file',
-        'Check output directory permissions and disk space'
-      )
+      const error = new FileOperationError('Failed to save image file')
 
       const response = responseBuilder.buildErrorResponse(error)
 
@@ -105,7 +102,9 @@ describe('ResponseBuilder', () => {
       const errorData = JSON.parse(response.content[0].text)
       expect(errorData.error.code).toBe('FILE_OPERATION_ERROR')
       expect(errorData.error.message).toBe('Failed to save image file')
-      expect(errorData.error.suggestion).toBe('Check output directory permissions and disk space')
+      expect(errorData.error.suggestion).toBe(
+        'Check file system permissions and available disk space'
+      )
     })
 
     it('should create error response for GeminiAPIError', () => {

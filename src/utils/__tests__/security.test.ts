@@ -90,7 +90,7 @@ describe('SecurityManager', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(SecurityError)
         expect(result.error.message).toContain('File path outside allowed directories')
-        expect(result.error.suggestion).toContain('Allowed directories')
+        expect(result.error.suggestion).toContain('allowed directories')
       }
     })
 
@@ -208,7 +208,7 @@ describe('SecurityManager', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(SecurityError)
         expect(result.error.message).toContain('Unsupported file extension: .pdf')
-        expect(result.error.suggestion).toContain('Allowed extensions')
+        expect(result.error.suggestion).toContain('supported file extensions')
       }
     })
 
@@ -275,7 +275,7 @@ describe('SecurityManager', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.message).toBe('Null byte detected in file path')
-        expect(result.error.suggestion).toBe('Remove null bytes from file path')
+        expect(result.error.suggestion).toBe('Ensure your request meets security requirements')
       }
     })
 
@@ -290,7 +290,7 @@ describe('SecurityManager', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.message).toBe('Path traversal attempt detected')
-        expect(result.error.suggestion).toBe('Use relative paths within allowed directories only')
+        expect(result.error.suggestion).toBe('Use valid file paths within allowed directories only')
       }
     })
   })

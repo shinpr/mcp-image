@@ -86,12 +86,7 @@ export class SecureFileManager extends FileManager {
         errorType: 'file-operation',
       })
 
-      return Err(
-        new FileOperationError(
-          `Failed to save image: ${errorMessage}`,
-          'Check directory permissions and disk space'
-        )
-      )
+      return Err(new FileOperationError(`Failed to save image: ${errorMessage}`))
     }
   }
 
@@ -133,12 +128,7 @@ export class SecureFileManager extends FileManager {
         }
       )
 
-      return Err(
-        new FileOperationError(
-          `Failed to create secure directory: ${errorMessage}`,
-          'Check directory permissions and path validity'
-        )
-      )
+      return Err(new FileOperationError(`Failed to create secure directory: ${errorMessage}`))
     }
   }
 

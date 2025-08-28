@@ -431,19 +431,14 @@ export class OptimizedImageGenerator extends ImageGenerator {
   > {
     // Check concurrency limits
     if (this.concurrencyManager.isAtLimit()) {
-      return Err(
-        new ConcurrencyError(
-          'Server busy, please try again later',
-          `Queue length: ${this.concurrencyManager.getQueueLength()}`
-        )
-      )
+      return Err(new ConcurrencyError('Server busy, please try again later'))
     }
 
     // Acquire concurrency lock
     try {
       await this.concurrencyManager.acquireLock()
     } catch (error) {
-      return Err(new ConcurrencyError('Request timeout', 'Server overloaded'))
+      return Err(new ConcurrencyError('Request timeout'))
     }
 
     const tracker = this.performanceManager.startMetrics()

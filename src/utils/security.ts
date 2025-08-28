@@ -26,19 +26,12 @@ export class SecurityManager {
   sanitizeFilePath(inputPath: string): Result<string, SecurityError> {
     // Null byte attack prevention
     if (inputPath.includes('\0')) {
-      return Err(
-        new SecurityError('Null byte detected in file path', 'Remove null bytes from file path')
-      )
+      return Err(new SecurityError('Null byte detected in file path'))
     }
 
     // Path traversal attack prevention
     if (inputPath.includes('..')) {
-      return Err(
-        new SecurityError(
-          'Path traversal attempt detected',
-          'Use relative paths within allowed directories only'
-        )
-      )
+      return Err(new SecurityError('Path traversal attempt detected'))
     }
 
     // Resolve and validate absolute path
@@ -48,12 +41,7 @@ export class SecurityManager {
     )
 
     if (!isAllowed) {
-      return Err(
-        new SecurityError(
-          'File path outside allowed directories',
-          `Allowed directories: ${this.allowedBasePaths.join(', ')}`
-        )
-      )
+      return Err(new SecurityError('File path outside allowed directories'))
     }
 
     return Ok(resolvedPath)
@@ -70,12 +58,7 @@ export class SecurityManager {
     const extension = path.extname(filePath).toLowerCase()
 
     if (!allowedExtensions.includes(extension)) {
-      return Err(
-        new SecurityError(
-          `Unsupported file extension: ${extension}`,
-          `Allowed extensions: ${allowedExtensions.join(', ')}`
-        )
-      )
+      return Err(new SecurityError(`Unsupported file extension: ${extension}`))
     }
 
     return Ok(undefined)

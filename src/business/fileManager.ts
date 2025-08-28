@@ -53,8 +53,7 @@ export class FileManager {
     } catch (error) {
       return Err(
         new FileOperationError(
-          `${ERROR_MESSAGES.SAVE_FAILED}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          ERROR_MESSAGES.PERMISSION_SUGGESTION
+          `${ERROR_MESSAGES.SAVE_FAILED}: ${error instanceof Error ? error.message : 'Unknown error'}`
         )
       )
     }
@@ -73,8 +72,7 @@ export class FileManager {
     } catch (error) {
       return Err(
         new FileOperationError(
-          `${ERROR_MESSAGES.DIRECTORY_CREATION_FAILED}: ${error instanceof Error ? error.message : 'Unknown error'}`,
-          ERROR_MESSAGES.PATH_SUGGESTION
+          `${ERROR_MESSAGES.DIRECTORY_CREATION_FAILED}: ${error instanceof Error ? error.message : 'Unknown error'}`
         )
       )
     }

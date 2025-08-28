@@ -106,10 +106,7 @@ describe('ErrorHandler', () => {
 
     it('should handle FileOperationError correctly', () => {
       // Arrange
-      const error = new FileOperationError(
-        'Failed to save image',
-        'Check output directory permissions'
-      )
+      const error = new FileOperationError('Failed to save image: Permission denied')
 
       // Act
       const response = ErrorHandler.handleError(error)
@@ -125,7 +122,7 @@ describe('ErrorHandler', () => {
         ],
       })
       expect(response.content[0].text).toContain('Failed to save image')
-      expect(response.content[0].text).toContain('Check output directory permissions')
+      expect(response.content[0].text).toContain('Check file and directory permissions')
     })
 
     it('should handle unknown Error types', () => {
