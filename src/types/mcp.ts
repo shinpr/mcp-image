@@ -42,3 +42,48 @@ export interface MCPServerConfig {
   /** Default image output directory */
   defaultOutputDir: string
 }
+
+/**
+ * MCP Tool Response format
+ */
+export interface McpToolResponse {
+  content: [
+    {
+      type: 'text'
+      text: string
+    },
+  ]
+  isError?: boolean
+  _meta?: {
+    progressToken?: string
+  }
+}
+
+/**
+ * Structured content for successful responses
+ */
+export interface StructuredContent {
+  type: 'resource'
+  resource: {
+    uri: string
+    name: string
+    mimeType: string
+  }
+  metadata: {
+    model: string
+    processingTime: number
+    contextMethod: string
+    timestamp: string
+  }
+}
+
+/**
+ * Structured error for error responses
+ */
+export interface StructuredError {
+  error: {
+    code: string
+    message: string
+    suggestion: string
+  }
+}
