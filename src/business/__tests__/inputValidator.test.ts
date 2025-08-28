@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GenerateImageParams } from '../../types/mcp'
-import {
-  validateGenerateImageParams,
-  validateImageFile,
-  validateNewFeatureParams,
-  validateOutputFormat,
-  validatePrompt,
-} from '../inputValidator'
+import { validateBase64Image, validateGenerateImageParams, validatePrompt } from '../inputValidator'
 
 describe('inputValidator', () => {
   describe('validatePrompt', () => {
@@ -83,101 +77,63 @@ describe('inputValidator', () => {
     })
   })
 
-  describe('validateImageFile', () => {
-    it('should return error for BMP file format', () => {
+  describe('validateBase64Image', () => {
+    it('should return success for BMP MIME type', () => {
       // Arrange
-      const bmpFilePath = './test-image.bmp'
+      const base64Data =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==' // 1x1 PNG
+      const bmpMimeType = 'image/bmp'
 
       // Act
-      const result = validateImageFile(bmpFilePath)
+      const result = validateBase64Image(base64Data, bmpMimeType)
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeInstanceOf(Buffer)
+      }
+    })
+
+    it('should return error for invalid base64 format', () => {
+      // Arrange
+      const invalidBase64 = 'not-valid-base64-data!'
+
+      // Act
+      const result = validateBase64Image(invalidBase64)
 
       // Assert
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
-        expect(result.error.message).toContain('Unsupported file format')
-        expect(result.error.message).toContain('PNG')
-        expect(result.error.message).toContain('JPEG')
-        expect(result.error.message).toContain('WEBP')
+        expect(result.error.message).toContain('Invalid base64 format')
       }
     })
 
-    it('should return error for non-existent file', () => {
-      // Arrange
-      const nonExistentFile = './non-existent-file.png'
-
-      // Act
-      const result = validateImageFile(nonExistentFile)
-
-      // Assert
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe('FILE_OPERATION_ERROR')
-        expect(result.error.message).toContain('File not found')
-      }
-    })
-
-    it('should return success for undefined file path', () => {
+    it('should return success for undefined image data', () => {
       // Arrange & Act
-      const result = validateImageFile(undefined)
+      const result = validateBase64Image(undefined)
 
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data).toBeNull()
+        expect(result.data).toBeUndefined()
       }
     })
 
-    it('should return error for file exceeding 10MB', () => {
-      // Note: This test requires a real large file or mocking fs functions
-      // For now, we skip this test as it requires file system mocking
-      // In a real project, we would use vi.mock() to mock fs functions
-      expect(true).toBe(true) // Placeholder assertion
-    })
-  })
-
-  describe('validateOutputFormat', () => {
-    it('should return error for invalid format', () => {
-      // Arrange
-      const invalidFormat = 'BMP' as any
+    it('should return error for image data exceeding 10MB', () => {
+      // Arrange - Create a large base64 string (over 10MB when decoded)
+      const largeBinaryData = Buffer.alloc(11 * 1024 * 1024, 'a') // 11MB
+      const largeBase64 = largeBinaryData.toString('base64')
 
       // Act
-      const result = validateOutputFormat(invalidFormat)
+      const result = validateBase64Image(largeBase64)
 
       // Assert
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
-        expect(result.error.message).toContain('Invalid output format')
-        expect(result.error.message).toContain('PNG')
-        expect(result.error.message).toContain('JPEG')
-        expect(result.error.message).toContain('WebP')
-      }
-    })
-
-    it('should return success for undefined format (defaults to PNG)', () => {
-      // Arrange & Act
-      const result = validateOutputFormat(undefined)
-
-      // Assert
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toBe('PNG')
-      }
-    })
-
-    it('should return success for valid formats', () => {
-      const validFormats = ['PNG', 'JPEG', 'WebP'] as const
-
-      for (const format of validFormats) {
-        // Act
-        const result = validateOutputFormat(format)
-
-        // Assert
-        expect(result.success).toBe(true)
-        if (result.success) {
-          expect(result.data).toBe(format)
-        }
+        expect(result.error.message).toContain('Image size exceeds')
+        expect(result.error.message).toContain('10.0MB')
       }
     })
   })
@@ -187,7 +143,6 @@ describe('inputValidator', () => {
       // Arrange
       const invalidParams: GenerateImageParams = {
         prompt: '', // Invalid empty prompt
-        outputFormat: 'PNG',
       }
 
       // Act
@@ -204,7 +159,6 @@ describe('inputValidator', () => {
       // Arrange
       const validParams: GenerateImageParams = {
         prompt: 'Generate a beautiful landscape',
-        outputFormat: 'PNG',
       }
 
       // Act
@@ -251,131 +205,6 @@ describe('inputValidator', () => {
       if (result.success) {
         expect(result.data).toEqual(validParams)
       }
-    })
-  })
-
-  describe('validateNewFeatureParams', () => {
-    it('should return success for undefined parameters', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(true)
-    })
-
-    it('should return success for valid boolean parameters', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-        blendImages: true,
-        maintainCharacterConsistency: false,
-        useWorldKnowledge: true,
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(true)
-    })
-
-    it('should return error for invalid blendImages parameter', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-        blendImages: 'yes' as any,
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
-        expect(result.error.message).toBe('blendImages must be a boolean value')
-        expect(result.error.suggestion).toContain('Use true or false for blendImages parameter')
-      }
-    })
-
-    it('should return error for invalid maintainCharacterConsistency parameter', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-        maintainCharacterConsistency: 1 as any,
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
-        expect(result.error.message).toBe('maintainCharacterConsistency must be a boolean value')
-        expect(result.error.suggestion).toContain(
-          'Use true or false for maintainCharacterConsistency parameter'
-        )
-      }
-    })
-
-    it('should return error for invalid useWorldKnowledge parameter', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-        useWorldKnowledge: 'false' as any,
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
-        expect(result.error.message).toBe('useWorldKnowledge must be a boolean value')
-        expect(result.error.suggestion).toContain(
-          'Use true or false for useWorldKnowledge parameter'
-        )
-      }
-    })
-
-    it('should return error for multiple invalid parameters (first one)', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-        blendImages: 'invalid' as any,
-        maintainCharacterConsistency: 123 as any,
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
-        expect(result.error.message).toBe('blendImages must be a boolean value')
-      }
-    })
-
-    it('should return success when only one feature is specified', () => {
-      // Arrange
-      const params: GenerateImageParams = {
-        prompt: 'Test prompt',
-        blendImages: true,
-      }
-
-      // Act
-      const result = validateNewFeatureParams(params)
-
-      // Assert
-      expect(result.success).toBe(true)
     })
   })
 })

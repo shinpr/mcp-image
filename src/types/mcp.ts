@@ -13,46 +13,20 @@
 export interface GenerateImageParams {
   /** Prompt for image generation */
   prompt: string
-  /** Image path to edit (for image editing) */
+  /** Optional file name for the generated image (if not specified, generates an auto-named file in IMAGE_OUTPUT_DIR) */
+  fileName?: string
+  /** Absolute path to input image for editing (optional) */
   inputImagePath?: string
-  /** Output path for generated image */
-  outputPath?: string
-  /** Output format for generated image */
-  outputFormat?: string
-  /** Enable URL context extraction and processing (default: false) */
-  enableUrlContext?: boolean
-
-  // Gemini 2.5 Flash Image new feature parameters
+  /** Base64 encoded input image data (optional) */
+  inputImage?: string
+  /** MIME type of the input image (optional, used with inputImage) */
+  inputImageMimeType?: string
   /** Multi-image blending functionality (default: false) */
   blendImages?: boolean
   /** Maintain character consistency across generations (default: false) */
   maintainCharacterConsistency?: boolean
   /** Use world knowledge integration for more accurate context (default: false) */
   useWorldKnowledge?: boolean
-
-  // Additional Gemini 2.5 Flash Image parameters
-  /** Aspect ratio for the generated image */
-  aspectRatio?: 'square' | 'portrait' | 'landscape'
-  /** Guidance scale (default: auto) */
-  guidance?: number
-  /** Random seed for reproducible results */
-  seed?: number
-  /** Output MIME type */
-  outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
-}
-
-/**
- * Image generation result
- */
-export interface GenerateImageResult {
-  /** Success flag */
-  success: boolean
-  /** Base64 encoded image data */
-  imageData?: string
-  /** Error message */
-  error?: string
-  /** Execution time (milliseconds) */
-  executionTime?: number
 }
 
 /**
@@ -68,16 +42,20 @@ export interface MCPServerConfig {
 }
 
 /**
+ * Content types for MCP responses
+ */
+export type McpContent = {
+  type: 'text'
+  text: string
+}
+
+/**
  * MCP Tool Response format
  */
 export interface McpToolResponse {
-  content: [
-    {
-      type: 'text'
-      text: string
-    },
-  ]
+  content: McpContent[]
   isError?: boolean
+  structuredContent?: unknown
   _meta?: {
     progressToken?: string
   }

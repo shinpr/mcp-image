@@ -893,7 +893,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       const content = JSON.parse(response.content[0].text)
 
       // Verify URL context processing was attempted
-      expect(content.metadata.contextMethod).toBe('url_context') // URL is detected and processed automatically
+      expect(content.metadata.contextMethod).toBe('prompt_only') // Will be prompt_only due to no URL context client
       expect(content.metadata.extractedUrls).toBeDefined()
       expect(content.metadata.extractedUrls).toHaveLength(1)
       expect(content.metadata.extractedUrls[0]).toBe('https://example.com')
@@ -922,8 +922,8 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       expect(response.isError).toBe(false)
       const content = JSON.parse(response.content[0].text)
 
-      // Verify URL context is used since URL is detected
-      expect(content.metadata.contextMethod).toBe('url_context')
+      // Verify fallback occurred
+      expect(content.metadata.contextMethod).toBe('prompt_only')
       expect(content.metadata.extractedUrls).toBeDefined()
       expect(content.metadata.extractedUrls).toHaveLength(1)
       expect(content.metadata.urlContextUsed).toBeUndefined() // Not attempted due to no client available
@@ -1021,7 +1021,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       expect(response.isError).toBe(false)
       const content = JSON.parse(response.content[0].text)
 
-      expect(content.metadata.contextMethod).toBe('url_context')
+      expect(content.metadata.contextMethod).toBe('prompt_only')
       expect(content.metadata.extractedUrls).toBeDefined() // URLs still extracted for metadata
       expect(content.metadata.extractedUrls).toHaveLength(1)
       expect(content.metadata.urlContextUsed).toBeUndefined() // Not attempted when disabled
@@ -1304,7 +1304,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
 
       const generateImageTool = toolsList.tools.find((tool) => tool.name === 'generate_image')
       expect(generateImageTool).toBeDefined()
-      expect(generateImageTool?.description).toContain('Generate image')
+      expect(generateImageTool?.description).toContain('Gemini API')
       expect(generateImageTool?.inputSchema).toBeDefined()
       expect(generateImageTool?.inputSchema.properties.prompt).toBeDefined()
 
@@ -1976,7 +1976,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       for (const nullPath of nullBytePaths) {
         const params: GenerateImageParams = {
           prompt: 'Test null byte handling',
-          fileName: nullPath,
+          outputPath: nullPath,
         }
 
         const response = await mcpServer.callTool('generate_image', params)
@@ -2068,7 +2068,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       for (const invalidPath of unsupportedFormats) {
         const params: GenerateImageParams = {
           prompt: 'Test unsupported format',
-          fileName: invalidPath,
+          outputPath: invalidPath,
         }
 
         const response = await mcpServer.callTool('generate_image', params)
@@ -2285,7 +2285,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
 
       const params: GenerateImageParams = {
         prompt: 'Test file permission error',
-        fileName: '/root/restricted/test.png', // Restricted path
+        outputPath: '/root/restricted/test.png', // Restricted path
       }
 
       // Act
@@ -2330,7 +2330,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       for (const invalidPath of invalidPaths) {
         const params: GenerateImageParams = {
           prompt: 'Test invalid path handling',
-          fileName: invalidPath,
+          outputPath: invalidPath,
         }
 
         const response = await mcpServer.callTool('generate_image', params)
@@ -2516,9 +2516,9 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       expect(response.isError).toBe(false)
       const content = JSON.parse(response.content[0].text)
 
-      // Verify URL context is used since URL is detected
+      // Verify fallback processing occurred
       expect(content.type).toBe('resource')
-      expect(content.metadata.contextMethod).toBe('url_context')
+      expect(content.metadata.contextMethod).toBe('prompt_only')
       expect(content.metadata.extractedUrls).toBeDefined()
       expect(content.metadata.extractedUrls).toContain('https://example.com')
 
@@ -2553,7 +2553,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
           name: 'Invalid file operation',
           params: {
             prompt: 'Test invalid file operation',
-            fileName: '/invalid/path/test.png',
+            outputPath: '/invalid/path/test.png',
           },
         },
       ]
@@ -2673,8 +2673,8 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       expect(content.metadata.extractedUrls).toContain('https://example.com')
       expect(content.metadata.extractedUrls).toContain('https://test.org')
 
-      // Verify processing method (URL context is used since URLs are detected)
-      expect(content.metadata.contextMethod).toBe('url_context')
+      // Verify processing method (should fallback to prompt_only)
+      expect(content.metadata.contextMethod).toBe('prompt_only')
 
       // Verify file generation succeeded (in real implementation)
       // Note: File system operations are mocked in integration tests
@@ -2976,7 +2976,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
 
       const requests = Array.from({ length: 3 }, (_, i) => ({
         prompt: `Concurrent request ${i + 1}`,
-        fileName: `./test-output/concurrent-${i + 1}.png`,
+        outputPath: `./test-output/concurrent-${i + 1}.png`,
       }))
 
       // Act - Send concurrent requests

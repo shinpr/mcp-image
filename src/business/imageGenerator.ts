@@ -4,27 +4,16 @@
  */
 
 import type { GeminiClient } from '../api/geminiClient'
-import type { UrlContextClient } from '../api/urlContextClient'
-import { ConcurrencyManager } from '../server/concurrencyManager'
 import type { GenerateImageParams } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import {
-  ConcurrencyError,
   type FileOperationError,
   GeminiAPIError,
-  InputValidationError,
+  type InputValidationError,
   type NetworkError,
 } from '../utils/errors'
-import { Logger } from '../utils/logger'
-import { validateImageFile, validatePrompt } from './inputValidator'
-import { PerformanceManager } from './performanceManager'
-import { URLExtractor } from './urlExtractor'
-
-/**
- * Context method type for image generation
- */
-export type ContextMethod = 'prompt_only' | 'url_context'
+import { validateBase64Image, validatePrompt } from './inputValidator'
 
 /**
  * Metadata for generated images in the business layer
@@ -32,27 +21,15 @@ export type ContextMethod = 'prompt_only' | 'url_context'
 export interface GenerationMetadata {
   model: 'gemini-2.5-flash-image-preview'
   processingTime: number // milliseconds
-  contextMethod: ContextMethod
+  contextMethod: string // URL context detection method used
   timestamp: string
   /** URLs extracted from the prompt (undefined if none) */
   extractedUrls?: string[]
-  /** Whether URL context was successfully used (undefined if not attempted) */
-  urlContextUsed?: boolean
-  /** Reason for fallback to prompt_only processing (undefined if no fallback) */
-  fallbackReason?: string
-  /** Number of retry attempts made during URL context processing (undefined if not attempted) */
-  retryCount?: number
-  /** New features usage metadata */
-  newFeatures?: {
+  /** Feature usage metadata */
+  features?: {
     blendImages: boolean
     maintainCharacterConsistency: boolean
     useWorldKnowledge: boolean
-  }
-  /** Effectiveness assessment of new features (undefined if features not used) */
-  featureEffectiveness?: {
-    blending?: 'successful' | 'partial' | 'failed'
-    consistency?: 'high' | 'medium' | 'low'
-    knowledge?: 'extensive' | 'moderate' | 'minimal'
   }
   /** Performance metrics (added in optimization) */
   performance?: {
@@ -76,15 +53,10 @@ export interface GenerationResult {
  */
 export interface ImageGeneratorParams {
   prompt: string
-  enableUrlContext?: boolean
-  inputImagePath?: string
-  outputPath?: string
-  outputFormat?: string
-  aspectRatio?: 'square' | 'portrait' | 'landscape'
-  guidance?: number
-  seed?: number
-  outputMimeType?: 'image/png' | 'image/jpeg' | 'image/webp'
-  // Gemini 2.5 Flash Image new feature parameters
+  /** Base64 encoded image data for editing (optional) */
+  inputImage?: string
+  /** MIME type of the input image */
+  inputImageMimeType?: string
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
   useWorldKnowledge?: boolean
@@ -97,10 +69,7 @@ export interface ImageGeneratorParams {
 export class ImageGenerator {
   private readonly modelName = 'gemini-2.5-flash-image-preview' as const
 
-  constructor(
-    private readonly geminiClient: GeminiClient,
-    private readonly urlContextClient?: UrlContextClient
-  ) {}
+  constructor(private readonly geminiClient: GeminiClient) {}
 
   /**
    * Generates an image from a text prompt with optional URL context processing
@@ -112,7 +81,7 @@ export class ImageGenerator {
   ): Promise<
     Result<
       GenerationResult,
-      InputValidationError | FileOperationError | GeminiAPIError | NetworkError | ConcurrencyError
+      InputValidationError | FileOperationError | GeminiAPIError | NetworkError
     >
   > {
     const startTime = Date.now()
@@ -124,148 +93,20 @@ export class ImageGenerator {
     }
     const validatedParams = validationResult.data
 
-    // Step 2: Initialize metadata tracking variables
-    let contextMethod: ContextMethod = 'prompt_only'
-    let extractedUrls: string[] = []
-    let finalPrompt = params.prompt
-
-    // Step 3: URL Context processing (if enabled)
-    const urlContextResult = await this.processUrlContext(params)
-    finalPrompt = urlContextResult.finalPrompt
-    contextMethod = urlContextResult.contextMethod
-    extractedUrls = urlContextResult.extractedUrls
-    const fallbackReason = urlContextResult.fallbackReason
-    const retryCount = urlContextResult.retryCount
-
-    // Step 4: Execute API call with processed prompt
-    const apiResult = await this.executeApiCall({
-      ...params,
-      prompt: finalPrompt,
-    })
+    // Step 2: Execute API call (URL Context is handled automatically by GeminiClient)
+    const apiResult = await this.executeApiCall(params)
     if (!apiResult.success) {
       return Err(apiResult.error)
     }
 
-    // Step 5: Generate metadata and return result
+    // Step 3: Generate metadata and return result
     const processingTime = Math.max(1, Date.now() - startTime)
-    const metadata = this.generateMetadata(
-      processingTime,
-      contextMethod,
-      extractedUrls,
-      urlContextResult.urlContextUsed,
-      validatedParams.enableUrlContext || false,
-      fallbackReason,
-      retryCount,
-      validatedParams
-    )
+    const metadata = this.generateMetadata(processingTime, validatedParams)
 
     return Ok({
       imageData: apiResult.data.imageData,
       metadata,
     })
-  }
-
-  /**
-   * Process URL context if enabled and URLs are present
-   * @param params Image generation parameters
-   * @returns URL context processing result with fallback information
-   */
-  protected async processUrlContext(params: ImageGeneratorParams): Promise<{
-    finalPrompt: string
-    contextMethod: ContextMethod
-    extractedUrls: string[]
-    urlContextUsed: boolean | undefined
-    fallbackReason: string | undefined
-    retryCount: number | undefined
-  }> {
-    // Initialize with defaults
-    let finalPrompt = params.prompt
-    let contextMethod: ContextMethod = 'prompt_only'
-    let extractedUrls: string[] = []
-    let urlContextUsed: boolean | undefined = undefined
-    let fallbackReason: string | undefined
-    let retryCount: number | undefined
-
-    // Extract URLs from prompt regardless of client availability for metadata tracking
-    extractedUrls = URLExtractor.extractUrls(params.prompt)
-
-    // Only process if URL context is enabled and client is available
-    if (!params.enableUrlContext || !this.urlContextClient) {
-      return {
-        finalPrompt,
-        contextMethod,
-        extractedUrls,
-        urlContextUsed,
-        fallbackReason,
-        retryCount,
-      }
-    }
-
-    // Only proceed if URLs were found
-    if (extractedUrls.length === 0) {
-      return {
-        finalPrompt,
-        contextMethod,
-        extractedUrls,
-        urlContextUsed,
-        fallbackReason,
-        retryCount,
-      }
-    }
-
-    console.log(`[ImageGenerator] Processing ${extractedUrls.length} URLs for context`, {
-      urls: extractedUrls,
-    })
-
-    try {
-      // Process URLs with context API
-      const contextResult = await this.urlContextClient.processUrls(extractedUrls, params.prompt)
-
-      if (contextResult.success) {
-        finalPrompt = contextResult.data.combinedPrompt
-        contextMethod = 'url_context'
-        urlContextUsed = true
-
-        // Extract retry information from the result
-        if (contextResult.data.extractedInfo && 'retryCount' in contextResult.data.extractedInfo) {
-          retryCount = contextResult.data.extractedInfo['retryCount'] as number
-        }
-
-        console.log('[ImageGenerator] URL context processing succeeded', {
-          urlCount: extractedUrls.length,
-          retryCount: retryCount || 0,
-          promptLength: finalPrompt.length,
-        })
-      } else {
-        // Context processing failed but URLs were extracted
-        urlContextUsed = false
-        fallbackReason = contextResult.error.message
-
-        console.warn(
-          '[ImageGenerator] URL context processing failed, falling back to prompt-only',
-          {
-            reason: fallbackReason,
-            urls: extractedUrls,
-            errorType: contextResult.error.constructor.name,
-          }
-        )
-      }
-    } catch (error) {
-      // Unexpected error during context processing
-      urlContextUsed = false
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      fallbackReason = `Unexpected error: ${errorMessage}`
-
-      console.warn(
-        '[ImageGenerator] Unexpected error during URL context processing, falling back to prompt-only',
-        {
-          error: errorMessage,
-          urls: extractedUrls,
-        }
-      )
-    }
-
-    return { finalPrompt, contextMethod, extractedUrls, urlContextUsed, fallbackReason, retryCount }
   }
 
   /**
@@ -280,9 +121,9 @@ export class ImageGenerator {
       return Err(promptResult.error)
     }
 
-    // Validate input image file if provided
-    if (params.inputImagePath) {
-      const imageResult = validateImageFile(params.inputImagePath)
+    // Validate input image if provided
+    if (params.inputImage) {
+      const imageResult = validateBase64Image(params.inputImage, params.inputImageMimeType)
       if (!imageResult.success) {
         return Err(imageResult.error)
       }
@@ -291,15 +132,8 @@ export class ImageGenerator {
     // Return validated parameters in GenerateImageParams format
     const validatedParams: GenerateImageParams = {
       prompt: promptResult.data,
-      ...(params.inputImagePath && { inputImagePath: params.inputImagePath }),
-      ...(params.outputPath && { outputPath: params.outputPath }),
-      ...(params.outputFormat && { outputFormat: params.outputFormat }),
-      ...(params.enableUrlContext !== undefined && { enableUrlContext: params.enableUrlContext }),
-      ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
-      ...(params.guidance !== undefined && { guidance: params.guidance }),
-      ...(params.seed !== undefined && { seed: params.seed }),
-      ...(params.outputMimeType && { outputMimeType: params.outputMimeType }),
-      // New feature parameters
+      ...(params.inputImage && { inputImage: params.inputImage }),
+      ...(params.inputImageMimeType && { inputImageMimeType: params.inputImageMimeType }),
       ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
       ...(params.maintainCharacterConsistency !== undefined && {
         maintainCharacterConsistency: params.maintainCharacterConsistency,
@@ -330,10 +164,10 @@ export class ImageGenerator {
       }
 
       // Add input image if provided
-      if (params.inputImagePath) {
-        // TODO: Implement proper file reading logic
-        // For now, create a placeholder Buffer to satisfy type requirements
-        apiParams.inputImage = Buffer.alloc(0)
+      if (params.inputImage) {
+        // Decode base64 image to Buffer
+        const cleanedData = params.inputImage.replace(/^data:image\/[a-z]+;base64,/, '')
+        apiParams.inputImage = Buffer.from(cleanedData, 'base64')
       }
 
       // Add new feature parameters if provided
@@ -363,42 +197,27 @@ export class ImageGenerator {
    */
   protected generateMetadata(
     processingTime: number,
-    contextMethod: ContextMethod,
-    extractedUrls: string[],
-    urlContextUsed: boolean | undefined,
-    urlContextEnabled: boolean,
-    fallbackReason: string | undefined,
-    retryCount: number | undefined,
     params: GenerateImageParams
   ): GenerationMetadata {
+    // Extract URLs from prompt for metadata tracking
+    const URL_PATTERN =
+      /https?:\/\/(?:[-\w.])+(?:\.[a-zA-Z]{2,})+(?:\/[-\w._~:\/?#[\]@!$&'()*+,;=]*)?/g
+    const extractedUrls = params.prompt.match(URL_PATTERN)
+
     const metadata: GenerationMetadata = {
       model: this.modelName,
       processingTime,
-      contextMethod,
+      contextMethod: extractedUrls && extractedUrls.length > 0 ? 'url_context' : 'prompt_only',
       timestamp: new Date().toISOString(),
     }
 
-    // Always include extractedUrls if any were found, regardless of URL context processing
-    if (extractedUrls.length > 0) {
-      metadata.extractedUrls = extractedUrls
+    if (extractedUrls && extractedUrls.length > 0) {
+      metadata.extractedUrls = [...new Set(extractedUrls)] // Remove duplicates
     }
 
-    // Include urlContextUsed when URL context processing was attempted
-    if (urlContextEnabled && extractedUrls.length > 0 && urlContextUsed !== undefined) {
-      metadata.urlContextUsed = urlContextUsed
-    }
-
-    if (fallbackReason) {
-      metadata.fallbackReason = fallbackReason
-    }
-
-    if (retryCount !== undefined) {
-      metadata.retryCount = retryCount
-    }
-
-    // Add new features usage information if any features are enabled
+    // Add features usage information if any features are enabled
     if (params.blendImages || params.maintainCharacterConsistency || params.useWorldKnowledge) {
-      metadata.newFeatures = {
+      metadata.features = {
         blendImages: params.blendImages || false,
         maintainCharacterConsistency: params.maintainCharacterConsistency || false,
         useWorldKnowledge: params.useWorldKnowledge || false,
@@ -423,259 +242,5 @@ export class ImageGenerator {
       'Unknown error occurred during image generation',
       'An unknown error occurred. Please try again or contact support if the problem persists'
     )
-  }
-}
-
-/**
- * Performance-optimized image generator with concurrency control and metrics
- */
-export class OptimizedImageGenerator extends ImageGenerator {
-  private performanceManager = new PerformanceManager()
-  private concurrencyManager = ConcurrencyManager.getInstance()
-  private logger = new Logger()
-
-  /**
-   * Generates an image with performance optimization and concurrency control
-   * @param params Parameters for image generation
-   * @returns Result containing image data with performance metadata, or an error
-   */
-  override async generateImage(
-    params: ImageGeneratorParams
-  ): Promise<
-    Result<
-      GenerationResult,
-      InputValidationError | FileOperationError | GeminiAPIError | NetworkError | ConcurrencyError
-    >
-  > {
-    // Check concurrency limits
-    if (this.concurrencyManager.isAtLimit()) {
-      return Err(new ConcurrencyError('Server busy, please try again later'))
-    }
-
-    // Acquire concurrency lock
-    try {
-      await this.concurrencyManager.acquireLock()
-    } catch (error) {
-      return Err(new ConcurrencyError('Request timeout'))
-    }
-
-    const tracker = this.performanceManager.startMetrics()
-
-    try {
-      // Phase 1: Optimized validation
-      const validationResult = await this.optimizedValidation(params)
-      tracker.checkpoint('validation')
-      if (!validationResult.success) return Err(validationResult.error)
-
-      // Phase 2: URL Context processing (existing logic)
-      const urlContextResult = await this.processUrlContext(params)
-      const {
-        finalPrompt,
-        contextMethod,
-        extractedUrls,
-        urlContextUsed,
-        fallbackReason,
-        retryCount,
-      } = urlContextResult
-
-      tracker.checkpoint('api-start')
-
-      // Phase 3: API call (existing logic)
-      const apiResult = await this.executeApiCall({
-        ...params,
-        prompt: finalPrompt,
-      })
-      tracker.checkpoint('api-end')
-      if (!apiResult.success) return Err(apiResult.error)
-
-      // Phase 4: Optimized image processing
-      const processedResult = await this.optimizedImageProcessing(apiResult.data.imageData)
-      tracker.checkpoint('processing-end')
-      if (!processedResult.success) return Err(processedResult.error)
-
-      // Phase 5: Performance analysis and metadata generation
-      const metrics = tracker.finish()
-      const analysis = PerformanceManager.analyzeBottlenecks(metrics)
-
-      // Check performance requirements
-      if (!PerformanceManager.isWithinLimits(metrics)) {
-        this.logger.warn('performance', 'Processing time exceeded limit', {
-          metrics,
-          analysis,
-        })
-      }
-
-      // Generate enhanced metadata
-      const baseMetadata = this.generateMetadata(
-        Math.max(1, Date.now() - Date.now()), // Will be overridden by performance data
-        contextMethod,
-        extractedUrls,
-        urlContextUsed,
-        params.enableUrlContext || false,
-        fallbackReason,
-        retryCount,
-        validationResult.data
-      )
-
-      const enhancedMetadata: GenerationMetadata = {
-        ...baseMetadata,
-        performance: {
-          internalProcessingTime: metrics.validationTime + metrics.processingTime,
-          totalTime: metrics.totalTime,
-          memoryPeak: metrics.memoryUsage.peak,
-          withinLimits: PerformanceManager.isWithinLimits(metrics),
-        },
-      }
-
-      return Ok({
-        imageData: processedResult.data,
-        metadata: enhancedMetadata,
-      })
-    } finally {
-      // Always release the concurrency lock
-      this.concurrencyManager.releaseLock()
-
-      // Enhanced memory cleanup
-      this.performMemoryCleanup(tracker)
-    }
-  }
-
-  /**
-   * Optimized validation with parallel checks
-   * @param params Image generation parameters
-   * @returns Validation result
-   */
-  private async optimizedValidation(
-    params: ImageGeneratorParams
-  ): Promise<Result<GenerateImageParams, InputValidationError | FileOperationError>> {
-    // Parallel validation for better performance
-    const validations = await Promise.allSettled([
-      this.validatePromptOptimized(params.prompt),
-      this.validateFileOptimized(params.inputImagePath),
-      this.validateNewFeaturesOptimized(params),
-    ])
-
-    // Check for any rejections
-    for (const validation of validations) {
-      if (validation.status === 'rejected') {
-        return Err(validation.reason)
-      }
-      if (validation.status === 'fulfilled' && !validation.value.success) {
-        return Err(validation.value.error)
-      }
-    }
-
-    // Return validated parameters
-    const validatedParams: GenerateImageParams = {
-      prompt: params.prompt,
-      ...(params.inputImagePath && { inputImagePath: params.inputImagePath }),
-      ...(params.outputPath && { outputPath: params.outputPath }),
-      ...(params.outputFormat && { outputFormat: params.outputFormat }),
-      ...(params.enableUrlContext !== undefined && { enableUrlContext: params.enableUrlContext }),
-      ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
-      ...(params.guidance !== undefined && { guidance: params.guidance }),
-      ...(params.seed !== undefined && { seed: params.seed }),
-      ...(params.outputMimeType && { outputMimeType: params.outputMimeType }),
-      // New feature parameters
-      ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
-      ...(params.maintainCharacterConsistency !== undefined && {
-        maintainCharacterConsistency: params.maintainCharacterConsistency,
-      }),
-      ...(params.useWorldKnowledge !== undefined && {
-        useWorldKnowledge: params.useWorldKnowledge,
-      }),
-    }
-
-    return Ok(validatedParams)
-  }
-
-  /**
-   * Optimized prompt validation
-   */
-  private async validatePromptOptimized(
-    prompt: string
-  ): Promise<Result<string, InputValidationError>> {
-    return validatePrompt(prompt)
-  }
-
-  /**
-   * Optimized file validation
-   */
-  private async validateFileOptimized(
-    inputImagePath?: string
-  ): Promise<Result<string | undefined, InputValidationError | FileOperationError>> {
-    if (!inputImagePath) {
-      return Ok(undefined)
-    }
-
-    const result = validateImageFile(inputImagePath)
-    if (!result.success) {
-      return Err(result.error)
-    }
-    return Ok(inputImagePath)
-  }
-
-  /**
-   * Optimized new features validation
-   */
-  private async validateNewFeaturesOptimized(
-    params: ImageGeneratorParams
-  ): Promise<Result<void, InputValidationError>> {
-    // Validate feature combinations and constraints
-    if (params.blendImages && !params.inputImagePath) {
-      return Err(
-        new InputValidationError(
-          'Blend images feature requires an input image',
-          'Provide an inputImagePath when using blendImages'
-        )
-      )
-    }
-
-    return Ok(undefined)
-  }
-
-  /**
-   * Optimized image processing with memory efficiency
-   * @param data Image data buffer
-   * @returns Processed image data
-   */
-  private async optimizedImageProcessing(data: Buffer): Promise<Result<Buffer, GeminiAPIError>> {
-    // For now, return the data as-is
-    // Future optimizations: streaming processing, memory-efficient transformations
-    return Ok(data)
-  }
-
-  /**
-   * Perform memory cleanup after processing
-   * @param tracker Optional performance tracker to get memory usage
-   */
-  private performMemoryCleanup(_tracker?: unknown): void {
-    // Force garbage collection if available
-    if (global.gc) {
-      const beforeGC = process.memoryUsage().heapUsed
-      global.gc()
-      const afterGC = process.memoryUsage().heapUsed
-      const cleaned = beforeGC - afterGC
-
-      if (cleaned > 1024 * 1024) {
-        // Log if more than 1MB was cleaned
-        this.logger.info('memory', 'Memory cleanup completed', {
-          cleanedMB: Math.round(cleaned / (1024 * 1024)),
-          heapUsedMB: Math.round(afterGC / (1024 * 1024)),
-        })
-      }
-    }
-
-    // Log memory warning if usage is still high
-    const currentMemory = process.memoryUsage()
-    const heapUsedMB = currentMemory.heapUsed / (1024 * 1024)
-
-    if (heapUsedMB > 512) {
-      this.logger.warn('memory', 'High memory usage after cleanup', {
-        heapUsedMB: Math.round(heapUsedMB),
-        rss: Math.round(currentMemory.rss / (1024 * 1024)),
-        external: Math.round(currentMemory.external / (1024 * 1024)),
-      })
-    }
   }
 }

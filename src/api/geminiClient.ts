@@ -1,6 +1,7 @@
 /**
  * Gemini API client for image generation
  * Integrates with Google's Gemini AI API using the official SDK
+ * Supports automatic URL Context processing and feature parameters
  */
 
 import { GoogleGenAI } from '@google/genai'
@@ -8,6 +9,11 @@ import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
+
+/**
+ * URL pattern for automatic URL detection
+ */
+const URL_PATTERN = /https?:\/\/(?:[-\w.])+(?:\.[a-zA-Z]{2,})+(?:\/[-\w._~:\/?#[\]@!$&'()*+,;=]*)?/g
 
 /**
  * Basic types for Gemini API responses
@@ -33,12 +39,19 @@ interface GeminiResponse {
   }
 }
 
-interface GenerativeModel {
-  generateContent(content: unknown[]): Promise<GeminiResponse>
-}
-
 interface GeminiClientInstance {
-  getGenerativeModel(config: { model: string }): GenerativeModel
+  models: {
+    generateContent(request: {
+      model: string
+      prompt?: string
+      systemInstruction?: string
+      config?: {
+        tools?: Array<{ urlContext?: Record<string, never> }>
+        [key: string]: unknown
+      }
+      contents?: unknown[]
+    }): Promise<GeminiResponse>
+  }
 }
 
 interface ErrorWithCode extends Error {
@@ -54,25 +67,13 @@ export interface GenerationMetadata {
   mimeType: string
   timestamp: Date
   inputImageProvided: boolean
-  /** New features usage metadata */
-  newFeatures?: {
+  contextMethod: string
+  /** Features usage metadata */
+  features?: {
     blendImages: boolean
     maintainCharacterConsistency: boolean
     useWorldKnowledge: boolean
   }
-}
-
-/**
- * Parameters for MCP server image generation request (includes file paths)
- */
-export interface McpGenerateImageParams {
-  prompt: string
-  inputImagePath?: string
-  outputFormat?: string
-  // Gemini 2.5 Flash Image new feature parameters
-  blendImages?: boolean
-  maintainCharacterConsistency?: boolean
-  useWorldKnowledge?: boolean
 }
 
 /**
@@ -81,7 +82,6 @@ export interface McpGenerateImageParams {
 export interface GenerateImageParams {
   prompt: string
   inputImage?: Buffer
-  // Gemini 2.5 Flash Image new feature parameters
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
   useWorldKnowledge?: boolean
@@ -108,21 +108,35 @@ export interface GeminiClient {
  * Implementation of Gemini API client
  */
 class GeminiClientImpl implements GeminiClient {
-  private readonly model: GenerativeModel
   private readonly modelName = 'gemini-2.5-flash-image-preview'
 
-  constructor(private readonly genai: GeminiClientInstance) {
-    this.model = this.genai.getGenerativeModel({
-      model: this.modelName,
-    })
-  }
+  constructor(private readonly genai: GeminiClientInstance) {}
 
   async generateImage(
     params: GenerateImageParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     try {
-      // Prepare the request content
-      const requestContent: unknown[] = [params.prompt]
+      // Enhance prompt with structured parameters for better accuracy
+      let enhancedPrompt = params.prompt
+
+      // Convert MCP parameters to structured prompt instructions
+      if (params.maintainCharacterConsistency) {
+        enhancedPrompt +=
+          ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]'
+      }
+
+      if (params.blendImages) {
+        enhancedPrompt +=
+          ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]'
+      }
+
+      if (params.useWorldKnowledge) {
+        enhancedPrompt +=
+          ' [INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]'
+      }
+
+      // Prepare the request content with enhanced prompt
+      const requestContent: unknown[] = [enhancedPrompt]
 
       // Add input image if provided
       if (params.inputImage) {
@@ -134,27 +148,42 @@ class GeminiClientImpl implements GeminiClient {
         })
       }
 
-      // Prepare generation configuration with new features
-      const generationConfig: Record<string, unknown> = {}
+      // Prepare API configuration
+      const config: {
+        tools?: Array<{ urlContext?: Record<string, never> }>
+        [key: string]: unknown
+      } = {}
 
-      // Add new feature parameters if provided
-      if (params.blendImages !== undefined) {
-        generationConfig['blendImages'] = params.blendImages
-      }
-      if (params.maintainCharacterConsistency !== undefined) {
-        generationConfig['maintainCharacterConsistency'] = params.maintainCharacterConsistency
-      }
-      if (params.useWorldKnowledge !== undefined) {
-        generationConfig['useWorldKnowledge'] = params.useWorldKnowledge
+      // Automatic URL Context detection and activation
+      const hasUrls = this.detectUrls(params.prompt)
+      if (hasUrls) {
+        config.tools = [{ urlContext: {} }]
       }
 
-      // Generate content using Gemini API with enhanced configuration
-      // Note: New features are stored for metadata but not yet supported in API calls
-      // TODO: Update when Gemini SDK supports generationConfig parameter
-      const response = await this.model.generateContent(requestContent)
+      // Note: Feature parameters are now handled via prompt enhancement
+      // The Gemini API does not directly support these as config parameters
+
+      // Generate content using Gemini API with official URL Context support
+      const response = await this.genai.models.generateContent({
+        model: this.modelName,
+        contents: requestContent,
+        config,
+      })
 
       // Extract image data from response
-      const candidates = response.response.candidates
+      if (!response || typeof response !== 'object') {
+        return Err(
+          new GeminiAPIError(
+            'Invalid response from Gemini API',
+            'The API returned an unexpected response format'
+          )
+        )
+      }
+
+      // Handle different response structures
+      const candidates =
+        response.response?.candidates ||
+        (response as unknown as { candidates?: unknown[] }).candidates
       if (!candidates || candidates.length === 0) {
         return Err(
           new GeminiAPIError(
@@ -173,7 +202,7 @@ class GeminiClientImpl implements GeminiClient {
           )
         )
       }
-      const parts = candidate.content?.parts
+      const parts = (candidate as unknown as { content?: { parts?: unknown[] } }).content?.parts
       if (!parts || parts.length === 0) {
         return Err(
           new GeminiAPIError(
@@ -183,8 +212,12 @@ class GeminiClientImpl implements GeminiClient {
         )
       }
 
-      // Find the image part
-      const imagePart = parts.find((part: ContentPart) => part.inlineData)
+      // Find the image part with proper type guards
+      const imagePart = parts.find((part: unknown) => {
+        const p = part as { inlineData?: { data: string; mimeType: string } }
+        return p.inlineData?.data
+      }) as { inlineData?: { data: string; mimeType: string } } | undefined
+
       if (!imagePart?.inlineData) {
         return Err(
           new GeminiAPIError(
@@ -198,18 +231,23 @@ class GeminiClientImpl implements GeminiClient {
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
-      // Create metadata with new features information
+      // Create metadata with features information
       const metadata: GenerationMetadata = {
         model: this.modelName,
-        prompt: params.prompt,
+        prompt: params.prompt, // Original prompt, not enhanced
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
+        contextMethod: hasUrls ? 'url_context' : 'prompt_only',
       }
 
-      // Add new features usage information if any features are used
-      if (params.blendImages || params.maintainCharacterConsistency || params.useWorldKnowledge) {
-        metadata.newFeatures = {
+      // Add features usage information if any features are specified (including false)
+      if (
+        params.blendImages !== undefined ||
+        params.maintainCharacterConsistency !== undefined ||
+        params.useWorldKnowledge !== undefined
+      ) {
+        metadata.features = {
           blendImages: params.blendImages || false,
           maintainCharacterConsistency: params.maintainCharacterConsistency || false,
           useWorldKnowledge: params.useWorldKnowledge || false,
@@ -303,6 +341,15 @@ class GeminiClientImpl implements GeminiClient {
       return typeof error.status === 'number' ? error.status : undefined
     }
     return undefined
+  }
+
+  /**
+   * Detect URLs in prompt for automatic URL Context activation
+   * @param prompt The prompt text to analyze
+   * @returns True if URLs are detected, false otherwise
+   */
+  private detectUrls(prompt: string): boolean {
+    return URL_PATTERN.test(prompt)
   }
 }
 

@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Logger } from '../logger'
 
-// Mock console methods
+// Mock console methods - Logger uses console.error for all MCP-compliant output
 const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
 const mockConsoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -30,14 +30,14 @@ describe('Logger', () => {
       logger.info(context, message, metadata)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"level":"info"'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"level":"info"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.stringContaining('"context":"test-context"')
       )
-      expect(mockConsoleLog).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.stringContaining('"message":"Test info message"')
       )
-      expect(mockConsoleLog).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.stringContaining('"metadata":{"key":"value","count":42}')
       )
     })
@@ -51,8 +51,8 @@ describe('Logger', () => {
       logger.info(context, message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"level":"info"'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('"metadata"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"level":"info"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('"metadata"'))
     })
   })
 
@@ -67,8 +67,8 @@ describe('Logger', () => {
       logger.warn(context, message, metadata)
 
       // Assert
-      expect(mockConsoleWarn).toHaveBeenCalledWith(expect.stringContaining('"level":"warn"'))
-      expect(mockConsoleWarn).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"level":"warn"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.stringContaining('"context":"validation"')
       )
     })
@@ -137,9 +137,11 @@ describe('Logger', () => {
         logger.info('test', 'message', metadata)
 
         // Assert
-        expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"[REDACTED]"'))
-        expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('sensitive-value'))
-        expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('normal-value'))
+        expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"[REDACTED]"'))
+        expect(mockConsoleError).toHaveBeenCalledWith(
+          expect.not.stringContaining('sensitive-value')
+        )
+        expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('normal-value'))
       })
     }
 
@@ -160,10 +162,10 @@ describe('Logger', () => {
       logger.info('test', 'nested data', metadata)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"[REDACTED]"'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('secret-key'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('user-password'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[URL_REDACTED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"[REDACTED]"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('secret-key'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('user-password'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[URL_REDACTED]'))
     })
 
     it('should redact GEMINI_API_KEY in environment variable format', () => {
@@ -174,8 +176,8 @@ describe('Logger', () => {
       logger.info('config', message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[REDACTED]'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[REDACTED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.not.stringContaining('AIzaSyABCDEF123456789')
       )
     })
@@ -188,8 +190,8 @@ describe('Logger', () => {
       logger.info('network', message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[URL_REDACTED]'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[URL_REDACTED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.not.stringContaining('https://api.example.com')
       )
     })
@@ -202,8 +204,8 @@ describe('Logger', () => {
       logger.info('payment', message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
         expect.not.stringContaining('4532-1234-5678-9012')
       )
     })
@@ -216,8 +218,8 @@ describe('Logger', () => {
       logger.info('notification', message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('user@example.com'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('user@example.com'))
     })
 
     it('should filter phone numbers in log messages', () => {
@@ -228,8 +230,8 @@ describe('Logger', () => {
       logger.info('sms', message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('+1-555-123-4567'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('+1-555-123-4567'))
     })
 
     it('should filter SSN in log messages', () => {
@@ -240,8 +242,8 @@ describe('Logger', () => {
       logger.info('processing', message)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.not.stringContaining('123-45-6789'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[FILTERED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.not.stringContaining('123-45-6789'))
     })
   })
 
@@ -263,8 +265,10 @@ describe('Logger', () => {
       logger.debug(context, message, metadata)
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"level":"debug"'))
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"context":"debug-test"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"level":"debug"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
+        expect.stringContaining('"context":"debug-test"')
+      )
     })
 
     it('should not log debug message in production mode', () => {
@@ -277,7 +281,7 @@ describe('Logger', () => {
       logger.debug(context, message)
 
       // Assert
-      expect(mockConsoleLog).not.toHaveBeenCalled()
+      expect(mockConsoleError).not.toHaveBeenCalled()
     })
   })
 
@@ -291,7 +295,7 @@ describe('Logger', () => {
       logger.info(context, message)
 
       // Assert
-      const logOutput = mockConsoleLog.mock.calls[0][0]
+      const logOutput = mockConsoleError.mock.calls[0][0]
       const parsedLog = JSON.parse(logOutput)
 
       expect(parsedLog).toHaveProperty('traceId')
@@ -351,10 +355,10 @@ describe('Logger', () => {
       logger.info('test', 'timestamp test')
 
       // Assert
-      expect(mockConsoleLog).toHaveBeenCalledWith(expect.stringContaining('"timestamp":"'))
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"timestamp":"'))
 
       // Extract the timestamp from the log call
-      const logCall = mockConsoleLog.mock.calls[0][0]
+      const logCall = mockConsoleError.mock.calls[0][0]
       const timestampMatch = logCall.match(/"timestamp":"([^"]+)"/)
       expect(timestampMatch).not.toBeNull()
 
@@ -377,7 +381,7 @@ describe('Logger', () => {
       logger.info(context, message, metadata)
 
       // Assert
-      const logOutput = mockConsoleLog.mock.calls[0][0]
+      const logOutput = mockConsoleError.mock.calls[0][0]
       expect(() => JSON.parse(logOutput)).not.toThrow()
 
       const parsedLog = JSON.parse(logOutput)

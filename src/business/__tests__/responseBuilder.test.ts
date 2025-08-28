@@ -21,7 +21,34 @@ describe('ResponseBuilder', () => {
   })
 
   describe('buildSuccessResponse', () => {
-    it('should create structured content response with base64 data URI', () => {
+    it('should create file URI structured content response when filePath is provided', () => {
+      const testImageData = Buffer.from('fake-image-data')
+      const generationResult: GenerationResult = {
+        imageData: testImageData,
+        metadata: {
+          model: 'gemini-2.5-flash-image-preview',
+          processingTime: 1250,
+          contextMethod: 'prompt_only',
+          timestamp: '2025-08-28T12:00:00Z',
+        },
+      }
+      const testFilePath = '/path/to/generated-image.png'
+
+      const response = responseBuilder.buildSuccessResponse(generationResult, testFilePath)
+
+      expect(response.isError).toBe(false)
+      expect(response.content).toHaveLength(1)
+      expect(response.content[0].type).toBe('text')
+
+      const contentData = JSON.parse(response.content[0].text)
+      expect(contentData.type).toBe('resource')
+      expect(contentData.resource.uri).toBe('file:///path/to/generated-image.png')
+      expect(contentData.resource.name).toBe('generated-image.png')
+      expect(contentData.resource.mimeType).toBe('image/png')
+      expect(contentData.metadata).toEqual(generationResult.metadata)
+    })
+
+    it('should handle different file extensions for MIME type detection', () => {
       const testImageData = Buffer.from('fake-image-data')
       const generationResult: GenerationResult = {
         imageData: testImageData,
@@ -33,45 +60,23 @@ describe('ResponseBuilder', () => {
         },
       }
 
-      const response = responseBuilder.buildSuccessResponse(generationResult)
+      // Test JPEG file
+      let response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.jpg')
+      let contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/jpeg')
+      expect(contentData.resource.uri).toBe('file:///path/to/image.jpg')
 
-      expect(response.isError).toBe(false)
-      expect(response.content).toHaveLength(1)
-      expect(response.content[0].type).toBe('text')
+      // Test WEBP file
+      response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.webp')
+      contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/webp')
+      expect(contentData.resource.uri).toBe('file:///path/to/image.webp')
 
-      const contentData = JSON.parse(response.content[0].text)
-      expect(contentData.type).toBe('resource')
-
-      // Verify data URI format
-      const expectedBase64 = testImageData.toString('base64')
-      expect(contentData.resource.uri).toBe(`data:image/png;base64,${expectedBase64}`)
-
-      // Verify name includes timestamp
-      expect(contentData.resource.name).toMatch(/^image-\d+\.png$/)
+      // Test unknown extension (defaults to PNG)
+      response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.unknown')
+      contentData = JSON.parse(response.content[0].text)
       expect(contentData.resource.mimeType).toBe('image/png')
-      expect(contentData.metadata).toEqual(generationResult.metadata)
-    })
-
-    it('should encode large image data correctly', () => {
-      // Test with larger image data to ensure proper base64 encoding
-      const largeImageData = Buffer.from(new Array(1000).fill('test-data').join(''))
-      const generationResult: GenerationResult = {
-        imageData: largeImageData,
-        metadata: {
-          model: 'gemini-2.5-flash-image-preview',
-          processingTime: 2000,
-          contextMethod: 'url_context',
-          timestamp: '2025-08-28T12:00:00Z',
-        },
-      }
-
-      const response = responseBuilder.buildSuccessResponse(generationResult)
-      const contentData = JSON.parse(response.content[0].text)
-
-      // Verify base64 encoding is correct
-      const expectedBase64 = largeImageData.toString('base64')
-      expect(contentData.resource.uri).toBe(`data:image/png;base64,${expectedBase64}`)
-      expect(contentData.resource.mimeType).toBe('image/png')
+      expect(contentData.resource.uri).toBe('file:///path/to/image.unknown')
     })
   })
 

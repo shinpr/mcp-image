@@ -132,18 +132,9 @@ export class Logger {
     // JSON format structured log output
     const logOutput = JSON.stringify(logEntry)
 
-    if (level === 'debug') {
-      console.log(logOutput)
-    } else if (level === 'info') {
-      console.log(logOutput)
-    } else if (level === 'warn') {
-      console.warn(logOutput)
-    } else if (level === 'error') {
-      console.error(logOutput)
-    }
-
-    // Optional file output
-    this.writeToFile(logEntry)
+    // For MCP servers, ALL logs must go to stderr
+    // stdout is reserved for JSON-RPC messages only
+    console.error(logOutput)
   }
 
   /**
@@ -234,14 +225,5 @@ export class Logger {
    */
   private getCurrentSessionId(): string {
     return this.currentSessionId!
-  }
-
-  /**
-   * Optional file logging (can be configured to write to log files)
-   */
-  private writeToFile(_logEntry: StructuredLogEntry): void {
-    // Implementation for file logging can be added here if needed
-    // For now, we only output to console
-    // Future enhancement: Write to rotating log files
   }
 }

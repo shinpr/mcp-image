@@ -3,34 +3,24 @@
  * Validates user inputs according to Gemini API and business requirements
  */
 
-import { existsSync, statSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { extname } from 'node:path'
 import type { GenerateImageParams } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
-import { FileOperationError, InputValidationError } from '../utils/errors'
+import { InputValidationError } from '../utils/errors'
 
 // Constants for validation limits
 const PROMPT_MIN_LENGTH = 1
 const PROMPT_MAX_LENGTH = 4000
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
-const SUPPORTED_IMAGE_FORMATS = ['png', 'jpeg', 'jpg', 'webp']
-const SUPPORTED_OUTPUT_FORMATS = ['PNG', 'JPEG', 'WebP'] as const
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
+const SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp']
 
 /**
  * Converts bytes to MB with proper formatting
  */
 function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1)
-}
-
-/**
- * Type guard for supported output formats
- */
-function isSupportedOutputFormat(
-  format: string
-): format is (typeof SUPPORTED_OUTPUT_FORMATS)[number] {
-  return SUPPORTED_OUTPUT_FORMATS.includes(format as (typeof SUPPORTED_OUTPUT_FORMATS)[number])
 }
 
 /**
@@ -52,131 +42,133 @@ export function validatePrompt(prompt: string): Result<string, InputValidationEr
 }
 
 /**
- * Validates image file path, format, and size
+ * Validates base64 encoded image data
+ * @param imageData - Base64 encoded image string
+ * @param mimeType - MIME type of the image
+ * @returns Result with validated Buffer or error
  */
-export function validateImageFile(
-  filePath?: string
-): Result<string | null, InputValidationError | FileOperationError> {
-  if (!filePath) {
-    return Ok(null)
+export function validateBase64Image(
+  imageData?: string,
+  mimeType?: string
+): Result<Buffer | undefined, InputValidationError> {
+  // If no image data provided, it's valid (optional parameter)
+  if (!imageData) {
+    return Ok(undefined)
   }
 
-  // Check file format first (before file existence to provide better error messages)
-  const fileExtension = extname(filePath).toLowerCase().slice(1)
-  if (!SUPPORTED_IMAGE_FORMATS.includes(fileExtension)) {
+  // Validate MIME type if provided
+  if (mimeType && !SUPPORTED_MIME_TYPES.includes(mimeType)) {
     return Err(
       new InputValidationError(
-        `Unsupported file format: .${fileExtension}. Supported formats: ${SUPPORTED_IMAGE_FORMATS.map((f) => f.toUpperCase()).join(', ')}`,
-        `Please convert your image to one of these supported formats: ${SUPPORTED_IMAGE_FORMATS.map((f) => f.toUpperCase()).join(', ')}. You can use image editing software or online converters.`
+        `Unsupported MIME type: ${mimeType}. Supported types: ${SUPPORTED_MIME_TYPES.join(', ')}`,
+        `Please provide an image with one of these MIME types: ${SUPPORTED_MIME_TYPES.join(', ')}`
       )
     )
   }
 
-  // Check file existence
-  if (!existsSync(filePath)) {
-    return Err(new FileOperationError(`File not found: ${filePath}`))
+  // Check if it's valid base64
+  // Remove data URI prefix if present
+  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/
+  const cleanedData = imageData.replace(/^data:image\/[a-z]+;base64,/, '')
+
+  if (!base64Regex.test(cleanedData)) {
+    return Err(
+      new InputValidationError(
+        'Invalid base64 format',
+        'Please provide a valid base64 encoded image string'
+      )
+    )
   }
 
-  // Check file size
+  // Decode and check size
+  let buffer: Buffer
   try {
-    const stats = statSync(filePath)
-    if (stats.size > MAX_FILE_SIZE) {
-      const sizeInMB = formatFileSize(stats.size)
-      const limitInMB = formatFileSize(MAX_FILE_SIZE)
+    buffer = Buffer.from(cleanedData, 'base64')
+
+    if (buffer.length > MAX_IMAGE_SIZE) {
+      const sizeInMB = formatFileSize(buffer.length)
+      const limitInMB = formatFileSize(MAX_IMAGE_SIZE)
       return Err(
         new InputValidationError(
-          `File size exceeds ${limitInMB}MB limit. Current size: ${sizeInMB}MB`,
-          `Please compress your image using image editing software, online tools, or save it with lower quality settings to reduce file size below ${limitInMB}MB.`
+          `Image size exceeds ${limitInMB}MB limit. Current size: ${sizeInMB}MB`,
+          `Please compress your image or reduce its resolution to stay below ${limitInMB}MB`
         )
       )
     }
   } catch (error) {
-    return Err(new FileOperationError(`Failed to read file: ${filePath}`))
-  }
-
-  return Ok(filePath)
-}
-
-/**
- * Validates output format
- */
-export function validateOutputFormat(format?: string): Result<string, InputValidationError> {
-  if (!format) {
-    return Ok('PNG')
-  }
-
-  if (!isSupportedOutputFormat(format)) {
     return Err(
       new InputValidationError(
-        `Invalid output format: ${format}. Supported formats: ${SUPPORTED_OUTPUT_FORMATS.join(', ')}`,
-        `Please specify one of these supported output formats: ${SUPPORTED_OUTPUT_FORMATS.join(', ')}. If not specified, PNG will be used as default.`
+        'Failed to decode base64 image',
+        'Please ensure the image is properly base64 encoded'
       )
     )
   }
 
-  return Ok(format)
+  return Ok(buffer)
 }
 
 /**
- * Validates output path for generated image
+ * Validates input image path
+ * @param imagePath - Path to the input image file
+ * @returns Result with validated path or error
  */
-export function validateOutputPath(
-  outputPath?: string
+export function validateImagePath(
+  imagePath?: string
 ): Result<string | undefined, InputValidationError> {
-  if (!outputPath) {
+  // If no path provided, it's valid (optional parameter)
+  if (!imagePath) {
     return Ok(undefined)
   }
 
-  // Check for path traversal attacks
-  if (outputPath.includes('../') || outputPath.includes('..\\')) {
+  // Check if file exists
+  if (!existsSync(imagePath)) {
     return Err(
       new InputValidationError(
-        'Path traversal detected in output path',
-        'Please use a safe output path without "../" or "..\\" sequences'
+        `Input image file not found: ${imagePath}`,
+        'Please provide a valid absolute path to an existing image file'
       )
     )
   }
 
-  // Check for null bytes
-  if (outputPath.includes('\0')) {
+  // Check file extension
+  const ext = extname(imagePath).toLowerCase()
+  const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']
+  if (!supportedExtensions.includes(ext)) {
     return Err(
       new InputValidationError(
-        'Null bytes detected in output path',
-        'Please use a valid file path without null byte characters'
+        `Unsupported image format: ${ext}. Supported formats: ${supportedExtensions.join(', ')}`,
+        `Please provide an image with one of these extensions: ${supportedExtensions.join(', ')}`
       )
     )
   }
 
-  // Validate output file extension
-  const supportedExtensions = ['.png', '.jpg', '.jpeg', '.webp']
-  const hasValidExtension = supportedExtensions.some((ext) =>
-    outputPath.toLowerCase().endsWith(ext)
-  )
-
-  if (!hasValidExtension) {
-    return Err(
-      new InputValidationError(
-        `Invalid output format: ${outputPath}. Supported extensions: ${supportedExtensions.join(', ')}`,
-        `Please use a valid file extension (${supportedExtensions.join(', ')}) for the output path`
-      )
-    )
-  }
-
-  return Ok(outputPath)
+  return Ok(imagePath)
 }
 
 /**
- * Validates new Gemini 2.5 Flash Image feature parameters
+ * Validates complete GenerateImageParams object
  */
-export function validateNewFeatureParams(
+export function validateGenerateImageParams(
   params: GenerateImageParams
-): Result<void, InputValidationError> {
+): Result<GenerateImageParams, InputValidationError> {
+  // Validate prompt
+  const promptResult = validatePrompt(params.prompt)
+  if (!promptResult.success) {
+    return Err(promptResult.error)
+  }
+
+  // Validate input image path if provided
+  const imagePathResult = validateImagePath(params.inputImagePath)
+  if (!imagePathResult.success) {
+    return Err(imagePathResult.error)
+  }
+
   // Validate blendImages parameter
   if (params.blendImages !== undefined && typeof params.blendImages !== 'boolean') {
     return Err(
       new InputValidationError(
         'blendImages must be a boolean value',
-        'Use true or false for blendImages parameter to enable/disable multi-image blending functionality'
+        'Use true or false for blendImages parameter to enable/disable multi-image blending'
       )
     )
   }
@@ -189,7 +181,7 @@ export function validateNewFeatureParams(
     return Err(
       new InputValidationError(
         'maintainCharacterConsistency must be a boolean value',
-        'Use true or false for maintainCharacterConsistency parameter to enable/disable character consistency maintenance'
+        'Use true or false for maintainCharacterConsistency parameter to enable/disable character consistency'
       )
     )
   }
@@ -204,43 +196,12 @@ export function validateNewFeatureParams(
     )
   }
 
-  return Ok(undefined)
-}
-
-/**
- * Validates complete GenerateImageParams object
- */
-export function validateGenerateImageParams(
-  params: GenerateImageParams
-): Result<GenerateImageParams, InputValidationError | FileOperationError> {
-  // Validate prompt
-  const promptResult = validatePrompt(params.prompt)
-  if (!promptResult.success) {
-    return Err(promptResult.error)
-  }
-
-  // Validate input image file if provided
-  const imageFileResult = validateImageFile(params.inputImagePath)
-  if (!imageFileResult.success) {
-    return Err(imageFileResult.error)
-  }
-
-  // Validate output path if provided
-  const outputPathResult = validateOutputPath(params.outputPath)
-  if (!outputPathResult.success) {
-    return Err(outputPathResult.error)
-  }
-
-  // Validate output format
-  const formatResult = validateOutputFormat(params.outputFormat)
-  if (!formatResult.success) {
-    return Err(formatResult.error)
-  }
-
-  // Validate new feature parameters
-  const newFeatureResult = validateNewFeatureParams(params)
-  if (!newFeatureResult.success) {
-    return Err(newFeatureResult.error)
+  // Validate input image data if provided
+  if (params.inputImage || params.inputImageMimeType) {
+    const imageResult = validateBase64Image(params.inputImage, params.inputImageMimeType)
+    if (!imageResult.success) {
+      return Err(imageResult.error)
+    }
   }
 
   return Ok(params)

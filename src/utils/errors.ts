@@ -244,36 +244,6 @@ export class ConfigError extends AppError {
 }
 
 /**
- * Error for URL Context API failures
- */
-export class URLContextError extends AppError {
-  readonly code = 'URL_CONTEXT_ERROR'
-
-  constructor(
-    message: string,
-    public readonly suggestion: string,
-    public readonly statusCode?: number
-  ) {
-    super(message)
-  }
-}
-
-/**
- * Error for invalid URL format
- */
-export class InvalidUrlError extends AppError {
-  readonly code = 'INVALID_URL_ERROR'
-
-  constructor(
-    message: string,
-    public readonly suggestion: string,
-    public readonly invalidUrl?: string
-  ) {
-    super(message)
-  }
-}
-
-/**
  * Error for security violations and attacks with intelligent suggestion system
  */
 export class SecurityError extends BaseError {
@@ -303,63 +273,6 @@ export class SecurityError extends BaseError {
     }
 
     return 'Ensure your request meets security requirements'
-  }
-}
-
-/**
- * Error for concurrency limit violations with intelligent suggestion system
- */
-export class ConcurrencyError extends BaseError {
-  readonly code = 'CONCURRENCY_ERROR'
-
-  get suggestion(): string {
-    const message = this.message.toLowerCase()
-
-    if (message.includes('timeout') || message.includes('queue')) {
-      return 'Server is busy. Please wait and retry your request'
-    }
-    if (message.includes('limit') || message.includes('maximum')) {
-      return 'Too many concurrent requests. Please retry after a few seconds'
-    }
-
-    return 'Too many concurrent requests. Please retry after a few seconds'
-  }
-}
-
-/**
- * Error for input validation failures with intelligent suggestion system
- */
-export class ValidationError extends BaseError {
-  readonly code = 'INPUT_VALIDATION_ERROR'
-
-  get suggestion(): string {
-    const message = this.message.toLowerCase()
-
-    if (message.includes('prompt') || message.includes('text')) {
-      return 'Ensure prompt length is between 1-4000 characters'
-    }
-    if (message.includes('file') || message.includes('image')) {
-      return 'Ensure input image is PNG, JPEG, or WebP format under 10MB'
-    }
-    if (message.includes('parameter') || message.includes('argument')) {
-      return 'Check parameter types and values according to API specification'
-    }
-    if (message.includes('url') || message.includes('link')) {
-      return 'Provide valid HTTP/HTTPS URLs for URL context processing'
-    }
-
-    return 'Validate all input parameters and retry'
-  }
-}
-
-/**
- * Error for unexpected internal failures with intelligent suggestion system
- */
-export class InternalError extends BaseError {
-  readonly code = 'INTERNAL_ERROR'
-
-  get suggestion(): string {
-    return 'An unexpected error occurred. Please contact system administrator if problem persists'
   }
 }
 

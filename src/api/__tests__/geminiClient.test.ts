@@ -9,18 +9,15 @@ vi.mock('@google/genai', () => ({
   GoogleGenAI: vi.fn(),
 }))
 
-// Mock the GenerativeModel
-const mockGenerativeModel = {
-  generateContent: vi.fn(),
-} as unknown as GenerativeModel
-
-const mockGoogleAI = {
-  getGenerativeModel: vi.fn().mockReturnValue(mockGenerativeModel),
+// Mock the Gemini client instance structure
+const mockGeminiClientInstance = {
+  models: {
+    generateContent: vi.fn(),
+  },
 }
 
-const mockGoogleGenAI = vi.mocked(
-  await import('@google/genai').then((m) => m.GoogleGenAI)
-) as MockedFunction<typeof import('@google/genai').GoogleGenAI>
+const { GoogleGenAI } = await import('@google/genai')
+const mockGoogleGenAI = vi.mocked(GoogleGenAI) as MockedFunction<typeof GoogleGenAI>
 
 describe('geminiClient', () => {
   const testConfig: Config = {
@@ -31,7 +28,7 @@ describe('geminiClient', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGoogleGenAI.mockReturnValue(mockGoogleAI)
+    mockGoogleGenAI.mockReturnValue(mockGeminiClientInstance as any)
   })
 
   describe('createGeminiClient', () => {
@@ -42,11 +39,6 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       expect(mockGoogleGenAI).toHaveBeenCalledWith({ apiKey: testConfig.geminiApiKey })
-      if (result.success) {
-        expect(mockGoogleAI.getGenerativeModel).toHaveBeenCalledWith({
-          model: 'gemini-2.5-flash-image-preview',
-        })
-      }
     })
 
     it('should return error when API key is invalid', () => {
@@ -89,7 +81,7 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -133,7 +125,7 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -158,21 +150,25 @@ describe('geminiClient', () => {
         expect(result.data.metadata.mimeType).toBe('image/jpeg')
       }
 
-      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
-        'Enhance this image',
-        {
-          inlineData: {
-            data: inputImageBuffer.toString('base64'),
-            mimeType: 'image/jpeg',
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: [
+          'Enhance this image',
+          {
+            inlineData: {
+              data: inputImageBuffer.toString('base64'),
+              mimeType: 'image/jpeg',
+            },
           },
-        },
-      ])
+        ],
+        config: {},
+      })
     })
 
     it('should return GeminiAPIError when API returns error', async () => {
       // Arrange
       const apiError = new Error('API quota exceeded')
-      mockGenerativeModel.generateContent = vi.fn().mockRejectedValue(apiError)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockRejectedValue(apiError)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -198,7 +194,7 @@ describe('geminiClient', () => {
       // Arrange
       const networkError = new Error('ECONNRESET') as Error & { code: string }
       networkError.code = 'ECONNRESET'
-      mockGenerativeModel.generateContent = vi.fn().mockRejectedValue(networkError)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockRejectedValue(networkError)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -227,7 +223,9 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockMalformedResponse)
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockMalformedResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -269,7 +267,7 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -290,17 +288,23 @@ describe('geminiClient', () => {
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
-        expect(result.data.metadata.newFeatures).toEqual({
+        expect(result.data.metadata.features).toEqual({
           blendImages: true,
           maintainCharacterConsistency: true,
           useWorldKnowledge: false,
         })
       }
 
-      // Verify API was called with basic parameters (generationConfig not yet supported)
-      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
-        'Generate character with blending',
-      ])
+      // Verify API was called with enhanced prompt
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: [
+          'Generate character with blending' +
+            ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]' +
+            ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]',
+        ],
+        config: {},
+      })
     })
 
     it('should generate image with only some new features enabled', async () => {
@@ -324,7 +328,7 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -341,17 +345,22 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.newFeatures).toEqual({
+        expect(result.data.metadata.features).toEqual({
           blendImages: false,
           maintainCharacterConsistency: false,
           useWorldKnowledge: true,
         })
       }
 
-      // Verify API was called with basic parameters (generationConfig not yet supported)
-      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
-        'Generate factually accurate historical scene',
-      ])
+      // Verify API was called with enhanced prompt
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: [
+          'Generate factually accurate historical scene' +
+            ' [INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]',
+        ],
+        config: {},
+      })
     })
 
     it('should generate image without new features when not specified', async () => {
@@ -375,7 +384,7 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -391,13 +400,15 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.newFeatures).toBeUndefined()
+        expect(result.data.metadata.features).toBeUndefined()
       }
 
       // Verify API was called without generation config
-      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
-        'Generate simple landscape',
-      ])
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: ['Generate simple landscape'],
+        config: {},
+      })
     })
 
     it('should generate image with new features and input image', async () => {
@@ -421,7 +432,7 @@ describe('geminiClient', () => {
         },
       }
 
-      mockGenerativeModel.generateContent = vi.fn().mockResolvedValue(mockResponse)
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -443,23 +454,29 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.metadata.inputImageProvided).toBe(true)
-        expect(result.data.metadata.newFeatures).toEqual({
+        expect(result.data.metadata.features).toEqual({
           blendImages: true,
           maintainCharacterConsistency: true,
           useWorldKnowledge: false,
         })
       }
 
-      // Verify API was called with input image (generationConfig not yet supported)
-      expect(mockGenerativeModel.generateContent).toHaveBeenCalledWith([
-        'Blend this character with fantasy elements',
-        {
-          inlineData: {
-            data: inputBuffer.toString('base64'),
-            mimeType: 'image/jpeg',
+      // Verify API was called with input image and enhanced prompt
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image-preview',
+        contents: [
+          'Blend this character with fantasy elements' +
+            ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]' +
+            ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]',
+          {
+            inlineData: {
+              data: inputBuffer.toString('base64'),
+              mimeType: 'image/jpeg',
+            },
           },
-        },
-      ])
+        ],
+        config: {},
+      })
     })
   })
 })

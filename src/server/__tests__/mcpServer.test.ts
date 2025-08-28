@@ -26,6 +26,25 @@ vi.mock('../../api/geminiClient', () => {
   }
 })
 
+// Mock the FileManager for unit tests
+vi.mock('../../business/fileManager', () => {
+  return {
+    FileManager: vi.fn().mockImplementation(() => {
+      return {
+        saveImage: vi.fn().mockResolvedValue({
+          success: true,
+          data: './test-output/test-image.png',
+        }),
+        ensureDirectoryExists: vi.fn().mockReturnValue({
+          success: true,
+          data: undefined,
+        }),
+        generateFileName: vi.fn().mockReturnValue('test-image.png'),
+      }
+    }),
+  }
+})
+
 // Basic tests for MCP server startup and tool registration
 describe('MCP Server', () => {
   let originalApiKey: string | undefined
@@ -55,7 +74,7 @@ describe('MCP Server', () => {
 
     // Verify that server info is set correctly
     const serverInfo = mcpServer.getServerInfo()
-    expect(serverInfo.name).toBe('gemini-image-generator-mcp-server')
+    expect(serverInfo.name).toBe('mcp-image-server')
     expect(serverInfo.version).toBe('0.1.0')
   })
 
@@ -69,7 +88,7 @@ describe('MCP Server', () => {
     // Assert: Verify that generate_image tool is registered
     expect(toolsList.tools).toHaveLength(1)
     expect(toolsList.tools[0].name).toBe('generate_image')
-    expect(toolsList.tools[0].description).toContain('Generate image using Gemini API')
+    expect(toolsList.tools[0].description).toContain('Generate image with specified prompt')
     expect(toolsList.tools[0].inputSchema).toBeDefined()
 
     // Verify basic schema structure
@@ -80,29 +99,65 @@ describe('MCP Server', () => {
       type: 'string',
       description: 'The prompt for image generation',
     })
+    expect(schema.properties).toHaveProperty('fileName')
+    expect(schema.properties?.fileName).toEqual({
+      type: 'string',
+      description:
+        'Optional file name for the generated image (if not specified, generates an auto-named file in IMAGE_OUTPUT_DIR)',
+    })
     expect(schema.required).toContain('prompt')
   })
 
-  it('should handle basic tool request', async () => {
+  it('should return file URI when no fileName is specified', async () => {
     // Arrange
     const mcpServer = createMCPServer()
 
-    // Act: Execute basic tool request
+    // Act: Execute basic tool request without fileName
     const result = await mcpServer.callTool('generate_image', {
       prompt: 'test prompt',
     })
 
-    // Assert: Verify that basic tool request is processed
+    // Assert: Verify that file URI is returned in structured format
     expect(result).toBeDefined()
     expect(result.content).toBeDefined()
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
 
-    // Verify response structure
+    // Should be structured JSON response
     const responseData = JSON.parse(result.content[0].text)
-    expect(responseData).toHaveProperty('type')
-    expect(responseData.type).toBe('resource')
+    expect(responseData).toHaveProperty('type', 'resource')
     expect(responseData).toHaveProperty('resource')
+    expect(responseData.resource.uri).toMatch(/^file:\/\//)
+    expect(responseData.resource.name).toBe('test-image.png')
+    expect(responseData.resource.mimeType).toBe('image/png')
+    expect(responseData).toHaveProperty('metadata')
+    expect(responseData.metadata.model).toBe('gemini-2.5-flash-image-preview')
+  })
+
+  it('should save to file when fileName is specified', async () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+    const testFileName = 'test-image.png'
+
+    // Act: Execute tool request with fileName
+    const result = await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: testFileName,
+    })
+
+    // Assert: Verify that file URI is returned
+    expect(result).toBeDefined()
+    expect(result.content).toBeDefined()
+    expect(result.content).toHaveLength(1)
+    expect(result.content[0].type).toBe('text')
+
+    // Verify response structure (should be JSON with file URI)
+    const responseData = JSON.parse(result.content[0].text)
+    expect(responseData).toHaveProperty('type', 'resource')
+    expect(responseData).toHaveProperty('resource')
+    expect(responseData.resource.uri).toBe('file://./test-output/test-image.png')
+    expect(responseData.resource.name).toBe('test-image.png')
+    expect(responseData.resource.mimeType).toBe('image/png')
     expect(responseData).toHaveProperty('metadata')
     expect(responseData.metadata.model).toBe('gemini-2.5-flash-image-preview')
   })
