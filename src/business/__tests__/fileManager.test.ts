@@ -8,7 +8,7 @@ import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 // Remove unused import - using .success property directly
 import { FileOperationError } from '../../utils/errors'
-import { FileManager } from '../fileManager'
+import { type FileManager, createFileManager } from '../fileManager'
 
 describe('FileManager', () => {
   let fileManager: FileManager
@@ -16,7 +16,7 @@ describe('FileManager', () => {
   const testImageData = Buffer.from('fake-image-data')
 
   beforeEach(() => {
-    fileManager = new FileManager()
+    fileManager = createFileManager()
   })
 
   afterEach(async () => {

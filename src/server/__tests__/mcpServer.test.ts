@@ -29,7 +29,7 @@ vi.mock('../../api/geminiClient', () => {
 // Mock the FileManager for unit tests
 vi.mock('../../business/fileManager', () => {
   return {
-    FileManager: vi.fn().mockImplementation(() => {
+    createFileManager: vi.fn().mockImplementation(() => {
       return {
         saveImage: vi.fn().mockResolvedValue({
           success: true,
@@ -41,6 +41,114 @@ vi.mock('../../business/fileManager', () => {
         }),
         generateFileName: vi.fn().mockReturnValue('test-image.png'),
       }
+    }),
+  }
+})
+
+// Mock the ImageGenerator for unit tests
+vi.mock('../../business/imageGenerator', () => {
+  return {
+    createImageGenerator: vi.fn().mockImplementation(() => {
+      return {
+        generateImage: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            imageData: Buffer.from('mock-image-data', 'utf-8'),
+            metadata: {
+              model: 'gemini-2.5-flash-image-preview',
+              prompt: 'test prompt',
+              mimeType: 'image/png',
+              timestamp: new Date(),
+              inputImageProvided: false,
+              processingTime: 1500,
+            },
+          },
+        }),
+      }
+    }),
+  }
+})
+
+// Mock the ResponseBuilder for unit tests
+vi.mock('../../business/responseBuilder', () => {
+  return {
+    createResponseBuilder: vi.fn().mockImplementation(() => {
+      return {
+        buildSuccessResponse: vi.fn().mockReturnValue({
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                type: 'resource',
+                resource: {
+                  uri: 'file://./test-output/test-image.png',
+                  name: 'test-image.png',
+                  mimeType: 'image/png',
+                },
+                metadata: {
+                  model: 'gemini-2.5-flash-image-preview',
+                  prompt: 'test prompt',
+                  mimeType: 'image/png',
+                  timestamp: new Date().toISOString(),
+                  inputImageProvided: false,
+                  processingTime: 1500,
+                },
+              }),
+            },
+          ],
+          isError: false,
+        }),
+        buildErrorResponse: vi.fn().mockImplementation((error) => {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  error: {
+                    code: error.code || 'INPUT_VALIDATION_ERROR',
+                    message:
+                      error.message ||
+                      'Prompt must be between 1 and 4000 characters. Current length: 0',
+                    suggestion:
+                      error.suggestion ||
+                      'Please provide a descriptive prompt for image generation.',
+                  },
+                }),
+              },
+            ],
+            isError: true,
+          }
+        }),
+      }
+    }),
+  }
+})
+
+// Mock the InputValidator for unit tests
+vi.mock('../../business/inputValidator', async () => {
+  const originalModule = await vi.importActual('../../business/inputValidator')
+  const { Err, Ok } = await vi.importActual('../../types/result')
+  const { InputValidationError } = await vi.importActual('../../utils/errors')
+
+  return {
+    ...originalModule,
+    validateGenerateImageParams: vi.fn().mockImplementation((args) => {
+      if (!args.prompt || args.prompt === '') {
+        return Err(
+          new InputValidationError(
+            'Prompt must be between 1 and 4000 characters. Current length: 0',
+            'Please provide a descriptive prompt for image generation.'
+          )
+        )
+      }
+      return Ok({
+        prompt: args.prompt,
+        fileName: args.fileName,
+        inputImagePath: args.inputImagePath,
+        blendImages: args.blendImages,
+        maintainCharacterConsistency: args.maintainCharacterConsistency,
+        useWorldKnowledge: args.useWorldKnowledge,
+      })
     }),
   }
 })

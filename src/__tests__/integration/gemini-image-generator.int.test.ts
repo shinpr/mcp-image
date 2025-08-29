@@ -893,7 +893,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       const content = JSON.parse(response.content[0].text)
 
       // Verify URL context processing was attempted
-      expect(content.metadata.contextMethod).toBe('url_context') // URL is detected and processed automatically
+      expect(content.metadata.contextMethod).toBe('prompt_only') // URLs are now handled in prompt
       expect(content.metadata.extractedUrls).toBeDefined()
       expect(content.metadata.extractedUrls).toHaveLength(1)
       expect(content.metadata.extractedUrls[0]).toBe('https://example.com')
@@ -923,7 +923,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       const content = JSON.parse(response.content[0].text)
 
       // Verify URL context is used since URL is detected
-      expect(content.metadata.contextMethod).toBe('url_context')
+      expect(content.metadata.contextMethod).toBe('prompt_only')
       expect(content.metadata.extractedUrls).toBeDefined()
       expect(content.metadata.extractedUrls).toHaveLength(1)
       expect(content.metadata.urlContextUsed).toBeUndefined() // Not attempted due to no client available
@@ -1021,7 +1021,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       expect(response.isError).toBe(false)
       const content = JSON.parse(response.content[0].text)
 
-      expect(content.metadata.contextMethod).toBe('url_context')
+      expect(content.metadata.contextMethod).toBe('prompt_only')
       expect(content.metadata.extractedUrls).toBeDefined() // URLs still extracted for metadata
       expect(content.metadata.extractedUrls).toHaveLength(1)
       expect(content.metadata.urlContextUsed).toBeUndefined() // Not attempted when disabled
@@ -2518,7 +2518,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
 
       // Verify URL context is used since URL is detected
       expect(content.type).toBe('resource')
-      expect(content.metadata.contextMethod).toBe('url_context')
+      expect(content.metadata.contextMethod).toBe('prompt_only')
       expect(content.metadata.extractedUrls).toBeDefined()
       expect(content.metadata.extractedUrls).toContain('https://example.com')
 
@@ -2674,7 +2674,7 @@ describe('Gemini Image Generator MCP Server Integration Tests', () => {
       expect(content.metadata.extractedUrls).toContain('https://test.org')
 
       // Verify processing method (URL context is used since URLs are detected)
-      expect(content.metadata.contextMethod).toBe('url_context')
+      expect(content.metadata.contextMethod).toBe('prompt_only')
 
       // Verify file generation succeeded (in real implementation)
       // Note: File system operations are mocked in integration tests

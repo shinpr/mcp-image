@@ -1,19 +1,177 @@
-# mcp-image
+# MCP Image Generator
 
-MCP server for AI image generation.
+A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 2.5 Flash Image API. Seamlessly integrate advanced image generation capabilities into Claude Code, Cursor, and other MCP-compatible AI tools.
 
-## Installation
+## ✨ Features
+
+- **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image Preview
+- **Image Editing**: Transform existing images with natural language instructions
+- **Advanced Options**: 
+  - Multi-image blending for composite scenes
+  - Character consistency across generations
+  - World knowledge integration for accurate context
+- **Multiple Output Formats**: PNG, JPEG, WebP support
+- **File Output**: Images are saved as files for easy access and integration
+
+## 🔧 Prerequisites
+
+- **Node.js** 20 or higher
+- **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey)
+- **Claude Code** or **Cursor** (or any MCP-compatible AI tool)
+- Basic terminal/command line knowledge
+
+## 🚀 Quick Start
+
+### 1. Get Your Gemini API Key
+
+Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
+
+### 2. MCP Configuration
+
+#### For Claude Code
+
+**Option 1: Using Claude CLI (Recommended)**
 
 ```bash
-npm install
+claude mcp add mcp-image "npx" "-y" "https://github.com/shinpr/mcp-image" --env GEMINI_API_KEY=your-api-key
 ```
 
-## Build
+**Option 2: Manual Configuration**
 
-```bash
-npm run build
+Add to your MCP settings file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "mcp-image": {
+      "command": "npx",
+      "args": ["-y", "https://github.com/shinpr/mcp-image"],
+      "env": {
+        "GEMINI_API_KEY": "your_gemini_api_key_here"
+      }
+    }
+  }
+}
 ```
 
-## License
+#### For Cursor
 
-MIT
+Add to your Cursor settings (`~/.cursor/mcp.json`):
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "mcp-image": {
+        "command": "npx",
+        "args": ["-y", "https://github.com/shinpr/mcp-image"],
+        "env": {
+          "GEMINI_API_KEY": "your_gemini_api_key_here"
+        }
+      }
+    }
+  }
+}
+```
+
+⚠️ **Security Note**: Never commit your API key to version control. Keep it secure and use environment-specific configuration.
+
+## 📖 Usage Examples
+
+Once configured, your AI assistant can generate images using natural language:
+
+### Basic Image Generation
+
+```
+"Generate a serene mountain landscape at sunset with a lake reflection"
+```
+
+### Image Editing
+
+```
+"Edit this image to make the person face right"
+(with inputImagePath: "/path/to/image.jpg")
+```
+
+
+### Advanced Features
+
+```
+"Generate a portrait of a medieval knight, maintaining character consistency for future variations"
+(with maintainCharacterConsistency: true)
+```
+
+## 🔧 API Reference
+
+### `generate_image` Tool
+
+The MCP server exposes a single tool for all image operations:
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `prompt` | string | ✅ | Text description or editing instruction |
+| `inputImagePath` | string | ❌ | Absolute path to input image for editing |
+| `fileName` | string | ❌ | Custom filename for output (auto-generated if not specified) |
+| `blendImages` | boolean | ❌ | Enable multi-image blending |
+| `maintainCharacterConsistency` | boolean | ❌ | Maintain character appearance across generations |
+| `useWorldKnowledge` | boolean | ❌ | Use real-world knowledge for context |
+
+#### Response
+
+```json
+{
+  "type": "resource",
+  "resource": {
+    "uri": "file:///path/to/generated/image.png",
+    "name": "image-filename.png",
+    "mimeType": "image/png"
+  },
+  "metadata": {
+    "model": "gemini-2.5-flash-image-preview",
+    "processingTime": 5000,
+    "timestamp": "2024-01-01T12:00:00.000Z"
+  }
+}
+```
+
+## 🛠️ Troubleshooting
+
+### Common Issues
+
+**"API key not found"**
+- Ensure `GEMINI_API_KEY` is set in your environment
+- Verify the API key is valid and has image generation permissions
+
+**"Input image file not found"**
+- Use absolute file paths, not relative paths
+- Ensure the file exists and is accessible
+- Supported formats: PNG, JPEG, WebP (max 10MB)
+
+**"No image data found in Gemini API response"**
+- Try rephrasing your prompt with more specific details
+- Ensure your prompt is appropriate for image generation
+- Check if your API key has sufficient quota
+
+### Performance Tips
+
+- Image generation: 30-60 seconds typical
+- Image editing: 15-45 seconds typical  
+- Use specific, descriptive prompts for better results
+- Consider enabling `useWorldKnowledge` for historical or factual subjects
+
+
+## 💰 Usage Notes
+
+- This MCP server uses the paid Gemini API for image generation
+- Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
+- Monitor your API usage to avoid unexpected charges
+
+## 📄 License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+**Need help?** [Open an issue](https://github.com/shinpr/mcp-image/issues) or check the [troubleshooting section](#-troubleshooting) above.

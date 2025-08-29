@@ -4,9 +4,9 @@
  */
 
 import * as path from 'node:path'
-import type { McpToolResponse, StructuredContent, StructuredError } from '../types/mcp'
+import type { McpToolResponse, StructuredContent } from '../types/mcp'
 import {
-  type AppError,
+  type BaseError,
   ConfigError,
   FileOperationError,
   GeminiAPIError,
@@ -34,122 +34,132 @@ const UNKNOWN_ERROR_CODE = 'UNKNOWN_ERROR'
 const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the problem persists'
 
 /**
- * Builds structured content responses for MCP tool responses
- * Handles both successful image generation and error responses
+ * Interface for response builder functionality
  */
-export class ResponseBuilder {
-  /**
-   * Builds a successful structured content response with file path
-   * @param generationResult Result from image generation
-   * @param filePath Absolute path to the saved image file (required)
-   * @returns MCP tool response with structured content containing file path
-   */
-  buildSuccessResponse(generationResult: GenerationResult, filePath: string): McpToolResponse {
-    // File-based implementation: Always return file path, never base64
-    // This avoids MCP token limit issues (25,000 tokens max)
-    const mimeType = this.getMimeTypeFromPath(filePath)
-    const fileName = path.basename(filePath)
+export interface ResponseBuilder {
+  buildSuccessResponse(generationResult: GenerationResult, filePath: string): McpToolResponse
+  buildErrorResponse(error: BaseError | Error): McpToolResponse
+}
 
-    const structuredContent: StructuredContent = {
-      type: 'resource',
-      resource: {
-        uri: `file://${filePath}`,
-        name: fileName,
-        mimeType,
-      },
-      metadata: generationResult.metadata,
-    }
+/**
+ * Determines MIME type based on file extension
+ * @param filePath Path to the image file
+ * @returns MIME type string
+ */
+function getMimeTypeFromPath(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase()
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(structuredContent),
-        },
-      ],
-      isError: false,
-    }
+  if (FILE_EXTENSIONS.PNG.includes(ext as '.png')) {
+    return MIME_TYPES.PNG
+  }
+  if (FILE_EXTENSIONS.JPEG.includes(ext as '.jpg' | '.jpeg')) {
+    return MIME_TYPES.JPEG
+  }
+  if (FILE_EXTENSIONS.WEBP.includes(ext as '.webp')) {
+    return MIME_TYPES.WEBP
   }
 
-  /**
-   * Builds an error response in structured content format
-   * @param error Error that occurred during processing
-   * @returns MCP tool response with structured error
-   */
-  buildErrorResponse(error: AppError | Error): McpToolResponse {
-    const structuredError: StructuredError = {
-      error: this.convertErrorToStructured(error),
-    }
+  return DEFAULT_MIME_TYPE
+}
 
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(structuredError),
-        },
-      ],
-      isError: true,
-    }
+/**
+ * Converts various error types to structured error format
+ * @param error Error to convert
+ * @returns Structured error object
+ */
+function convertErrorToStructured(error: BaseError | Error): {
+  code: string
+  message: string
+  suggestion: string
+  timestamp: string
+} {
+  const baseError = {
+    timestamp: new Date().toISOString(),
   }
 
-  /**
-   * Determines MIME type based on file extension
-   * @param filePath Path to the image file
-   * @returns MIME type string
-   */
-  private getMimeTypeFromPath(filePath: string): string {
-    const ext = path.extname(filePath).toLowerCase()
-
-    if (FILE_EXTENSIONS.PNG.includes(ext as '.png')) {
-      return MIME_TYPES.PNG
-    }
-    if (FILE_EXTENSIONS.JPEG.includes(ext as '.jpg' | '.jpeg')) {
-      return MIME_TYPES.JPEG
-    }
-    if (FILE_EXTENSIONS.WEBP.includes(ext as '.webp')) {
-      return MIME_TYPES.WEBP
-    }
-
-    return DEFAULT_MIME_TYPE
-  }
-
-  /**
-   * Converts various error types to structured error format
-   * @param error Error to convert
-   * @returns Structured error object
-   */
-  private convertErrorToStructured(error: AppError | Error): {
-    code: string
-    message: string
-    suggestion: string
-    timestamp: string
-  } {
-    const baseError = {
-      timestamp: new Date().toISOString(),
-    }
-
-    if (
-      error instanceof InputValidationError ||
-      error instanceof FileOperationError ||
-      error instanceof GeminiAPIError ||
-      error instanceof NetworkError ||
-      error instanceof ConfigError ||
-      error instanceof SecurityError
-    ) {
-      return {
-        ...baseError,
-        code: error.code,
-        message: error.message,
-        suggestion: error.suggestion,
-      }
-    }
-
-    // Handle unknown errors
+  if (
+    error instanceof InputValidationError ||
+    error instanceof FileOperationError ||
+    error instanceof GeminiAPIError ||
+    error instanceof NetworkError ||
+    error instanceof ConfigError ||
+    error instanceof SecurityError
+  ) {
     return {
       ...baseError,
-      code: UNKNOWN_ERROR_CODE,
-      message: error.message || 'An unknown error occurred',
-      suggestion: DEFAULT_ERROR_SUGGESTION,
+      code: error.code,
+      message: error.message,
+      suggestion: error.suggestion,
     }
+  }
+
+  // Handle unknown errors
+  return {
+    ...baseError,
+    code: UNKNOWN_ERROR_CODE,
+    message: error.message || 'An unknown error occurred',
+    suggestion: DEFAULT_ERROR_SUGGESTION,
+  }
+}
+
+/**
+ * Creates a response builder with MCP structured content support
+ * @returns ResponseBuilder implementation
+ */
+export function createResponseBuilder(): ResponseBuilder {
+  return {
+    /**
+     * Builds a successful structured content response with file path
+     * @param generationResult Result from image generation
+     * @param filePath Absolute path to the saved image file (required)
+     * @returns MCP tool response with structured content containing file path
+     */
+    buildSuccessResponse(generationResult: GenerationResult, filePath: string): McpToolResponse {
+      // File-based implementation: Always return file path, never base64
+      // This avoids MCP token limit issues (25,000 tokens max)
+      const mimeType = getMimeTypeFromPath(filePath)
+      const fileName = path.basename(filePath)
+
+      const structuredContent: StructuredContent = {
+        type: 'resource',
+        resource: {
+          uri: `file://${filePath}`,
+          name: fileName,
+          mimeType,
+        },
+        metadata: generationResult.metadata,
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredContent),
+          },
+        ],
+        isError: false,
+      }
+    },
+
+    /**
+     * Builds an error response in structured content format
+     * @param error Error that occurred during processing
+     * @returns MCP tool response with structured error
+     */
+    buildErrorResponse(error: BaseError | Error): McpToolResponse {
+      const structuredError = {
+        error: convertErrorToStructured(error),
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(structuredError),
+          },
+        ],
+        isError: true,
+      }
+    },
   }
 }

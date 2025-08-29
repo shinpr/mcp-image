@@ -15,6 +15,11 @@ export interface StructuredError {
 }
 
 /**
+ * Result type pattern for explicit error handling
+ */
+export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E }
+
+/**
  * Base class for all application errors with structured error support
  */
 export abstract class BaseError extends Error {
@@ -42,15 +47,9 @@ export abstract class BaseError extends Error {
 }
 
 /**
- * Legacy base class for backward compatibility
- * @deprecated Use BaseError instead
- */
-export abstract class AppError extends BaseError {}
-
-/**
  * Error for input validation failures
  */
-export class InputValidationError extends AppError {
+export class InputValidationError extends BaseError {
   readonly code = 'INPUT_VALIDATION_ERROR'
 
   constructor(
@@ -232,7 +231,7 @@ export class NetworkError extends BaseError {
 /**
  * Error for configuration failures
  */
-export class ConfigError extends AppError {
+export class ConfigError extends BaseError {
   readonly code = 'CONFIG_ERROR'
 
   constructor(
@@ -275,8 +274,3 @@ export class SecurityError extends BaseError {
     return 'Ensure your request meets security requirements'
   }
 }
-
-/**
- * Result type for operations that may fail
- */
-export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E }

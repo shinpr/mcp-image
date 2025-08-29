@@ -1,8 +1,10 @@
-import * as path from 'node:path'
 /**
  * MCP Server implementation
  * Basic structure of MCP server using @modelcontextprotocol/sdk
  */
+
+// External libraries
+import * as path from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import {
   CallToolRequestSchema,
@@ -10,16 +12,25 @@ import {
   ListToolsRequestSchema,
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
-import { createGeminiClient } from '../api/geminiClient'
-import { FileManager } from '../business/fileManager'
-import { ImageGenerator } from '../business/imageGenerator'
+
+// Types and interfaces
+import type { GenerateImageParams, MCPServerConfig, McpContent } from '../types/mcp'
+
+// Business logic
+import { type FileManager, createFileManager } from '../business/fileManager'
+import { type ImageGenerator, createImageGenerator } from '../business/imageGenerator'
 import { validateGenerateImageParams } from '../business/inputValidator'
-import { ResponseBuilder } from '../business/responseBuilder'
-import type { McpContent } from '../types/mcp'
-import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
+import { type ResponseBuilder, createResponseBuilder } from '../business/responseBuilder'
+
+// API clients
+import { type GeminiClient, createGeminiClient } from '../api/geminiClient'
+
+// Utilities
 import { getConfig } from '../utils/config'
 import { Logger } from '../utils/logger'
 import { SecurityManager } from '../utils/security'
+
+// Same module
 import { ErrorHandler } from './errorHandler'
 
 /**
@@ -32,6 +43,17 @@ const DEFAULT_CONFIG: MCPServerConfig = {
 }
 
 /**
+ * Dependencies for MCPServerImpl
+ */
+export interface MCPServerDependencies {
+  fileManager?: FileManager
+  responseBuilder?: ResponseBuilder
+  logger?: Logger
+  securityManager?: SecurityManager
+  createImageGenerator?: (geminiClient: GeminiClient) => ImageGenerator
+}
+
+/**
  * Basic MCP server structure
  * Simple implementation focusing on testability
  */
@@ -39,10 +61,18 @@ export class MCPServerImpl {
   private config: MCPServerConfig
   private server: Server | null = null
   private logger: Logger
+  private fileManager: FileManager
+  private responseBuilder: ResponseBuilder
+  private securityManager: SecurityManager
+  private createImageGeneratorFn: (geminiClient: GeminiClient) => ImageGenerator
 
-  constructor(config: Partial<MCPServerConfig> = {}) {
+  constructor(config: Partial<MCPServerConfig> = {}, dependencies: MCPServerDependencies = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
-    this.logger = new Logger()
+    this.logger = dependencies.logger || new Logger()
+    this.fileManager = dependencies.fileManager || createFileManager()
+    this.responseBuilder = dependencies.responseBuilder || createResponseBuilder()
+    this.securityManager = dependencies.securityManager || new SecurityManager()
+    this.createImageGeneratorFn = dependencies.createImageGenerator || createImageGenerator
   }
 
   /**
@@ -207,9 +237,9 @@ export class MCPServerImpl {
         await this.sendProgress(progressToken, 50, 100, 'Client initialized')
       }
 
-      const imageGenerator = new ImageGenerator(geminiClientResult.data)
-      const fileManager = new FileManager()
-      const responseBuilder = new ResponseBuilder()
+      const imageGenerator = this.createImageGeneratorFn(geminiClientResult.data)
+      const fileManager = this.fileManager
+      const responseBuilder = this.responseBuilder
 
       if (progressToken) {
         await this.sendProgress(progressToken, 60, 100, 'Generating image...')
@@ -267,7 +297,7 @@ export class MCPServerImpl {
       const rawOutputPath = path.join(configResult.data.imageOutputDir, finalFileName)
 
       // Security check: Sanitize output path
-      const securityManager = new SecurityManager()
+      const securityManager = this.securityManager
       const pathSanitizationResult = securityManager.sanitizeFilePath(rawOutputPath)
       if (!pathSanitizationResult.success) {
         throw pathSanitizationResult.error
@@ -301,7 +331,7 @@ export class MCPServerImpl {
     }
 
     // Build error response using ResponseBuilder
-    const responseBuilder = new ResponseBuilder()
+    const responseBuilder = this.responseBuilder
     return responseBuilder.buildErrorResponse(result.error)
   }
 
@@ -363,7 +393,10 @@ export class MCPServerImpl {
 /**
  * Factory function (for backward compatibility)
  */
-export function createMCPServer(config: Partial<MCPServerConfig> = {}) {
-  const mcpServer = new MCPServerImpl(config)
+export function createMCPServer(
+  config: Partial<MCPServerConfig> = {},
+  dependencies: MCPServerDependencies = {}
+) {
+  const mcpServer = new MCPServerImpl(config, dependencies)
   return mcpServer
 }

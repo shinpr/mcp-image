@@ -104,25 +104,19 @@ describe('GenerationMetadata - URL Context Extensions (Task-09)', () => {
   })
 
   describe('Metadata creation patterns', () => {
-    it('should create URL context metadata correctly', () => {
-      const createUrlContextMetadata = (
-        processingTime: number,
-        extractedUrls: string[],
-        urlContextUsed: boolean
-      ) => ({
+    it('should create metadata with URL extraction correctly', () => {
+      const createMetadataWithUrls = (processingTime: number, extractedUrls: string[]) => ({
         model: 'gemini-2.5-flash-image-preview' as const,
         processingTime,
-        contextMethod: 'url_context' as const,
+        contextMethod: 'prompt_only' as const,
         timestamp: new Date().toISOString(),
         extractedUrls: extractedUrls.length > 0 ? extractedUrls : undefined,
-        urlContextUsed: urlContextUsed || undefined,
       })
 
-      const metadata = createUrlContextMetadata(1500, ['https://example.com'], true)
+      const metadata = createMetadataWithUrls(1500, ['https://example.com'])
 
-      expect(metadata.contextMethod).toBe('url_context')
+      expect(metadata.contextMethod).toBe('prompt_only')
       expect(metadata.extractedUrls).toEqual(['https://example.com'])
-      expect(metadata.urlContextUsed).toBe(true)
     })
 
     it('should create prompt-only metadata correctly', () => {
@@ -181,7 +175,7 @@ describe('GenerationMetadata - URL Context Extensions (Task-09)', () => {
 
     it('should validate contextMethod values strictly', () => {
       // Should only accept valid context methods
-      const validMethods = ['prompt_only', 'url_context'] as const
+      const validMethods = ['prompt_only'] as const
 
       for (const method of validMethods) {
         const metadata = {
@@ -191,7 +185,7 @@ describe('GenerationMetadata - URL Context Extensions (Task-09)', () => {
           timestamp: new Date().toISOString(),
         }
 
-        expect(['prompt_only', 'url_context']).toContain(metadata.contextMethod)
+        expect(['prompt_only']).toContain(metadata.contextMethod)
       }
     })
   })

@@ -30,13 +30,11 @@ async function main(): Promise<void> {
     await server.connect(transport)
 
     logger.info('mcp-startup', 'Image Generator MCP Server started successfully')
-    console.error('Image Generator MCP Server started')
   } catch (error) {
     logger.error('mcp-startup', 'Failed to start MCP server', error as Error, {
       errorType: (error as Error)?.constructor?.name,
       stack: (error as Error)?.stack,
     })
-    console.error('Failed to start MCP server:', error)
     process.exit(1)
   }
 }
@@ -44,7 +42,6 @@ async function main(): Promise<void> {
 // Run main function
 main().catch((error) => {
   logger.error('mcp-startup', 'Fatal error during startup', error as Error)
-  console.error('Fatal error:', error)
   process.exit(1)
 })
 

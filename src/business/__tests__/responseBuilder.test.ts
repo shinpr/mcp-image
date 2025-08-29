@@ -3,7 +3,7 @@
  * Tests structured content response generation for both success and error cases
  */
 
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
   FileOperationError,
   GeminiAPIError,
@@ -11,13 +11,13 @@ import {
   NetworkError,
 } from '../../utils/errors'
 import type { GenerationResult } from '../imageGenerator'
-import { ResponseBuilder } from '../responseBuilder'
+import { type ResponseBuilder, createResponseBuilder } from '../responseBuilder'
 
 describe('ResponseBuilder', () => {
   let responseBuilder: ResponseBuilder
 
   beforeEach(() => {
-    responseBuilder = new ResponseBuilder()
+    responseBuilder = createResponseBuilder()
   })
 
   describe('buildSuccessResponse', () => {

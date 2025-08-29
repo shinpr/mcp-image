@@ -46,7 +46,6 @@ interface GeminiClientInstance {
       prompt?: string
       systemInstruction?: string
       config?: {
-        tools?: Array<{ urlContext?: Record<string, never> }>
         [key: string]: unknown
       }
       contents?: unknown[]
@@ -61,7 +60,7 @@ interface ErrorWithCode extends Error {
 /**
  * Metadata for generated images
  */
-export interface GenerationMetadata {
+export interface GeminiGenerationMetadata {
   model: string
   prompt: string
   mimeType: string
@@ -79,7 +78,7 @@ export interface GenerationMetadata {
 /**
  * Parameters for Gemini API image generation (with processed data)
  */
-export interface GenerateImageParams {
+export interface GeminiApiParams {
   prompt: string
   inputImage?: Buffer
   blendImages?: boolean
@@ -92,7 +91,7 @@ export interface GenerateImageParams {
  */
 export interface GeneratedImageResult {
   imageData: Buffer
-  metadata: GenerationMetadata
+  metadata: GeminiGenerationMetadata
 }
 
 /**
@@ -100,7 +99,7 @@ export interface GeneratedImageResult {
  */
 export interface GeminiClient {
   generateImage(
-    params: GenerateImageParams
+    params: GeminiApiParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>>
 }
 
@@ -113,7 +112,7 @@ class GeminiClientImpl implements GeminiClient {
   constructor(private readonly genai: GeminiClientInstance) {}
 
   async generateImage(
-    params: GenerateImageParams
+    params: GeminiApiParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     try {
       // Enhance prompt with structured parameters for better accuracy
@@ -150,15 +149,12 @@ class GeminiClientImpl implements GeminiClient {
 
       // Prepare API configuration
       const config: {
-        tools?: Array<{ urlContext?: Record<string, never> }>
         [key: string]: unknown
       } = {}
 
-      // Automatic URL Context detection and activation
-      const hasUrls = this.detectUrls(params.prompt)
-      if (hasUrls) {
-        config.tools = [{ urlContext: {} }]
-      }
+      // URL detection is maintained for potential future use
+      // Note: urlContext tool has been removed as it's not supported by the model
+      this.detectUrls(params.prompt)
 
       // Note: Feature parameters are now handled via prompt enhancement
       // The Gemini API does not directly support these as config parameters
@@ -232,13 +228,13 @@ class GeminiClientImpl implements GeminiClient {
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
       // Create metadata with features information
-      const metadata: GenerationMetadata = {
+      const metadata: GeminiGenerationMetadata = {
         model: this.modelName,
         prompt: params.prompt, // Original prompt, not enhanced
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
-        contextMethod: hasUrls ? 'url_context' : 'prompt_only',
+        contextMethod: 'prompt_only',
       }
 
       // Add features usage information if any features are specified (including false)

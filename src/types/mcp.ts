@@ -56,9 +56,6 @@ export interface McpToolResponse {
   content: McpContent[]
   isError?: boolean
   structuredContent?: unknown
-  _meta?: {
-    progressToken?: string
-  }
 }
 
 /**
@@ -76,16 +73,5 @@ export interface StructuredContent {
     processingTime: number
     contextMethod: string
     timestamp: string
-  }
-}
-
-/**
- * Structured error for error responses
- */
-export interface StructuredError {
-  error: {
-    code: string
-    message: string
-    suggestion: string
   }
 }

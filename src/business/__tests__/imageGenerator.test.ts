@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GeminiClient, GeneratedImageResult } from '../../api/geminiClient'
-import { ImageGenerator } from '../../business/imageGenerator'
+import { type ImageGenerator, createImageGenerator } from '../../business/imageGenerator'
 import type { Result } from '../../types/result'
 import { Err, Ok } from '../../types/result'
 import { GeminiAPIError, InputValidationError, NetworkError } from '../../utils/errors'
@@ -36,7 +36,7 @@ describe('ImageGenerator', () => {
     mockValidateImageFile.mockReturnValue(Ok('/path/to/input.jpg'))
 
     // This will fail until we implement the ImageGenerator class
-    imageGenerator = new ImageGenerator(mockGeminiClient)
+    imageGenerator = createImageGenerator(mockGeminiClient)
   })
 
   describe('generateImage - Success Cases', () => {
