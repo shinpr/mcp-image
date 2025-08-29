@@ -41,6 +41,9 @@ Thumbs.db
 *.temp
 tmp/
 
+# Generated image output
+output/
+
 # Documents
 docs/
 

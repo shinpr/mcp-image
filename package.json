@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "MCP server for AI image generation",
   "main": "dist/index.js",
+  "bin": {
+    "mcp-image": "./dist/index.js"
+  },
   "keywords": [
     "mcp",
     "image-generation",
@@ -18,6 +21,7 @@
   },
   "scripts": {
     "build": "tsc && tsc-alias",
+    "link": "npm run build && npm link",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:coverage:summary": "node scripts/show-coverage.js",
@@ -36,7 +40,10 @@
     "cleanup:processes": "bash ./scripts/cleanup-test-processes.sh",
     "test:safe": "npm test && npm run cleanup:processes"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@google/genai": "^1.16.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
     "@testing-library/jest-dom": "^6.6.3",
@@ -55,7 +62,7 @@
     "vitest": "^3.2.4"
   },
   "engines": {
-    "node": "20"
+    "node": ">=20"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
