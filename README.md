@@ -30,29 +30,8 @@ Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
 #### For Claude Code
 
-**Option 1: Using Claude CLI (Recommended)**
-
 ```bash
 claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y https://github.com/shinpr/mcp-image
-```
-
-**Option 2: Manual Configuration**
-
-Add to your MCP settings file (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "mcp-image": {
-      "command": "npx",
-      "args": ["-y", "https://github.com/shinpr/mcp-image"],
-      "env": {
-        "GEMINI_API_KEY": "your_gemini_api_key_here",
-        "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
-      }
-    }
-  }
-}
 ```
 
 #### For Cursor
