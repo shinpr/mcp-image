@@ -33,7 +33,7 @@ Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
 **Option 1: Using Claude CLI (Recommended)**
 
 ```bash
-claude mcp add mcp-image "npx" "-y" "https://github.com/shinpr/mcp-image" --env GEMINI_API_KEY=your-api-key
+claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y https://github.com/shinpr/mcp-image
 ```
 
 **Option 2: Manual Configuration**
@@ -47,7 +47,8 @@ Add to your MCP settings file (`~/Library/Application Support/Claude/claude_desk
       "command": "npx",
       "args": ["-y", "https://github.com/shinpr/mcp-image"],
       "env": {
-        "GEMINI_API_KEY": "your_gemini_api_key_here"
+        "GEMINI_API_KEY": "your_gemini_api_key_here",
+        "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
       }
     }
   }
@@ -66,7 +67,8 @@ Add to your Cursor settings (`~/.cursor/mcp.json`):
         "command": "npx",
         "args": ["-y", "https://github.com/shinpr/mcp-image"],
         "env": {
-          "GEMINI_API_KEY": "your_gemini_api_key_here"
+          "GEMINI_API_KEY": "your_gemini_api_key_here",
+          "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
         }
       }
     }
@@ -75,6 +77,11 @@ Add to your Cursor settings (`~/.cursor/mcp.json`):
 ```
 
 ⚠️ **Security Note**: Never commit your API key to version control. Keep it secure and use environment-specific configuration.
+
+📁 **Path Requirements**: 
+- `IMAGE_OUTPUT_DIR` must be an absolute path (e.g., `/Users/username/images`, not `./images`)
+- Defaults to `./output` in the current working directory if not specified
+- Directory will be created automatically if it doesn't exist
 
 ## 📖 Usage Examples
 
