@@ -1,0 +1,39 @@
+# Source files (TypeScript)
+src/
+*.ts
+!*.d.ts
+
+# Development files
+.github/
+.husky/
+.vscode/
+.idea/
+.claude/
+docs/
+scripts/
+tmp/
+output/
+
+# Config files
+.gitignore
+.madgerc
+.tsprunerc
+biome.json
+tsconfig.json
+vitest.config.ts
+CLAUDE.md
+
+# Test files
+__tests__/
+*.test.js
+*.test.ts
+coverage/
+.vitest-cache/
+
+# Misc
+.DS_Store
+*.log
+.env*
+*.swp
+*.swo
+*~

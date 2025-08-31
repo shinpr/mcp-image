@@ -31,7 +31,7 @@ Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
 #### For Claude Code
 
 ```bash
-claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y https://github.com/shinpr/mcp-image
+claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
 ```
 
 #### For Cursor
@@ -44,7 +44,7 @@ Add to your Cursor settings (`~/.cursor/mcp.json`):
     "servers": {
       "mcp-image": {
         "command": "npx",
-        "args": ["-y", "https://github.com/shinpr/mcp-image"],
+        "args": ["-y", "mcp-image"],
         "env": {
           "GEMINI_API_KEY": "your_gemini_api_key_here",
           "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
