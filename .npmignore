@@ -21,6 +21,7 @@ output/
 biome.json
 tsconfig.json
 vitest.config.ts
+vitest.config.mjs
 CLAUDE.md
 
 # Test files
