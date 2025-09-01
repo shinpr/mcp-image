@@ -36,19 +36,19 @@ claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DI
 
 #### For Cursor
 
-Add to your Cursor settings (`~/.cursor/mcp.json`):
+Add to your Cursor settings:
+- **Global** (all projects): `~/.cursor/mcp.json`
+- **Project-specific**: `.cursor/mcp.json` in your project root
 
 ```json
 {
-  "mcp": {
-    "servers": {
-      "mcp-image": {
-        "command": "npx",
-        "args": ["-y", "mcp-image"],
-        "env": {
-          "GEMINI_API_KEY": "your_gemini_api_key_here",
-          "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
-        }
+  "mcpServers": {
+    "mcp-image": {
+      "command": "npx",
+      "args": ["-y", "mcp-image"],
+      "env": {
+        "GEMINI_API_KEY": "your_gemini_api_key_here",
+        "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
       }
     }
   }
