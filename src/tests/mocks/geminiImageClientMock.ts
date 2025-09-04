@@ -4,14 +4,14 @@
  * Supports advanced testing scenarios for structured prompt generation
  */
 
-import type { Result } from '../../types/result'
-import { Ok, Err } from '../../types/result'
-import type { 
-  GeminiClient, 
-  GeminiApiParams, 
-  GeneratedImageResult, 
-  GeminiGenerationMetadata 
+import type {
+  GeminiApiParams,
+  GeminiClient,
+  GeminiGenerationMetadata,
+  GeneratedImageResult,
 } from '../../api/geminiClient'
+import type { Result } from '../../types/result'
+import { Err, Ok } from '../../types/result'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
 
 /**
@@ -70,8 +70,8 @@ export class GeminiImageClientMockFactory {
         aspectRatioSource: 'original',
         qualityScore: Math.floor(Math.random() * 20) + 80, // 80-100
         parametersIntegrated: true,
-        optimizationApplied: true
-      }
+        optimizationApplied: true,
+      },
     }
   }
 }
@@ -87,7 +87,7 @@ class GeminiImageClientMock implements GeminiClient {
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     // Simulate processing delay
     if (this.scenario.delay) {
-      await new Promise(resolve => setTimeout(resolve, this.scenario.delay))
+      await new Promise((resolve) => setTimeout(resolve, this.scenario.delay))
     }
 
     // Handle different error scenarios
@@ -111,7 +111,7 @@ class GeminiImageClientMock implements GeminiClient {
 
       case 'timeout':
         // Simulate timeout for image generation (longer than text)
-        await new Promise(resolve => setTimeout(resolve, 61000)) // 61 seconds
+        await new Promise((resolve) => setTimeout(resolve, 61000)) // 61 seconds
         return Err(
           new GeminiAPIError(
             'Image generation timeout after 60 seconds',
@@ -140,8 +140,17 @@ class GeminiImageClientMock implements GeminiClient {
   private generateMockImageResult(params: GeminiApiParams): GeneratedImageResult {
     // Create mock image data (represents a PNG image)
     const mockImageData = Buffer.from([
-      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
-      ...Array(1000).fill(0).map(() => Math.floor(Math.random() * 256)) // Random data
+      0x89,
+      0x50,
+      0x4e,
+      0x47,
+      0x0d,
+      0x0a,
+      0x1a,
+      0x0a, // PNG signature
+      ...Array(1000)
+        .fill(0)
+        .map(() => Math.floor(Math.random() * 256)), // Random data
     ])
 
     // Generate comprehensive metadata
@@ -151,7 +160,7 @@ class GeminiImageClientMock implements GeminiClient {
       mimeType: 'image/png',
       timestamp: new Date(),
       inputImageProvided: !!params.inputImage,
-      contextMethod: params.inputImage ? 'image_editing' : 'text_to_image'
+      contextMethod: params.inputImage ? 'image_editing' : 'text_to_image',
     }
 
     // Add features information if any features are specified
@@ -163,13 +172,13 @@ class GeminiImageClientMock implements GeminiClient {
       metadata.features = {
         blendImages: params.blendImages || false,
         maintainCharacterConsistency: params.maintainCharacterConsistency || false,
-        useWorldKnowledge: params.useWorldKnowledge || false
+        useWorldKnowledge: params.useWorldKnowledge || false,
       }
     }
 
     const result: GeneratedImageResult = {
       imageData: mockImageData,
-      metadata
+      metadata,
     }
 
     // Apply enhanced testing features
@@ -238,7 +247,6 @@ class GeminiImageClientMock implements GeminiClient {
           costMetrics: number
         }
         appliedPractices?: string[]
-        qualityScore?: number
         fallbackTriggered?: boolean
         notification?: string
         usedFallback?: boolean
@@ -265,9 +273,9 @@ export function createSuccessfulGeminiImageClientMock(
   const factory = new GeminiImageClientMockFactory()
   factory.configureForStructuredPromptTesting()
   if (customResponse) {
-    factory.setScenario({ 
-      ...factory['scenario'], 
-      customResponse 
+    factory.setScenario({
+      ...factory['scenario'],
+      customResponse,
     })
   }
   return factory.create()
@@ -281,9 +289,9 @@ export function createErrorGeminiImageClientMock(
   errorMessage?: string
 ): GeminiClient {
   const factory = new GeminiImageClientMockFactory()
-  factory.setScenario({ 
-    type: errorType, 
-    errorMessage 
+  factory.setScenario({
+    type: errorType,
+    ...(errorMessage && { errorMessage }),
   })
   return factory.create()
 }
@@ -297,12 +305,10 @@ export function createStructuredPromptImageMock(options?: {
   practicesApplied?: string[]
 }): GeminiClient {
   const factory = new GeminiImageClientMockFactory()
-  
-  const qualityScore = options?.qualityImprovement || 
-                      Math.floor(Math.random() * 30) + 70 // 70-100
-  const processingTime = options?.processingTime || 
-                        Math.floor(Math.random() * 20000) + 10000 // 10-30 seconds
-  
+
+  const qualityScore = options?.qualityImprovement || Math.floor(Math.random() * 30) + 70 // 70-100
+  const processingTime = options?.processingTime || Math.floor(Math.random() * 20000) + 10000 // 10-30 seconds
+
   factory.setScenario({
     type: 'success',
     delay: processingTime,
@@ -310,7 +316,7 @@ export function createStructuredPromptImageMock(options?: {
       qualityScore,
       parametersIntegrated: true,
       optimizationApplied: true,
-      aspectRatioPreserved: true
+      aspectRatioPreserved: true,
     },
     customResponse: {
       metadata: {
@@ -319,11 +325,11 @@ export function createStructuredPromptImageMock(options?: {
         mimeType: 'image/png',
         timestamp: new Date(),
         inputImageProvided: false,
-        contextMethod: 'structured_prompt_to_image'
-      } as GeminiGenerationMetadata
-    }
+        contextMethod: 'structured_prompt_to_image',
+      } as GeminiGenerationMetadata,
+    },
   })
-  
+
   return factory.create()
 }
 

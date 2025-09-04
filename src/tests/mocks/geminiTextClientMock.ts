@@ -5,7 +5,7 @@
  */
 
 import type { Result } from '../../types/result'
-import { Ok, Err } from '../../types/result'
+import { Err, Ok } from '../../types/result'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
 
 /**
@@ -91,7 +91,7 @@ class GeminiTextClientMock implements GeminiTextClient {
   ): Promise<Result<OptimizedPrompt, GeminiAPIError | NetworkError>> {
     // Simulate processing delay
     if (this.scenario.delay) {
-      await new Promise(resolve => setTimeout(resolve, this.scenario.delay))
+      await new Promise((resolve) => setTimeout(resolve, this.scenario.delay))
     }
 
     // Handle different error scenarios
@@ -115,7 +115,7 @@ class GeminiTextClientMock implements GeminiTextClient {
 
       case 'timeout':
         // Simulate timeout by waiting longer than expected
-        await new Promise(resolve => setTimeout(resolve, 16000)) // 16 seconds > 15s limit
+        await new Promise((resolve) => setTimeout(resolve, 16000)) // 16 seconds > 15s limit
         return Err(
           new GeminiAPIError(
             'Request timeout after 15 seconds',
@@ -143,7 +143,7 @@ class GeminiTextClientMock implements GeminiTextClient {
    */
   private generateMockResponse(params: PromptGenerationParams): OptimizedPrompt {
     const { prompt } = params
-    
+
     // Simulate different enhancement levels based on prompt complexity
     const enhancementLevel = this.determineEnhancementLevel(prompt)
     const structuredPrompt = this.enhancePrompt(prompt, enhancementLevel)
@@ -156,8 +156,8 @@ class GeminiTextClientMock implements GeminiTextClient {
         model: 'gemini-2.0-flash',
         processingTime: Math.floor(Math.random() * 10000) + 5000, // 5-15 seconds
         timestamp: new Date(),
-        enhancementLevel
-      }
+        enhancementLevel,
+      },
     }
 
     // Apply custom response overrides if provided
@@ -208,10 +208,10 @@ class GeminiTextClientMock implements GeminiTextClient {
     switch (level) {
       case 'complete':
         practices.push('camera-control', 'aspect-ratio', 'semantic-negatives')
-        // fallthrough
+      /* falls through */
       case 'advanced':
         practices.push('character-consistency', 'context-intent', 'iterate-refine')
-        // fallthrough
+      /* falls through */
       case 'basic':
         practices.push('hyper-specific')
         break
@@ -228,10 +228,10 @@ export function createSuccessfulGeminiTextClientMock(
   customResponse?: Partial<OptimizedPrompt>
 ): GeminiTextClient {
   const factory = new GeminiTextClientMockFactory()
-  factory.setScenario({ 
-    type: 'success', 
+  factory.setScenario({
+    type: 'success',
     delay: Math.floor(Math.random() * 10000) + 5000,
-    customResponse 
+    ...(customResponse && { customResponse }),
   })
   return factory.create()
 }
@@ -244,9 +244,9 @@ export function createErrorGeminiTextClientMock(
   errorMessage?: string
 ): GeminiTextClient {
   const factory = new GeminiTextClientMockFactory()
-  factory.setScenario({ 
-    type: errorType, 
-    errorMessage 
+  factory.setScenario({
+    type: errorType,
+    ...(errorMessage && { errorMessage }),
   })
   return factory.create()
 }

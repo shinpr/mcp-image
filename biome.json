@@ -18,10 +18,13 @@
         "noNonNullAssertion": "off"
       },
       "suspicious": {
-        "noExplicitAny": "warn"
+        "noExplicitAny": "warn",
+        "noFallthroughSwitchClause": "off"
       },
       "complexity": {
-        "useLiteralKeys": "off"
+        "useLiteralKeys": "off",
+        "noForEach": "off",
+        "noUselessSwitchCase": "off"
       }
     }
   },

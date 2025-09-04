@@ -34,7 +34,7 @@
     "noPropertyAccessFromIndexSignature": true, // Prohibit property access from index signature
     
     // Error detection
-    "noFallthroughCasesInSwitch": true,     // Prohibit fallthrough in switch statements
+    "noFallthroughCasesInSwitch": false,    // Allow intentional fallthrough in switch statements
     "noImplicitReturns": true,              // Prohibit implicit returns
     "noImplicitOverride": true,             // Require override keyword
     "noUnusedLocals": true,                 // Detect unused local variables
