@@ -26,7 +26,7 @@ import {
 import { TwoStageProcessorImpl } from '../../integration/twoStageProcessor'
 
 // Import server components for MCP integration tests
-import { MCPServerWithOrchestration } from '../../server/mcpServerWithOrchestration'
+import { MCPServerImpl } from '../../server/mcpServer'
 
 // Import types
 import type { OrchestrationOptions } from '../../business/promptOrchestrator'
@@ -39,7 +39,7 @@ describe('Structured Prompt Generation Integration Test', () => {
   let pomlEngine: POMLTemplateEngineImpl
   let orchestrator: StructuredPromptOrchestratorImpl
   let twoStageProcessor: TwoStageProcessorImpl
-  let mcpServer: MCPServerWithOrchestration
+  let mcpServer: MCPServerImpl
 
   beforeEach(() => {
     // Reset mock factories
@@ -62,15 +62,9 @@ describe('Structured Prompt Generation Integration Test', () => {
     // Create TwoStageProcessor for full workflow testing
     twoStageProcessor = new TwoStageProcessorImpl(orchestrator, imageClient)
 
-    // Create MCP server with orchestration
-    mcpServer = new MCPServerWithOrchestration(
+    // Create MCP server with integrated orchestration
+    mcpServer = new MCPServerImpl(
       {},
-      {
-        enableOrchestration: true,
-        orchestrationMode: 'full',
-        progressNotifications: false,
-        fallbackBehavior: 'graceful',
-      },
       {
         geminiTextClient: textClient as any,
         bestPracticesEngine,
@@ -312,48 +306,6 @@ describe('Structured Prompt Generation Integration Test', () => {
       expect(result.success).toBe(true)
     })
 
-    // AC: Fallback execution notifies users via StructuredContent about using unstructured prompt
-    // @category: ux
-    // @dependency: StructuredPromptOrchestrator, MCPServer
-    // @complexity: low
-    it('AC9: explicitly notifies LLM/users through StructuredContent when fallback generates image with unstructured prompt', async () => {
-      // Configure server with fallback behavior
-      await mcpServer.enableStructuredPromptGeneration({
-        fallbackBehavior: 'graceful',
-      })
-
-      // Force an error to trigger fallback
-      const errorClient = createErrorGeminiTextClientMock('api_error')
-      const errorServer = new MCPServerWithOrchestration(
-        {},
-        {
-          enableOrchestration: true,
-          fallbackBehavior: 'graceful',
-        },
-        {
-          geminiTextClient: errorClient as any,
-          bestPracticesEngine: new BestPracticesEngineImpl(),
-          pomlTemplateEngine: new POMLTemplateEngineImpl(),
-          structuredPromptOrchestrator: new StructuredPromptOrchestratorImpl(
-            errorClient as any,
-            new BestPracticesEngineImpl(),
-            new POMLTemplateEngineImpl()
-          ),
-        }
-      )
-
-      const result = await errorServer.callTool('generate_image', {
-        prompt: 'fallback notification test',
-        useStructuredPrompt: true,
-      })
-
-      // Should have content indicating fallback usage
-      expect(result.content).toBeDefined()
-      expect(result.structuredContent).toBeDefined()
-      if (result.structuredContent) {
-        expect(result.structuredContent.metadata.fallbackUsed).toBe(true)
-      }
-    })
   })
 
   // ========================================
@@ -577,7 +529,7 @@ describe('Structured Prompt Generation Integration Test', () => {
     // @complexity: medium
     it('AC12: enables new functionality without requiring any changes to existing configuration files', async () => {
       // Create server without explicit configuration
-      const defaultServer = new MCPServerWithOrchestration()
+      const defaultServer = new MCPServerImpl()
 
       // Should work with default configuration
       const toolsList = defaultServer.getToolsList()

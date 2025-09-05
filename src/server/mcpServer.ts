@@ -15,15 +15,32 @@ import {
 
 // Types and interfaces
 import type { GenerateImageParams, MCPServerConfig, McpContent } from '../types/mcp'
+import type {
+  MCPOrchestrationConfig,
+  MCPOrchestrationResult,
+  OrchestrationStatus,
+} from '../types/mcpOrchestrationTypes'
+import { DEFAULT_ORCHESTRATION_CONFIG } from '../types/mcpOrchestrationTypes'
 
+import { type BestPracticesEngine, BestPracticesEngineImpl } from '../business/bestPracticesEngine'
 // Business logic
 import { type FileManager, createFileManager } from '../business/fileManager'
 import { type ImageGenerator, createImageGenerator } from '../business/imageGenerator'
 import { validateGenerateImageParams } from '../business/inputValidator'
+import { type POMLTemplateEngine, POMLTemplateEngineImpl } from '../business/pomlTemplateEngine'
+import {
+  type OrchestrationOptions,
+  type StructuredPromptOrchestrator,
+  StructuredPromptOrchestratorImpl,
+} from '../business/promptOrchestrator'
 import { type ResponseBuilder, createResponseBuilder } from '../business/responseBuilder'
 
 // API clients
 import { type GeminiClient, createGeminiClient } from '../api/geminiClient'
+import { type GeminiTextClient, createGeminiTextClient } from '../api/geminiTextClient'
+
+// Handlers
+import { StructuredPromptHandler } from './handlers/structuredPromptHandler'
 
 // Utilities
 import { getConfig } from '../utils/config'
@@ -51,28 +68,49 @@ export interface MCPServerDependencies {
   logger?: Logger
   securityManager?: SecurityManager
   createImageGenerator?: (geminiClient: GeminiClient) => ImageGenerator
+  geminiTextClient?: GeminiTextClient
+  bestPracticesEngine?: BestPracticesEngine
+  pomlTemplateEngine?: POMLTemplateEngine
+  structuredPromptOrchestrator?: StructuredPromptOrchestrator
+  structuredPromptHandler?: StructuredPromptHandler
 }
 
 /**
- * Basic MCP server structure
- * Simple implementation focusing on testability
+ * MCP server with integrated orchestration
+ * Provides AI-powered prompt optimization as standard feature
  */
 export class MCPServerImpl {
   private config: MCPServerConfig
+  private orchestrationConfig: MCPOrchestrationConfig
   private server: Server | null = null
   private logger: Logger
   private fileManager: FileManager
   private responseBuilder: ResponseBuilder
   private securityManager: SecurityManager
   private createImageGeneratorFn: (geminiClient: GeminiClient) => ImageGenerator
+  private structuredPromptHandler: StructuredPromptHandler | null = null
+  private geminiTextClient: GeminiTextClient | null = null
+  private orchestrator: StructuredPromptOrchestrator | null = null
 
   constructor(config: Partial<MCPServerConfig> = {}, dependencies: MCPServerDependencies = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+    this.orchestrationConfig = DEFAULT_ORCHESTRATION_CONFIG
     this.logger = dependencies.logger || new Logger()
     this.fileManager = dependencies.fileManager || createFileManager()
     this.responseBuilder = dependencies.responseBuilder || createResponseBuilder()
     this.securityManager = dependencies.securityManager || new SecurityManager()
     this.createImageGeneratorFn = dependencies.createImageGenerator || createImageGenerator
+
+    // Initialize orchestration components if provided
+    if (dependencies.structuredPromptHandler) {
+      this.structuredPromptHandler = dependencies.structuredPromptHandler
+    }
+    if (dependencies.geminiTextClient) {
+      this.geminiTextClient = dependencies.geminiTextClient
+    }
+    if (dependencies.structuredPromptOrchestrator) {
+      this.orchestrator = dependencies.structuredPromptOrchestrator
+    }
   }
 
   /**
@@ -197,14 +235,87 @@ export class MCPServerImpl {
   }
 
   /**
-   * Image generation tool handler with proper error handling
+   * Initialize orchestration components lazily
+   */
+  private async initializeOrchestrationComponents(): Promise<void> {
+    if (this.orchestrator) return // Already initialized
+
+    try {
+      const configResult = getConfig()
+      if (!configResult.success) {
+        throw configResult.error
+      }
+
+      // Initialize Gemini Text Client if not provided
+      if (!this.geminiTextClient) {
+        const geminiTextClientResult = createGeminiTextClient(configResult.data)
+        if (!geminiTextClientResult.success) {
+          throw geminiTextClientResult.error
+        }
+        this.geminiTextClient = geminiTextClientResult.data
+      }
+
+      // Initialize Best Practices Engine
+      const bestPracticesEngine = new BestPracticesEngineImpl()
+
+      // Initialize POML Template Engine
+      const pomlTemplateEngine = new POMLTemplateEngineImpl()
+
+      // Initialize Orchestrator
+      this.orchestrator = new StructuredPromptOrchestratorImpl(
+        this.geminiTextClient,
+        bestPracticesEngine,
+        pomlTemplateEngine
+      )
+
+      // Initialize Structured Prompt Handler
+      if (!this.structuredPromptHandler) {
+        this.structuredPromptHandler = new StructuredPromptHandler(
+          this.orchestrator,
+          this.orchestrationConfig,
+          { logger: this.logger }
+        )
+      }
+
+      this.logger.info('mcp-orchestration', 'Orchestration components initialized')
+    } catch (error) {
+      this.logger.error(
+        'mcp-orchestration',
+        'Failed to initialize orchestration components',
+        error as Error
+      )
+      throw error
+    }
+  }
+
+  /**
+   * Get orchestration status information
+   */
+  public getOrchestrationStatus(): OrchestrationStatus {
+    if (!this.structuredPromptHandler) {
+      return {
+        enabled: true,
+        mode: this.orchestrationConfig.orchestrationMode,
+        statistics: {
+          totalAttempts: 0,
+          successfulAttempts: 0,
+          failedAttempts: 0,
+          averageProcessingTime: 0,
+        },
+      }
+    }
+    return this.structuredPromptHandler.getOrchestrationStatus()
+  }
+
+  /**
+   * Image generation tool handler with integrated prompt optimization
    */
   private async handleGenerateImage(params: GenerateImageParams, progressToken?: string | number) {
     // Use ErrorHandler.wrapWithResultType for safe execution
     const result = await ErrorHandler.wrapWithResultType(async () => {
       // Send initial progress notification
       if (progressToken) {
-        await this.sendProgress(progressToken, 0, 100, 'Starting image generation...')
+        await this.sendProgress(progressToken, 0, 100, 'Starting prompt optimization...')
       }
 
       // Step 1: Validate input parameters
@@ -214,7 +325,7 @@ export class MCPServerImpl {
       }
 
       if (progressToken) {
-        await this.sendProgress(progressToken, 20, 100, 'Input parameters validated')
+        await this.sendProgress(progressToken, 10, 100, 'Input parameters validated')
       }
 
       // Step 2: Load configuration
@@ -224,17 +335,76 @@ export class MCPServerImpl {
       }
 
       if (progressToken) {
-        await this.sendProgress(progressToken, 30, 100, 'Configuration loaded')
+        await this.sendProgress(progressToken, 15, 100, 'Configuration loaded')
       }
 
-      // Step 3: Initialize components
+      // Step 3: Initialize orchestration components if needed
+      await this.initializeOrchestrationComponents()
+
+      if (progressToken) {
+        await this.sendProgress(progressToken, 20, 100, 'Optimizing prompt with AI...')
+      }
+
+      // Step 4: Apply prompt optimization (always enabled)
+      let optimizedPrompt = params.prompt
+      let orchestrationResult: MCPOrchestrationResult['orchestrationResult'] | undefined
+      let fallbackUsed = false
+
+      if (this.structuredPromptHandler) {
+        const orchestrationOptions: OrchestrationOptions = {
+          bestPracticesMode: 'complete',
+          enablePOML: true,
+          // Map feature parameters to orchestration options
+          ...(params.maintainCharacterConsistency !== undefined && {
+            maintainCharacterConsistency: params.maintainCharacterConsistency,
+          }),
+          ...(params.blendImages !== undefined && {
+            blendImages: params.blendImages,
+          }),
+          ...(params.useWorldKnowledge !== undefined && {
+            useWorldKnowledge: params.useWorldKnowledge,
+          }),
+        }
+
+        const startTime = Date.now()
+        const orchestrationRes = await this.structuredPromptHandler.processStructuredPrompt(
+          params.prompt,
+          orchestrationOptions,
+          this.server || undefined,
+          progressToken
+        )
+        const orchestrationTime = Date.now() - startTime
+
+        if (orchestrationRes.success) {
+          optimizedPrompt = orchestrationRes.data.structuredPrompt
+          orchestrationResult = orchestrationRes.data
+
+          this.logger.info('mcp-orchestration', 'Prompt optimization successful', {
+            originalLength: params.prompt.length,
+            optimizedLength: optimizedPrompt.length,
+            orchestrationTime,
+          })
+        } else {
+          // Log warning but continue with original prompt (graceful fallback)
+          fallbackUsed = true
+          this.logger.warn('mcp-orchestration', 'Prompt optimization failed, using original', {
+            error: orchestrationRes.error.message,
+          })
+        }
+      }
+
+      if (progressToken) {
+        await this.sendProgress(progressToken, 50, 100, 'Initializing image generation client...')
+      }
+
+      // Step 5: Initialize Gemini client for image generation
       const geminiClientResult = createGeminiClient(configResult.data)
       if (!geminiClientResult.success) {
         throw geminiClientResult.error
       }
 
       if (progressToken) {
-        await this.sendProgress(progressToken, 50, 100, 'Client initialized')
+        await this.sendProgress(progressToken, 55, 100, 'Client initialized')
       }
 
       const imageGenerator = this.createImageGeneratorFn(geminiClientResult.data)
@@ -242,7 +412,7 @@ export class MCPServerImpl {
       const responseBuilder = this.responseBuilder
 
       if (progressToken) {
-        await this.sendProgress(progressToken, 60, 100, 'Generating image...')
+        await this.sendProgress(progressToken, 60, 100, 'Generating image with optimized prompt...')
       }
 
       // Step 4: Handle input image if provided
@@ -288,10 +458,10 @@ export class MCPServerImpl {
       }
 
       if (progressToken) {
-        await this.sendProgress(progressToken, 90, 100, 'Image generated, building response...')
+        await this.sendProgress(progressToken, 90, 100, 'Image generated, saving to file...')
       }
 
-      // Step 6: Save image file to IMAGE_OUTPUT_DIR with specified or auto-generated name
+      // Step 8: Save image file to IMAGE_OUTPUT_DIR with specified or auto-generated name
       // Determine file path: use provided fileName or generate one, always in IMAGE_OUTPUT_DIR
       const finalFileName = params.fileName || fileManager.generateFileName()
       const rawOutputPath = path.join(configResult.data.imageOutputDir, finalFileName)
@@ -315,14 +485,31 @@ export class MCPServerImpl {
         await this.sendProgress(progressToken, 95, 100, 'Image saved to file')
       }
 
-      // Step 6: Build structured response
+      // Step 9: Build structured response with orchestration metadata
       const response = responseBuilder.buildSuccessResponse(generationResult.data, savedFilePath)
+
+      // Add orchestration metadata to response using structuredContent
+      const enhancedResponse = {
+        ...response,
+        structuredContent: {
+          ...((response.structuredContent as Record<string, unknown>) || {}),
+          metadata: {
+            fallbackUsed,
+            promptOptimized: !!orchestrationResult,
+            ...(orchestrationResult && {
+              originalPrompt: params.prompt,
+              optimizedPrompt: optimizedPrompt,
+              orchestrationDetails: orchestrationResult,
+            }),
+          },
+        },
+      }
 
       if (progressToken) {
         await this.sendProgress(progressToken, 100, 100, 'Image generation completed')
       }
 
-      return response
+      return enhancedResponse
     }, 'image-generation')
 
     // Handle the result
@@ -332,7 +519,57 @@ export class MCPServerImpl {
 
     // Build error response using ResponseBuilder
     const responseBuilder = this.responseBuilder
-    return responseBuilder.buildErrorResponse(result.error)
+    const errorResponse = responseBuilder.buildErrorResponse(result.error)
+
+    // Add fallback information even for errors if orchestration was attempted
+    if (this.structuredPromptHandler) {
+      return {
+        ...errorResponse,
+        structuredContent: {
+          ...((errorResponse.structuredContent as Record<string, unknown>) || {}),
+          metadata: {
+            fallbackUsed: true,
+            promptOptimized: false,
+            errorOccurred: true,
+          },
+        },
+      }
+    }
+
+    return errorResponse
+  }
+
+  /**
+   * Enable or configure structured prompt generation
+   */
+  async enableStructuredPromptGeneration(options?: {
+    fallbackBehavior?: 'graceful' | 'retry' | 'fail'
+    orchestrationMode?: 'full' | 'essential' | 'minimal'
+    progressNotifications?: boolean
+  }): Promise<void> {
+    if (options) {
+      if (options.fallbackBehavior) {
+        this.orchestrationConfig = {
+          ...this.orchestrationConfig,
+          fallbackBehavior: options.fallbackBehavior,
+        }
+      }
+      if (options.orchestrationMode) {
+        this.orchestrationConfig = {
+          ...this.orchestrationConfig,
+          orchestrationMode: options.orchestrationMode,
+        }
+      }
+      if (options.progressNotifications !== undefined) {
+        this.orchestrationConfig = {
+          ...this.orchestrationConfig,
+          progressNotifications: options.progressNotifications,
+        }
+      }
+    }
+
+    // Initialize orchestration components if not already done
+    await this.initializeOrchestrationComponents()
   }
 
   /**

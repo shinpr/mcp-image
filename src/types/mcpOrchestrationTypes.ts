@@ -3,34 +3,14 @@
  * Extends existing MCP types with structured prompt generation capabilities
  */
 
-import type { OrchestrationOptions, OrchestrationResult } from '../business/promptOrchestrator'
-import type { GenerateImageParams } from './mcp'
+import type { OrchestrationResult } from '../business/promptOrchestrator'
 
-/**
- * Extended generate_image parameters with orchestration support
- */
-export interface GenerateImageWithOrchestrationParams extends GenerateImageParams {
-  /**
-   * Enable structured prompt generation (optional)
-   * When true, applies 2-stage orchestration before image generation
-   */
-  useStructuredPrompt?: boolean
-
-  /**
-   * Orchestration configuration options
-   */
-  orchestrationOptions?: OrchestrationOptions
-}
+// Orchestration params no longer needed - always enabled by default
 
 /**
  * Orchestration configuration for MCP server
  */
 export interface MCPOrchestrationConfig {
-  /**
-   * Global orchestration enablement flag
-   */
-  enableOrchestration: boolean
-
   /**
    * Orchestration processing mode
    * - full: POML + all 7 best practices
@@ -179,7 +159,6 @@ export interface OrchestrationProgressMessage {
  * Default orchestration configuration
  */
 export const DEFAULT_ORCHESTRATION_CONFIG: MCPOrchestrationConfig = {
-  enableOrchestration: true,
   orchestrationMode: 'full',
   progressNotifications: true,
   fallbackBehavior: 'graceful',

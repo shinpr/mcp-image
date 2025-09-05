@@ -60,12 +60,6 @@ export class StructuredPromptHandler {
     const startTime = new Date()
 
     try {
-      // Check if orchestration is enabled
-      if (!this.config.enableOrchestration) {
-        this.logger.debug('structured-prompt', 'Orchestration disabled, skipping')
-        return Err(new GeminiAPIError('Orchestration is disabled'))
-      }
-
       this.status.statistics.totalAttempts++
 
       // Send initial progress notification
@@ -300,7 +294,7 @@ export class StructuredPromptHandler {
    */
   private initializeStatus(): OrchestrationStatus {
     return {
-      enabled: this.config.enableOrchestration,
+      enabled: true, // Always enabled now
       mode: this.config.orchestrationMode,
       statistics: {
         totalAttempts: 0,

@@ -88,20 +88,6 @@ export class APIContractValidator {
         expectedBehavior: 'original_functionality',
       },
       {
-        name: 'call_generate_image_structured',
-        request: {
-          method: 'tools/call',
-          params: {
-            name: 'generate_image',
-            arguments: {
-              prompt: 'test image',
-              useStructuredPrompt: true,
-            },
-          },
-        },
-        expectedBehavior: 'enhanced_functionality',
-      },
-      {
         name: 'call_generate_image_with_config',
         request: {
           method: 'tools/call',
@@ -191,11 +177,6 @@ export class APIContractValidator {
             type: 'object',
             properties: {
               prompt: { type: 'string', description: 'The image prompt' },
-              useStructuredPrompt: {
-                type: 'boolean',
-                description: 'Enable structured prompt optimization',
-                default: false,
-              },
               structuredPromptConfig: {
                 type: 'object',
                 description: 'Configuration for structured prompt processing',
@@ -216,7 +197,7 @@ export class APIContractValidator {
     // Green phase - return response that meets contract expectations
     const paramsObj = params as Record<string, unknown>
     const argsObj = paramsObj?.['arguments'] as Record<string, unknown> | undefined
-    const hasStructuredPrompt = argsObj?.['useStructuredPrompt'] === true
+    const hasStructuredPrompt = true // Always enabled now
 
     return {
       content: [
@@ -230,13 +211,11 @@ export class APIContractValidator {
       isError: false,
       // Extended response for structured prompts
       metadata: {
-        structuredPromptUsed: hasStructuredPrompt,
-        processingTime: hasStructuredPrompt ? 12000 : 8000, // Simulated processing times
+        structuredPromptUsed: true, // Always true now
+        processingTime: 12000, // Always uses optimization time
         fallbackUsed: false,
         originalPrompt: argsObj?.['prompt'],
-        enhancedPrompt: hasStructuredPrompt
-          ? `Enhanced: ${argsObj?.['prompt']} with detailed specifications`
-          : undefined,
+        enhancedPrompt: `Enhanced: ${argsObj?.['prompt']} with detailed specifications`, // Always enhanced
       },
     }
   }

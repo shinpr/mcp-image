@@ -171,8 +171,6 @@ export class BackwardCompatibilityVerifier {
                     type: 'object',
                     properties: {
                       prompt: { type: 'string' },
-                      useStructuredPrompt: { type: 'boolean', default: false },
-                      structuredPromptConfig: { type: 'object' },
                     },
                     required: ['prompt'],
                   },
@@ -332,7 +330,6 @@ export class BackwardCompatibilityVerifier {
       // Verify that data structures remain compatible
       const testData = {
         prompt: 'test prompt',
-        useStructuredPrompt: false, // Default behavior preserved
       }
 
       // Simulate data validation
@@ -362,11 +359,7 @@ export class BackwardCompatibilityVerifier {
       return false
     }
     const dataObj = data as Record<string, unknown>
-    return (
-      typeof dataObj['prompt'] === 'string' &&
-      (dataObj['useStructuredPrompt'] === undefined ||
-        typeof dataObj['useStructuredPrompt'] === 'boolean')
-    )
+    return typeof dataObj['prompt'] === 'string'
   }
 
   private async testDefaultBehavior(): Promise<boolean> {
