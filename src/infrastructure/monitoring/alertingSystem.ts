@@ -4,11 +4,11 @@
  */
 
 import {
-  type AlertRule,
-  type AlertEvent,
-  type AlertEvaluation,
-  AlertType,
   type AlertCondition,
+  type AlertEvaluation,
+  type AlertEvent,
+  type AlertRule,
+  AlertType,
   type CurrentMetrics,
 } from '../../types/performanceTypes'
 
@@ -497,13 +497,14 @@ export class AlertingSystem {
     // Standard severity calculation
     if (ratio > 1.8) {
       return 'critical'
-    } else if (ratio > 1.4) {
-      return 'high'
-    } else if (ratio > 1.1) {
-      return 'medium'
-    } else {
-      return 'low'
     }
+    if (ratio > 1.4) {
+      return 'high'
+    }
+    if (ratio > 1.1) {
+      return 'medium'
+    }
+    return 'low'
   }
 
   /**
@@ -525,7 +526,7 @@ export class AlertingSystem {
     const notifications = rule.actions.map(async (action) => {
       try {
         const handler = this.notificationHandlers.get(action.type)
-        if (handler && handler.isHealthy()) {
+        if (handler?.isHealthy()) {
           await handler.sendAlert(alert)
         } else {
           console.error(`Alert handler '${action.type}' not available or unhealthy`)

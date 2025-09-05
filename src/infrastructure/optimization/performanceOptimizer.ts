@@ -4,15 +4,15 @@
  */
 
 import {
-  ProcessingStage,
-  type PerformanceAnalysis,
-  type OptimizationRequest,
-  type OptimizedPipeline,
+  type APICallPattern,
   type CacheOptimization,
   type MemoryOptimization,
-  type ResourceAllocation,
-  type APICallPattern,
+  type OptimizationRequest,
+  type OptimizedPipeline,
   type OrchestrationMetrics,
+  type PerformanceAnalysis,
+  ProcessingStage,
+  type ResourceAllocation,
 } from '../../types/performanceTypes'
 
 /**
@@ -276,7 +276,8 @@ export class PerformanceOptimizer {
           evictionPolicy: 'adaptive_lru',
         },
       }
-    } else if (cacheHitRate < 0.7) {
+    }
+    if (cacheHitRate < 0.7) {
       // Medium hit rate - optimize cache size and eviction
       return {
         strategy: 'adaptive_lru',

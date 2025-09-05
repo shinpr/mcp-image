@@ -3,18 +3,18 @@
  * Tests for OrchestrationMetrics, PerformanceOptimizer, and AlertingSystem
  */
 
-import { OrchestrationMetrics } from '../monitoring/OrchestrationMetrics'
-import { PerformanceOptimizer } from '../optimization/performanceOptimizer'
-import { AlertingSystem } from '../monitoring/alertingSystem'
 import {
-  ProcessingStage,
-  FallbackTier,
   AlertType,
+  type CurrentMetrics,
+  FallbackTier,
+  type MemoryMetrics,
+  ProcessingStage,
   ReportingPeriod,
   type TimeRange,
-  type CurrentMetrics,
-  type MemoryMetrics,
 } from '../../types/performanceTypes'
+import { OrchestrationMetrics } from '../monitoring/OrchestrationMetrics'
+import { AlertingSystem } from '../monitoring/alertingSystem'
+import { PerformanceOptimizer } from '../optimization/performanceOptimizer'
 
 describe('Performance Monitoring Infrastructure', () => {
   let orchestrationMetrics: OrchestrationMetrics
