@@ -320,7 +320,9 @@ export class TwoStageProcessorImpl implements TwoStageProcessor {
     try {
       const imageParams: GeminiApiParams = {
         prompt: structuredPrompt,
-        ...(optimizedParams.inputImage && { inputImage: optimizedParams.inputImage }),
+        ...(optimizedParams.inputImage && {
+          inputImage: optimizedParams.inputImage.toString('base64'),
+        }),
         ...(optimizedParams.blendImages && { blendImages: optimizedParams.blendImages }),
         ...(optimizedParams.maintainCharacterConsistency && {
           maintainCharacterConsistency: optimizedParams.maintainCharacterConsistency,
@@ -375,7 +377,7 @@ export class TwoStageProcessorImpl implements TwoStageProcessor {
       const imageParams: GeminiApiParams = {
         prompt: request.originalPrompt,
         ...(request.imageParameters?.inputImage && {
-          inputImage: request.imageParameters.inputImage,
+          inputImage: request.imageParameters.inputImage.toString('base64'),
         }),
         ...(request.imageParameters?.blendImages && {
           blendImages: request.imageParameters.blendImages,

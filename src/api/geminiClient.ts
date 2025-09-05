@@ -80,7 +80,7 @@ export interface GeminiGenerationMetadata {
  */
 export interface GeminiApiParams {
   prompt: string
-  inputImage?: Buffer
+  inputImage?: string
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
   useWorldKnowledge?: boolean
@@ -115,35 +115,33 @@ class GeminiClientImpl implements GeminiClient {
     params: GeminiApiParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     try {
-      // Enhance prompt with structured parameters for better accuracy
-      let enhancedPrompt = params.prompt
+      // Prepare the request content with proper structure for multimodal input
+      const requestContent: unknown[] = []
 
-      // Convert MCP parameters to structured prompt instructions
-      if (params.maintainCharacterConsistency) {
-        enhancedPrompt +=
-          ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]'
-      }
-
-      if (params.blendImages) {
-        enhancedPrompt +=
-          ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]'
-      }
-
-      if (params.useWorldKnowledge) {
-        enhancedPrompt +=
-          ' [INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]'
-      }
-
-      // Prepare the request content with enhanced prompt
-      const requestContent: unknown[] = [enhancedPrompt]
-
-      // Add input image if provided
+      // Structure the contents properly for image generation/editing
       if (params.inputImage) {
+        // For image editing: provide image first, then text instructions
         requestContent.push({
-          inlineData: {
-            data: params.inputImage.toString('base64'),
-            mimeType: 'image/jpeg', // Assume JPEG for input images
-          },
+          parts: [
+            {
+              inlineData: {
+                data: params.inputImage,
+                mimeType: 'image/jpeg', // TODO: Dynamic MIME type support
+              },
+            },
+            {
+              text: params.prompt,
+            },
+          ],
+        })
+      } else {
+        // For text-to-image: provide only text prompt
+        requestContent.push({
+          parts: [
+            {
+              text: params.prompt,
+            },
+          ],
         })
       }
 
@@ -156,8 +154,8 @@ class GeminiClientImpl implements GeminiClient {
       // Note: urlContext tool has been removed as it's not supported by the model
       this.detectUrls(params.prompt)
 
-      // Note: Feature parameters are now handled via prompt enhancement
-      // The Gemini API does not directly support these as config parameters
+      // Note: Feature parameters are now handled by the orchestration layer
+      // They are no longer processed directly in GeminiClient
 
       // Generate content using Gemini API with official URL Context support
       const response = await this.genai.models.generateContent({

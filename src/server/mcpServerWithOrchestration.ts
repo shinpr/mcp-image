@@ -252,6 +252,14 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
 
         const orchestrationOptions: OrchestrationOptions = {
           ...params.orchestrationOptions,
+          // Map feature parameters to orchestration options (only when defined)
+          ...(params.maintainCharacterConsistency !== undefined && {
+            maintainCharacterConsistency: params.maintainCharacterConsistency,
+          }),
+          ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
+          ...(params.useWorldKnowledge !== undefined && {
+            useWorldKnowledge: params.useWorldKnowledge,
+          }),
         }
 
         const orchestrationRes = await this.structuredPromptHandler.processStructuredPrompt(

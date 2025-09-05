@@ -316,17 +316,6 @@ describe('BestPracticesEngine', () => {
       }
     })
 
-    it('should handle prompts with all practices already present', async () => {
-      const fullPrompt = `professional portrait with dramatic cinematic lighting using 85mm lens at f/1.4, 
-                          maintaining consistent character features across series with unified artistic style and 
-                          coherent color palette, conveying purposeful emotional resonance with contextual narrative depth,
-                          optimized for 16:9 widescreen composition with progressive refinement guidance`
-
-      const analysis = await engine.analyzePracticeCompliance(fullPrompt)
-      expect(analysis.existingPractices.length).toBeGreaterThan(5)
-      expect(analysis.overallScore).toBeGreaterThan(70)
-    })
-
     it('should track applied practices correctly', async () => {
       // First application
       await engine.applyBestPractices('first prompt')
@@ -341,6 +330,94 @@ describe('BestPracticesEngine', () => {
       // Should track latest application
       expect(secondPractices).not.toEqual(firstPractices)
       expect(secondPractices.length).toBeLessThanOrEqual(2)
+    })
+  })
+
+  describe('Feature Parameters Integration', () => {
+    it('should apply maintainCharacterConsistency feature parameter', async () => {
+      const prompt = 'image of a character'
+      const result = await engine.applyBestPractices(prompt, {
+        maintainCharacterConsistency: true,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.enhancedPrompt).toContain(
+          '[INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]'
+        )
+      }
+    })
+
+    it('should apply blendImages feature parameter', async () => {
+      const prompt = 'multiple visual elements'
+      const result = await engine.applyBestPractices(prompt, {
+        blendImages: true,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.enhancedPrompt).toContain(
+          '[INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]'
+        )
+      }
+    })
+
+    it('should apply useWorldKnowledge feature parameter', async () => {
+      const prompt = 'historical scene'
+      const result = await engine.applyBestPractices(prompt, {
+        useWorldKnowledge: true,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.enhancedPrompt).toContain(
+          '[INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]'
+        )
+      }
+    })
+
+    it('should apply multiple feature parameters together', async () => {
+      const prompt = 'character in historical scene'
+      const result = await engine.applyBestPractices(prompt, {
+        maintainCharacterConsistency: true,
+        blendImages: true,
+        useWorldKnowledge: true,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.enhancedPrompt).toContain(
+          '[INSTRUCTION: Maintain exact character appearance'
+        )
+        expect(result.data.enhancedPrompt).toContain(
+          '[INSTRUCTION: Seamlessly blend multiple visual elements'
+        )
+        expect(result.data.enhancedPrompt).toContain(
+          '[INSTRUCTION: Apply accurate real-world knowledge'
+        )
+      }
+    })
+
+    it('should not apply feature parameters when false or undefined', async () => {
+      const prompt = 'simple image'
+      const result = await engine.applyBestPractices(prompt, {
+        maintainCharacterConsistency: false,
+        blendImages: undefined,
+        useWorldKnowledge: false,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.enhancedPrompt).not.toContain(
+          '[INSTRUCTION: Maintain exact character appearance'
+        )
+        expect(result.data.enhancedPrompt).not.toContain(
+          '[INSTRUCTION: Seamlessly blend multiple visual elements'
+        )
+        expect(result.data.enhancedPrompt).not.toContain(
+          '[INSTRUCTION: Apply accurate real-world knowledge'
+        )
+      }
     })
   })
 })

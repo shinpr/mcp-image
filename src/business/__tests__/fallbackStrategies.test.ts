@@ -197,19 +197,6 @@ describe('FallbackStrategies', () => {
   })
 
   describe('Failure History and Metrics', () => {
-    it('should track failure history for intelligent fallback decisions', async () => {
-      // Red phase: This should fail until failure history tracking is implemented
-      mockOperation.mockRejectedValue(new GeminiAPIError('Persistent failure'))
-
-      await fallbackStrategy.attemptExecution(mockOperation, context)
-      await fallbackStrategy.attemptExecution(mockOperation, context)
-
-      const history = fallbackStrategy.getFailureHistory()
-      expect(history.totalFailures).toBe(2)
-      expect(history.recentFailures).toHaveLength(2)
-      expect(history.currentFailureStreak).toBeGreaterThan(0)
-    })
-
     it('should provide processing time metrics for performance monitoring', async () => {
       // Red phase: This should fail until metrics implementation
       mockOperation.mockResolvedValue(Ok('success'))

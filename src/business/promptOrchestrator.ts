@@ -21,7 +21,11 @@ import {
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { GeminiAPIError, InputValidationError } from '../utils/errors'
-import type { BestPracticesEngine, BestPracticesOptions } from './bestPracticesEngine'
+import {
+  type BestPracticesEngine,
+  type BestPracticesOptions,
+  createBestPracticesEngine,
+} from './bestPracticesEngine'
 import type { POMLTemplate, POMLTemplateEngine } from './pomlTemplateEngine'
 
 /**
@@ -43,6 +47,10 @@ export interface OrchestrationOptions {
   bestPracticesMode?: BestPracticesMode
   fallbackStrategy?: FallbackStrategy
   maxProcessingTime?: number
+  // Feature parameters for image generation
+  maintainCharacterConsistency?: boolean
+  blendImages?: boolean
+  useWorldKnowledge?: boolean
 }
 
 /**
@@ -387,9 +395,23 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
         aspectRatio: '16:9',
         targetStyle: 'enhanced',
         contextIntent: 'image_generation',
+        // Pass through feature parameters from orchestration options (only when defined)
+        ...(options.maintainCharacterConsistency !== undefined && {
+          maintainCharacterConsistency: options.maintainCharacterConsistency,
+        }),
+        ...(options.blendImages !== undefined && { blendImages: options.blendImages }),
+        ...(options.useWorldKnowledge !== undefined && {
+          useWorldKnowledge: options.useWorldKnowledge,
+        }),
       }
 
-      const bestPracticesResult = await this.bestPracticesEngine.applyBestPractices(
+      // Create BestPracticesEngine with GeminiTextClient for AI-powered enhancement
+      const enhancedBestPracticesEngine = createBestPracticesEngine(
+        { enableAllPractices: true },
+        this.geminiTextClient
+      )
+
+      const bestPracticesResult = await enhancedBestPracticesEngine.applyBestPractices(
         prompt,
         bestPracticesOptions
       )

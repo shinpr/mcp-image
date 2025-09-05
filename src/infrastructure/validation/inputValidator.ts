@@ -50,7 +50,7 @@ interface ValidationItem {
  * Validation constants
  */
 const VALIDATION_CONSTANTS = {
-  MAX_PROMPT_LENGTH: 8000,
+  MAX_PROMPT_LENGTH: 4000,
   MIN_PROMPT_LENGTH: 1,
   SUPPORTED_LANGUAGES: ['en', 'ja', 'zh', 'ko', 'es', 'fr', 'de', 'it', 'pt', 'ru'],
   SPECIAL_CHAR_PATTERN: /[^\w\s\-.,!?'"():;]/g,
@@ -203,10 +203,10 @@ export class InputValidator {
       }
     }
 
-    // Check for extremely repetitive content
+    // Check for extremely repetitive content (more lenient threshold)
     const words = prompt.toLowerCase().split(/\s+/)
     const uniqueWords = new Set(words)
-    if (words.length > 10 && uniqueWords.size < words.length * 0.3) {
+    if (words.length > 20 && uniqueWords.size < words.length * 0.15) {
       return {
         valid: false,
         severity: Severity.DEGRADED,
@@ -371,9 +371,15 @@ export class InputValidator {
     // Trim whitespace
     normalized = normalized.trim()
 
-    // Remove potential security issues
-    for (const pattern of VALIDATION_CONSTANTS.UNSAFE_CONTENT_PATTERNS) {
-      normalized = normalized.replace(pattern, '')
+    // Skip security pattern removal for non-Latin scripts to preserve content
+    const hasNonLatinScript = /[\u0600-\u06ff\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff]/.test(
+      normalized
+    )
+    if (!hasNonLatinScript) {
+      // Remove potential security issues only for Latin scripts
+      for (const pattern of VALIDATION_CONSTANTS.UNSAFE_CONTENT_PATTERNS) {
+        normalized = normalized.replace(pattern, '')
+      }
     }
 
     // Truncate if too long
@@ -382,19 +388,10 @@ export class InputValidator {
       // Ensure we don't cut off mid-word by finding the last complete word
       const lastSpaceIndex = normalized.lastIndexOf(' ')
       if (lastSpaceIndex > normalized.length * 0.8) {
-        normalized = normalized.substring(0, lastSpaceIndex).trim()
-      } else {
-        normalized = normalized.trim()
+        normalized = normalized.substring(0, lastSpaceIndex)
       }
-      // Ensure no trailing partial words
-      if (normalized.match(/\w+$/)) {
-        const words = normalized.split(' ')
-        if (words.length > 1) {
-          // Remove the last word if it might be partial
-          words.pop()
-          normalized = words.join(' ')
-        }
-      }
+      // Ensure trailing partial words are properly handled
+      normalized = normalized.trim()
     }
 
     return normalized

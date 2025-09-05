@@ -4,6 +4,7 @@
  * for image generation prompts to improve output quality and consistency
  */
 
+import type { GeminiTextClient } from '../api/geminiTextClient'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 
@@ -15,6 +16,10 @@ export interface BestPracticesOptions {
   aspectRatio?: AspectRatio
   targetStyle?: string
   contextIntent?: string
+  // Feature parameters for image generation
+  maintainCharacterConsistency?: boolean
+  blendImages?: boolean
+  useWorldKnowledge?: boolean
 }
 
 /**
@@ -154,9 +159,10 @@ const DEFAULT_CONFIG: BestPracticesConfig = {
  * @returns BestPracticesEngine instance
  */
 export function createBestPracticesEngine(
-  config?: Partial<BestPracticesConfig>
+  config?: Partial<BestPracticesConfig>,
+  geminiTextClient?: GeminiTextClient
 ): BestPracticesEngine {
-  return new BestPracticesEngineImpl(config)
+  return new BestPracticesEngineImpl(config, geminiTextClient)
 }
 
 /**
@@ -166,9 +172,11 @@ export class BestPracticesEngineImpl implements BestPracticesEngine {
   private readonly strategies: Map<BestPracticeType, TransformationStrategy>
   private readonly config: BestPracticesConfig
   private appliedPractices: BestPracticeItem[] = []
+  private geminiTextClient: GeminiTextClient | undefined
 
-  constructor(config: Partial<BestPracticesConfig> = {}) {
+  constructor(config: Partial<BestPracticesConfig> = {}, geminiTextClient?: GeminiTextClient) {
     this.config = { ...DEFAULT_CONFIG, ...config }
+    this.geminiTextClient = geminiTextClient
     this.strategies = new Map()
     this.initializeStrategies()
   }
@@ -185,39 +193,75 @@ export class BestPracticesEngineImpl implements BestPracticesEngine {
         return Err(new BestPracticesError('Empty prompt provided', 'INVALID_INPUT'))
       }
 
-      // Analyze current prompt
-      const analysis = await this.analyzePracticeCompliance(prompt)
-
-      // Determine practices to apply
-      const practicesToApply = options.enabledPractices || analysis.missingPractices
-
-      // Apply each missing practice
       let enhancedPrompt = prompt
       const appliedPractices: BestPracticeItem[] = []
 
-      for (const practiceType of practicesToApply) {
-        const strategy = this.strategies.get(practiceType)
-        if (!strategy) continue
+      // Use AI-powered enhancement if GeminiTextClient is available
+      if (this.geminiTextClient) {
+        const aiStart = Date.now()
 
-        const practiceStartTime = Date.now()
-        const needsApplication = await strategy.analyze(enhancedPrompt)
+        try {
+          // Build a comprehensive prompt for Gemini 2.0 Flash
+          const enhancementPrompt = this.buildAIEnhancementPrompt(prompt, options)
 
-        // Apply the practice if it's needed (analyze returns true when practice is missing)
-        if (needsApplication) {
-          enhancedPrompt = await strategy.apply(enhancedPrompt, options)
-          const metadata = strategy.getMetadata()
-
-          appliedPractices.push({
-            type: practiceType,
-            applied: true,
-            enhancement: this.getEnhancementDescription(practiceType),
-            metadata: {
-              processingTime: Math.max(Date.now() - practiceStartTime, 1), // Ensure minimum 1ms
-              confidence: metadata.confidence,
-            },
+          const aiResult = await this.geminiTextClient.generateStructuredPrompt(enhancementPrompt, {
+            temperature: 0.7,
+            maxTokens: 500,
+            bestPracticesMode: 'complete',
           })
+
+          if (aiResult.success) {
+            enhancedPrompt = aiResult.data.text
+            appliedPractices.push({
+              type: 'semantic-enhancement' as BestPracticeType,
+              applied: true,
+              enhancement: 'AI-powered prompt optimization using Gemini 2.0 Flash',
+              metadata: {
+                processingTime: Date.now() - aiStart,
+                confidence: 0.95,
+              },
+            })
+          }
+        } catch (error) {
+          console.warn('AI enhancement failed, falling back to rule-based approach:', error)
         }
       }
+
+      // If AI enhancement wasn't used, apply rule-based practices
+      if (appliedPractices.length === 0) {
+        // Analyze current prompt
+        const analysis = await this.analyzePracticeCompliance(prompt)
+
+        // Determine practices to apply
+        const practicesToApply = options.enabledPractices || analysis.missingPractices
+
+        for (const practiceType of practicesToApply) {
+          const strategy = this.strategies.get(practiceType)
+          if (!strategy) continue
+
+          const practiceStartTime = Date.now()
+          const needsApplication = await strategy.analyze(enhancedPrompt)
+
+          // Apply the practice if it's needed (analyze returns true when practice is missing)
+          if (needsApplication) {
+            enhancedPrompt = await strategy.apply(enhancedPrompt, options)
+            const metadata = strategy.getMetadata()
+
+            appliedPractices.push({
+              type: practiceType,
+              applied: true,
+              enhancement: this.getEnhancementDescription(practiceType),
+              metadata: {
+                processingTime: Math.max(Date.now() - practiceStartTime, 1), // Ensure minimum 1ms
+                confidence: metadata.confidence,
+              },
+            })
+          }
+        }
+      }
+
+      // Apply feature parameters as structured prompt instructions
+      enhancedPrompt = await this.applyFeatureParameters(enhancedPrompt, options)
 
       const totalProcessingTime = Date.now() - startTime
 
@@ -239,7 +283,7 @@ export class BestPracticesEngineImpl implements BestPracticesEngine {
         appliedPractices,
         transformationMeta: {
           totalProcessingTime,
-          practicesAnalyzed: practicesToApply.length,
+          practicesAnalyzed: appliedPractices.length,
           practicesApplied: appliedPractices.length,
           qualityScore: this.calculateQualityScore(appliedPractices),
           timestamp: new Date(),
@@ -367,6 +411,97 @@ export class BestPracticesEngineImpl implements BestPracticesEngine {
     }
 
     return recommendations
+  }
+
+  /**
+   * Build AI enhancement prompt for Gemini 2.0 Flash
+   */
+  private buildAIEnhancementPrompt(originalPrompt: string, options?: BestPracticesOptions): string {
+    let systemPrompt = `You are an expert in optimizing prompts for Gemini 2.5 Flash Image Preview.
+
+Enhance this prompt for optimal image generation: "${originalPrompt}"
+
+Apply these best practices:
+1. Be hyper-specific with details (lighting, camera angles, textures, atmosphere)
+2. Add photographic language (lens type, aperture, composition)
+3. Include artistic style and mood descriptions
+4. Specify color palette and visual coherence
+5. Add context and intent for better understanding
+
+`
+
+    // Add feature-specific instructions
+    if (options?.maintainCharacterConsistency) {
+      systemPrompt += `CHARACTER CONSISTENCY: Add extremely detailed character features including:
+- Specific facial structure and proportions
+- Exact eye color and shape
+- Hair texture, style, and color with highlights
+- Skin tone and distinctive markings
+- Unique identifying features
+
+`
+    }
+
+    if (options?.blendImages) {
+      systemPrompt += `IMAGE BLENDING: Include instructions for:
+- Seamlessly blending multiple visual elements
+- Natural composition with unified perspective
+- Consistent lighting across all elements
+- Harmonious color grading
+
+`
+    }
+
+    if (options?.useWorldKnowledge) {
+      systemPrompt += `WORLD KNOWLEDGE: Apply accurate real-world details:
+- Historical accuracy for period settings
+- Geographical and cultural authenticity
+- Realistic physics and proportions
+- Factually correct representations
+
+`
+    }
+
+    if (options?.aspectRatio) {
+      systemPrompt += `Optimize composition for ${options.aspectRatio} aspect ratio.\n`
+    }
+
+    if (options?.targetStyle) {
+      systemPrompt += `Apply ${options.targetStyle} artistic style throughout.\n`
+    }
+
+    systemPrompt +=
+      '\nIMPORTANT: Return ONLY the enhanced prompt. No explanations, no prefixes, just the enhanced prompt text.'
+
+    return systemPrompt
+  }
+
+  /**
+   * Apply feature parameters as structured prompt instructions
+   */
+  private async applyFeatureParameters(
+    prompt: string,
+    options: BestPracticesOptions
+  ): Promise<string> {
+    let enhancedPrompt = prompt
+
+    // Apply feature parameters as structured instructions
+    if (options.maintainCharacterConsistency) {
+      enhancedPrompt +=
+        ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]'
+    }
+
+    if (options.blendImages) {
+      enhancedPrompt +=
+        ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]'
+    }
+
+    if (options.useWorldKnowledge) {
+      enhancedPrompt +=
+        ' [INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]'
+    }
+
+    return enhancedPrompt
   }
 }
 

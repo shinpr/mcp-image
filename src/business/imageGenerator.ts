@@ -125,7 +125,7 @@ async function executeApiCall(
   try {
     const apiParams: {
       prompt: string
-      inputImage?: Buffer
+      inputImage?: string
       blendImages?: boolean
       maintainCharacterConsistency?: boolean
       useWorldKnowledge?: boolean
@@ -133,11 +133,11 @@ async function executeApiCall(
       prompt: params.prompt,
     }
 
-    // Add input image if provided
+    // Add input image if provided (pass base64 string directly)
     if (params.inputImage) {
-      // Decode base64 image to Buffer
+      // Clean the base64 data and pass directly to API
       const cleanedData = params.inputImage.replace(/^data:image\/[a-z]+;base64,/, '')
-      apiParams.inputImage = Buffer.from(cleanedData, 'base64')
+      apiParams.inputImage = cleanedData
     }
 
     // Add new feature parameters if provided

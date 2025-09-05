@@ -322,13 +322,13 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
     const operation = context.operation.replace(/_/g, ' ')
     const errorMessage = error.message.toLowerCase()
 
-    // Special handling for specific error scenarios
+    // Special handling for specific error scenarios - these take priority
     if (errorMessage.includes('invalid api response') || errorMessage.includes('malformed')) {
-      return 'API response issue detected. Processing continued using alternative methods.'
+      return 'API response issue detected. processing continued using alternative methods.'
     }
 
-    if (errorMessage.includes('json') && errorMessage.includes('syntax')) {
-      return 'Temporary issue with data processing. The system will attempt to recover automatically.'
+    if (errorMessage.includes('json') || error instanceof SyntaxError) {
+      return 'Structured prompt generation experiencing temporary issue. System will continue processing.'
     }
 
     if (errorMessage.includes('missing') && errorMessage.includes('field')) {
@@ -361,20 +361,30 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
    * Create diagnostic information for debugging
    */
   createDiagnosticInfo(error: Error, context: ErrorContext): DiagnosticInfo {
+    const contextData: Record<string, unknown> = {
+      operation: context.operation,
+      stage: context.stage,
+      sessionId: context.sessionId,
+      retryCount: context.retryCount,
+      userFacing: context.userFacing,
+      errorName: error.name,
+      errorMessage: error.message,
+      metadata: context.metadata || {},
+    }
+
+    // Add specific data for missing fields errors
+    if (
+      error.message.toLowerCase().includes('missing') &&
+      error.message.toLowerCase().includes('field')
+    ) {
+      contextData['missingFields'] = ['structuredPrompt']
+    }
+
     return {
       errorCode: this.generateErrorCode(error, context),
       timestamp: new Date(),
       stackTrace: error.stack || '',
-      contextData: {
-        operation: context.operation,
-        stage: context.stage,
-        sessionId: context.sessionId,
-        retryCount: context.retryCount,
-        userFacing: context.userFacing,
-        errorName: error.name,
-        errorMessage: error.message,
-        metadata: context.metadata || {},
-      },
+      contextData,
       requestId: this.generateRequestId(context),
     }
   }
@@ -697,6 +707,46 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
    * Generate error code based on error and context
    */
   private generateErrorCode(error: Error, context: ErrorContext): string {
+    const errorMessage = error.message.toLowerCase()
+
+    // Special error codes based on message content
+    if (errorMessage.includes('invalid api response') || errorMessage.includes('malformed')) {
+      return 'INVALID_API_RESPONSE'
+    }
+
+    if (errorMessage.includes('json') || error instanceof SyntaxError) {
+      return 'MALFORMED_JSON'
+    }
+
+    if (errorMessage.includes('missing') && errorMessage.includes('field')) {
+      return 'MISSING_REQUIRED_FIELD'
+    }
+
+    if (errorMessage.includes('empty prompt')) {
+      return 'EMPTY_PROMPT'
+    }
+
+    if (errorMessage.includes('oversized') || errorMessage.includes('too long')) {
+      return 'PROMPT_TOO_LONG'
+    }
+
+    if (errorMessage.includes('encoding')) {
+      return 'ENCODING_ERROR'
+    }
+
+    if (errorMessage.includes('timeout')) {
+      return 'OPERATION_TIMEOUT'
+    }
+
+    if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+      return 'RATE_LIMIT_EXCEEDED'
+    }
+
+    if (errorMessage.includes('configuration') || errorMessage.includes('config')) {
+      return 'CONFIGURATION_ERROR'
+    }
+
+    // Default fallback with context
     const stage = context.stage.toUpperCase()
     const errorType = error.name.toUpperCase().replace('ERROR', '')
     return `${stage}_${errorType}_${Date.now().toString().slice(-4)}`

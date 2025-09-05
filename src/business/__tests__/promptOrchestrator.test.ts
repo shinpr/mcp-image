@@ -8,6 +8,7 @@ import type { GeminiTextClient, OptimizedPrompt } from '../../api/geminiTextClie
 import { Err, Ok } from '../../types/result'
 import { GeminiAPIError, InputValidationError } from '../../utils/errors'
 import type { BestPracticeItem, BestPracticesEngine, EnhancedPrompt } from '../bestPracticesEngine'
+import * as BestPracticesModule from '../bestPracticesEngine'
 import type { POMLTemplateEngine, StructuredPrompt } from '../pomlTemplateEngine'
 import {
   type OrchestrationConfig,
@@ -26,6 +27,7 @@ describe('StructuredPromptOrchestrator', () => {
     // Mock GeminiTextClient
     mockGeminiTextClient = {
       generateOptimizedPrompt: vi.fn(),
+      generateStructuredPrompt: vi.fn(),
       validateAPIKey: vi.fn().mockResolvedValue(Ok(true)),
       getModelInfo: vi.fn(),
       setConfig: vi.fn(),
@@ -37,6 +39,11 @@ describe('StructuredPromptOrchestrator', () => {
       analyzePracticeCompliance: vi.fn(),
       getAppliedPractices: vi.fn(),
     } as ReturnType<typeof vi.mocked<BestPracticesEngine>>
+
+    // Mock createBestPracticesEngine to return our mock
+    vi.spyOn(BestPracticesModule, 'createBestPracticesEngine').mockReturnValue(
+      mockBestPracticesEngine
+    )
 
     // Mock POMLTemplateEngine
     mockPOMLTemplateEngine = {
