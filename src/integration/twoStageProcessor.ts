@@ -268,9 +268,9 @@ export class TwoStageProcessorImpl implements TwoStageProcessor {
 
     try {
       const orchestrationOptions: OrchestrationOptions = {
-        enablePOML: true,
-        bestPracticesMode: 'complete',
-        maxProcessingTime: 15000, // 15 seconds for prompt generation
+        enablePOML: request.orchestrationOptions?.enablePOML ?? true,
+        bestPracticesMode: request.orchestrationOptions?.bestPracticesMode ?? 'complete',
+        maxProcessingTime: request.orchestrationOptions?.maxProcessingTime ?? 15000, // 15 seconds for prompt generation
         ...request.orchestrationOptions,
       }
 

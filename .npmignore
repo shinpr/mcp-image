@@ -26,8 +26,12 @@ CLAUDE.md
 
 # Test files
 __tests__/
+src/__tests__/
+src/tests/
+**/__tests__/
 *.test.js
 *.test.ts
+*.test.d.ts
 coverage/
 .vitest-cache/
 

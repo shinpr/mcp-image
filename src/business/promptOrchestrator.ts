@@ -55,7 +55,7 @@ export type FallbackStrategy = 'primary' | 'secondary' | 'tertiary'
  */
 export interface ProcessingStage {
   name: string
-  status: 'pending' | 'processing' | 'completed' | 'failed'
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'skipped'
   startTime: Date
   endTime?: Date
   error?: Error
@@ -355,10 +355,24 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
    */
   private async executeStage2(
     prompt: string,
-    _options: OrchestrationOptions,
+    options: OrchestrationOptions,
     stages: ProcessingStage[],
     appliedStrategies: StrategyApplication[]
   ): Promise<Result<string, GeminiAPIError>> {
+    // Skip if best practices mode is not enabled or is basic
+    if (!options.bestPracticesMode || options.bestPracticesMode === 'basic') {
+      // For basic mode or disabled, return the prompt unchanged
+      const stage: ProcessingStage = {
+        name: 'Best Practices Enhancement',
+        status: 'skipped',
+        startTime: new Date(),
+        endTime: new Date(),
+        output: prompt,
+      }
+      stages.push(stage)
+      return Ok(prompt)
+    }
+
     const stage: ProcessingStage = {
       name: 'Best Practices Enhancement',
       status: 'processing',

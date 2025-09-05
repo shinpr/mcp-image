@@ -102,7 +102,12 @@ export class ParameterOptimizerImpl implements ParameterOptimizer {
       }
 
       // Optimize style based on prompt analysis
-      if (this.shouldOptimizeStyle(characteristics, baseParams.style)) {
+      // Only change style if no style was specified in baseParams
+      if (baseParams.style) {
+        // Keep the explicitly provided style
+        optimized.style = baseParams.style
+        optimizationReasons.push('style preserved - explicitly provided')
+      } else if (this.shouldOptimizeStyle(characteristics, baseParams.style)) {
         optimized.style = characteristics.suggestedStyle
         optimizationReasons.push('style optimized for detected content characteristics')
       }

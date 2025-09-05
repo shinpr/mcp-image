@@ -114,8 +114,7 @@ class GeminiTextClientMock implements GeminiTextClient {
         )
 
       case 'timeout':
-        // Simulate timeout by waiting longer than expected
-        await new Promise((resolve) => setTimeout(resolve, 16000)) // 16 seconds > 15s limit
+        // Return timeout error immediately without actual delay
         return Err(
           new GeminiAPIError(
             'Request timeout after 15 seconds',
@@ -230,7 +229,7 @@ export function createSuccessfulGeminiTextClientMock(
   const factory = new GeminiTextClientMockFactory()
   factory.setScenario({
     type: 'success',
-    delay: Math.floor(Math.random() * 10000) + 5000,
+    delay: 100, // Small delay to simulate async operation without blocking tests
     ...(customResponse && { customResponse }),
   })
   return factory.create()

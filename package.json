@@ -19,6 +19,13 @@
     "type": "git",
     "url": "https://github.com/shinpr/mcp-image.git"
   },
+  "files": [
+    "dist/**/*",
+    "!dist/**/*.test.js",
+    "!dist/**/*.test.d.ts",
+    "!dist/__tests__",
+    "!dist/tests"
+  ],
   "scripts": {
     "build": "tsc && tsc-alias",
     "link": "npm run build && npm link",

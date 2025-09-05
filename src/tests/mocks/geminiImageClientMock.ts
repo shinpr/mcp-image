@@ -64,7 +64,7 @@ export class GeminiImageClientMockFactory {
   configureForStructuredPromptTesting(): void {
     this.scenario = {
       type: 'success',
-      delay: Math.floor(Math.random() * 5000) + 2000, // 2-7 seconds
+      delay: 50, // Small delay to simulate async operation
       features: {
         aspectRatioPreserved: true,
         aspectRatioSource: 'original',
@@ -110,8 +110,7 @@ class GeminiImageClientMock implements GeminiClient {
         )
 
       case 'timeout':
-        // Simulate timeout for image generation (longer than text)
-        await new Promise((resolve) => setTimeout(resolve, 61000)) // 61 seconds
+        // Return timeout error immediately without actual delay
         return Err(
           new GeminiAPIError(
             'Image generation timeout after 60 seconds',
@@ -307,7 +306,7 @@ export function createStructuredPromptImageMock(options?: {
   const factory = new GeminiImageClientMockFactory()
 
   const qualityScore = options?.qualityImprovement || Math.floor(Math.random() * 30) + 70 // 70-100
-  const processingTime = options?.processingTime || Math.floor(Math.random() * 20000) + 10000 // 10-30 seconds
+  const processingTime = options?.processingTime || 50 // Small delay
 
   factory.setScenario({
     type: 'success',

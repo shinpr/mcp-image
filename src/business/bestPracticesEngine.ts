@@ -613,7 +613,10 @@ class SemanticEnhancementStrategy implements TransformationStrategy {
   private confidence = 0
 
   async analyze(prompt: string): Promise<boolean> {
-    // Check if prompt lacks semantic context
+    // Check if prompt has negative expressions or lacks semantic context
+    const negativePatterns = /\bno\s+\w+|\bnot\s+\w+|\bwithout\s+\w+|\bavoid\s+\w+|\bdon't\s+\w+/i
+    const hasNegatives = negativePatterns.test(prompt)
+
     const semanticKeywords = [
       'meaning',
       'context',
@@ -624,7 +627,9 @@ class SemanticEnhancementStrategy implements TransformationStrategy {
       'emotional',
     ]
     const hasSemantics = semanticKeywords.some((keyword) => prompt.toLowerCase().includes(keyword))
-    return !hasSemantics // Returns true when semantic enhancement is MISSING
+
+    // Apply if has negatives OR lacks semantic context
+    return hasNegatives || !hasSemantics
   }
 
   async apply(prompt: string, options?: BestPracticesOptions): Promise<string> {
@@ -635,8 +640,26 @@ class SemanticEnhancementStrategy implements TransformationStrategy {
 
     let enhanced = prompt
 
-    // Add semantic context
-    enhanced += ', conveying purposeful emotional resonance with contextual narrative depth'
+    // Convert negative expressions to positive semantic equivalents
+    const negativeTransformations: [RegExp, string][] = [
+      [/\bno cars?\b/gi, 'quiet empty street'],
+      [/\bno people\b/gi, 'deserted area'],
+      [/\bno lights?\b/gi, 'darkness'],
+      [/\bno sounds?\b/gi, 'silent atmosphere'],
+      [/\bno colors?\b/gi, 'monochrome'],
+      [/\bwithout details?\b/gi, 'minimalist'],
+      [/\bnot busy\b/gi, 'peaceful'],
+      [/\bnot bright\b/gi, 'subdued lighting'],
+    ]
+
+    for (const [pattern, replacement] of negativeTransformations) {
+      enhanced = enhanced.replace(pattern, replacement)
+    }
+
+    // Add semantic context if not already transformed
+    if (enhanced === prompt || !enhanced.includes('quiet empty street')) {
+      enhanced += ', conveying purposeful emotional resonance with contextual narrative depth'
+    }
 
     // Add context intent if provided
     if (options?.contextIntent) {
@@ -718,20 +741,13 @@ class CameraControlTerminologyStrategy implements TransformationStrategy {
   private confidence = 0
 
   async analyze(prompt: string): Promise<boolean> {
-    // Check if prompt lacks professional camera terminology
-    const cameraKeywords = [
-      'wide-angle shot',
-      'macro shot',
-      'low-angle perspective',
-      '85mm portrait lens',
-      'dutch angle',
-      'lens',
-      'aperture',
-      'focal length',
-      'depth of field',
-      'exposure',
-    ]
-    const hasCameraTerms = cameraKeywords.some((keyword) => prompt.toLowerCase().includes(keyword))
+    // Check if prompt already has camera control terminology added by this strategy
+    const hasExistingCameraControl = prompt.includes(
+      'captured with professional photographic techniques'
+    )
+    if (hasExistingCameraControl) {
+      return false // Already applied
+    }
 
     // Apply to portrait photos, other photographic content, or generic prompts
     const isPhotographicContent =
@@ -740,7 +756,7 @@ class CameraControlTerminologyStrategy implements TransformationStrategy {
       prompt.toLowerCase().includes('shot') ||
       prompt.toLowerCase().includes('image') // Apply to generic prompts
 
-    return isPhotographicContent && !hasCameraTerms
+    return isPhotographicContent
   }
 
   async apply(prompt: string, _options?: BestPracticesOptions): Promise<string> {
