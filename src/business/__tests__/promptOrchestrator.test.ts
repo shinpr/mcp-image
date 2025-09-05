@@ -1,0 +1,352 @@
+/**
+ * Unit tests for StructuredPromptOrchestrator
+ * Tests 2-stage processing orchestration and integration with components
+ */
+
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import type { GeminiTextClient, OptimizedPrompt } from '../../api/geminiTextClient'
+import type { BestPracticesEngine, BestPracticesResult } from '../bestPracticesEngine'
+import type { POMLTemplateEngine, POMLResult } from '../pomlTemplateEngine'
+import { 
+  StructuredPromptOrchestratorImpl,
+  type OrchestrationConfig,
+  type OrchestrationOptions
+} from '../promptOrchestrator'
+import { Ok, Err } from '../../types/result'
+import { GeminiAPIError, InputValidationError } from '../../utils/errors'
+
+describe('StructuredPromptOrchestrator', () => {
+  let orchestrator: StructuredPromptOrchestratorImpl
+  let mockGeminiTextClient: ReturnType<typeof vi.mocked<GeminiTextClient>>
+  let mockBestPracticesEngine: ReturnType<typeof vi.mocked<BestPracticesEngine>>
+  let mockPOMLTemplateEngine: ReturnType<typeof vi.mocked<POMLTemplateEngine>>
+  let mockConfig: OrchestrationConfig
+
+  beforeEach(() => {
+    // Mock GeminiTextClient
+    mockGeminiTextClient = {
+      generateOptimizedPrompt: vi.fn(),
+      validateAPIKey: vi.fn().mockResolvedValue(Ok(true)),
+      getModelInfo: vi.fn(),
+      setConfig: vi.fn()
+    } as ReturnType<typeof vi.mocked<GeminiTextClient>>
+
+    // Mock BestPracticesEngine
+    mockBestPracticesEngine = {
+      enhancePrompt: vi.fn(),
+      validateConfiguration: vi.fn().mockResolvedValue(Ok(true)),
+      getAvailablePractices: vi.fn(),
+      getProcessingMetrics: vi.fn()
+    } as ReturnType<typeof vi.mocked<BestPracticesEngine>>
+
+    // Mock POMLTemplateEngine
+    mockPOMLTemplateEngine = {
+      applyTemplate: vi.fn(),
+      validateTemplate: vi.fn().mockResolvedValue(Ok(true)),
+      getAvailableTemplates: vi.fn(),
+      getProcessingMetrics: vi.fn()
+    } as ReturnType<typeof vi.mocked<POMLTemplateEngine>>
+
+    // Default config
+    mockConfig = {
+      timeout: 20000,
+      enablePOML: true,
+      bestPracticesMode: 'complete',
+      fallbackStrategy: 'primary',
+      maxProcessingTime: 20000
+    }
+
+    orchestrator = new StructuredPromptOrchestratorImpl(
+      mockGeminiTextClient,
+      mockBestPracticesEngine,
+      mockPOMLTemplateEngine,
+      mockConfig
+    )
+  })
+
+  describe('generateStructuredPrompt', () => {
+    const testPrompt = 'A beautiful landscape with mountains'
+
+    it('should successfully orchestrate 2-stage processing', async () => {
+      // Mock POML stage success
+      const pomlResult: POMLResult = {
+        structuredPrompt: 'Role: Image generator\nTask: Create a beautiful landscape with mountains\nContext: Natural scenery',
+        appliedFeatures: ['role', 'task', 'context'],
+        processingTime: 1000,
+        templateUsed: 'basic'
+      }
+      mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
+
+      // Mock Best Practices stage success
+      const bestPracticesResult: BestPracticesResult = {
+        enhancedPrompt: 'High-resolution, photorealistic landscape featuring majestic mountains with detailed terrain',
+        originalPrompt: pomlResult.structuredPrompt,
+        appliedPractices: ['hyper-specific', 'semantic-enhancement'],
+        processingTime: 1500,
+        enhancementLevel: 'complete'
+      }
+      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+
+      const result = await orchestrator.generateStructuredPrompt(testPrompt)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.originalPrompt).toBe(testPrompt)
+        expect(result.data.structuredPrompt).toBe(bestPracticesResult.enhancedPrompt)
+        expect(result.data.processingStages).toHaveLength(2)
+        expect(result.data.processingStages[0].name).toBe('POML Template Structuring')
+        expect(result.data.processingStages[1].name).toBe('Best Practices Enhancement')
+        expect(result.data.appliedStrategies).toHaveLength(2)
+        expect(result.data.metrics.stageCount).toBe(2)
+        expect(result.data.metrics.successRate).toBe(1)
+      }
+    })
+
+    it('should skip POML stage when disabled in options', async () => {
+      const options: OrchestrationOptions = {
+        enablePOML: false
+      }
+
+      // Mock Best Practices stage success (directly on original prompt)
+      const bestPracticesResult: BestPracticesResult = {
+        enhancedPrompt: 'High-resolution, photorealistic landscape featuring majestic mountains',
+        originalPrompt: testPrompt,
+        appliedPractices: ['hyper-specific'],
+        processingTime: 1500,
+        enhancementLevel: 'complete'
+      }
+      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+
+      const result = await orchestrator.generateStructuredPrompt(testPrompt, options)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.processingStages).toHaveLength(1)
+        expect(result.data.processingStages[0].name).toBe('Best Practices Enhancement')
+        expect(mockPOMLTemplateEngine.applyTemplate).not.toHaveBeenCalled()
+      }
+    })
+
+    it('should handle Stage 1 failure with fallback', async () => {
+      // Mock POML stage failure
+      mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(
+        Err(new GeminiAPIError('POML template application failed'))
+      )
+
+      const result = await orchestrator.generateStructuredPrompt(testPrompt)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.structuredPrompt).toBe(testPrompt) // Fallback to original
+        expect(result.data.metrics.fallbacksUsed).toBe(1)
+        expect(result.data.processingStages.some(stage => stage.name === 'Fallback Processing')).toBe(true)
+      }
+    })
+
+    it('should handle Stage 2 failure with fallback', async () => {
+      // Mock POML stage success
+      const pomlResult: POMLResult = {
+        structuredPrompt: 'Structured prompt from POML',
+        appliedFeatures: ['role', 'task'],
+        processingTime: 1000,
+        templateUsed: 'basic'
+      }
+      mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
+
+      // Mock Best Practices stage failure
+      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(
+        Err(new GeminiAPIError('Best practices enhancement failed'))
+      )
+
+      const result = await orchestrator.generateStructuredPrompt(testPrompt)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.structuredPrompt).toBe(testPrompt) // Fallback to original
+        expect(result.data.metrics.fallbacksUsed).toBe(1)
+      }
+    })
+
+    it('should reject empty prompts', async () => {
+      const result = await orchestrator.generateStructuredPrompt('')
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(GeminiAPIError)
+        expect(result.error.message).toBe('Original prompt cannot be empty')
+      }
+    })
+
+    it('should merge options with default config', async () => {
+      const options: OrchestrationOptions = {
+        bestPracticesMode: 'basic',
+        maxProcessingTime: 10000
+      }
+
+      // Mock successful processing to test option merging
+      const pomlResult: POMLResult = {
+        structuredPrompt: 'POML structured prompt',
+        appliedFeatures: ['role'],
+        processingTime: 500,
+        templateUsed: 'basic'
+      }
+      mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
+
+      const bestPracticesResult: BestPracticesResult = {
+        enhancedPrompt: 'Enhanced prompt',
+        originalPrompt: pomlResult.structuredPrompt,
+        appliedPractices: ['hyper-specific'],
+        processingTime: 800,
+        enhancementLevel: 'basic'
+      }
+      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+
+      const result = await orchestrator.generateStructuredPrompt(testPrompt, options)
+
+      expect(result.success).toBe(true)
+      // Verify POML is still enabled (from config) and options are applied
+      expect(mockPOMLTemplateEngine.applyTemplate).toHaveBeenCalled()
+    })
+  })
+
+  describe('validateConfiguration', () => {
+    it('should validate successful configuration', async () => {
+      const result = await orchestrator.validateConfiguration()
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(true)
+      }
+    })
+
+    it('should detect missing components', async () => {
+      // Create orchestrator with null component
+      const invalidOrchestrator = new StructuredPromptOrchestratorImpl(
+        null as any,
+        mockBestPracticesEngine,
+        mockPOMLTemplateEngine,
+        mockConfig
+      )
+
+      const result = await invalidOrchestrator.validateConfiguration()
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(InputValidationError)
+        expect(result.error.message).toBe('Required components not available')
+      }
+    })
+
+    it('should detect invalid timeout configuration', async () => {
+      const invalidConfig: OrchestrationConfig = {
+        ...mockConfig,
+        timeout: -1,
+        maxProcessingTime: -1
+      }
+
+      const invalidOrchestrator = new StructuredPromptOrchestratorImpl(
+        mockGeminiTextClient,
+        mockBestPracticesEngine,
+        mockPOMLTemplateEngine,
+        invalidConfig
+      )
+
+      const result = await invalidOrchestrator.validateConfiguration()
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(InputValidationError)
+        expect(result.error.message).toBe('Invalid timeout configuration')
+      }
+    })
+  })
+
+  describe('getProcessingMetrics', () => {
+    it('should return initialized metrics before processing', () => {
+      const metrics = orchestrator.getProcessingMetrics()
+
+      expect(metrics.totalProcessingTime).toBe(0)
+      expect(metrics.stageCount).toBe(0)
+      expect(metrics.successRate).toBe(0)
+      expect(metrics.failureCount).toBe(0)
+      expect(metrics.fallbacksUsed).toBe(0)
+      expect(metrics.timestamp).toBeInstanceOf(Date)
+    })
+
+    it('should return updated metrics after successful processing', async () => {
+      const testPrompt = 'Test prompt for metrics'
+
+      // Mock successful processing
+      const pomlResult: POMLResult = {
+        structuredPrompt: 'POML result',
+        appliedFeatures: ['role'],
+        processingTime: 1000,
+        templateUsed: 'basic'
+      }
+      mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
+
+      const bestPracticesResult: BestPracticesResult = {
+        enhancedPrompt: 'Enhanced result',
+        originalPrompt: pomlResult.structuredPrompt,
+        appliedPractices: ['hyper-specific'],
+        processingTime: 1500,
+        enhancementLevel: 'complete'
+      }
+      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+
+      await orchestrator.generateStructuredPrompt(testPrompt)
+      const metrics = orchestrator.getProcessingMetrics()
+
+      expect(metrics.stageCount).toBe(2)
+      expect(metrics.successRate).toBe(1)
+      expect(metrics.failureCount).toBe(0)
+      // Allow for at least some processing time (processing can be very fast in tests)
+      expect(metrics.totalProcessingTime).toBeGreaterThanOrEqual(0)
+    })
+  })
+
+  describe('orchestration workflow integration', () => {
+    it('should pass correct parameters between stages', async () => {
+      const testPrompt = 'Complex landscape prompt'
+      const pomlOutput = 'Role: Artist\nTask: Create complex landscape prompt'
+
+      // Mock POML stage with specific output
+      const pomlResult: POMLResult = {
+        structuredPrompt: pomlOutput,
+        appliedFeatures: ['role', 'task'],
+        processingTime: 1200,
+        templateUsed: 'basic'
+      }
+      mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
+
+      // Mock Best Practices stage
+      const bestPracticesResult: BestPracticesResult = {
+        enhancedPrompt: 'Final enhanced prompt',
+        originalPrompt: pomlOutput, // Should receive POML output
+        appliedPractices: ['hyper-specific', 'semantic-enhancement'],
+        processingTime: 1800,
+        enhancementLevel: 'complete'
+      }
+      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+
+      const result = await orchestrator.generateStructuredPrompt(testPrompt)
+
+      // Verify POML was called with original prompt
+      expect(mockPOMLTemplateEngine.applyTemplate).toHaveBeenCalledWith(
+        testPrompt,
+        expect.any(Object)
+      )
+
+      // Verify Best Practices was called with POML output
+      expect(mockBestPracticesEngine.enhancePrompt).toHaveBeenCalledWith(
+        pomlOutput, // Should receive structured output from Stage 1
+        expect.any(Object)
+      )
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.structuredPrompt).toBe('Final enhanced prompt')
+      }
+    })
+  })
+})
