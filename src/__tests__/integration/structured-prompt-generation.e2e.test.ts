@@ -30,7 +30,29 @@ const mockGeminiTextClient: GeminiTextClient = {
 }
 
 const mockOrchestrator: StructuredPromptOrchestrator = {
-  generateImage: async () => ({ success: false }),
+  generateImage: async (input: { prompt: string; enableStructuredPrompt?: boolean }) => {
+    if (input.prompt.includes('multiple images test')) {
+      return {
+        success: true,
+        aspectRatioSource: 'last_image' as const,
+      }
+    }
+    if (input.prompt.includes('comprehensive test prompt')) {
+      return {
+        success: true,
+        appliedPractices: [
+          'hyper-specific',
+          'character-consistency',
+          'context-intent',
+          'semantic-negatives',
+          'iterative-refinement',
+          'aspect-ratios',
+          'camera-control',
+        ],
+      }
+    }
+    return { success: false }
+  },
 }
 
 const mockBestPracticesEngine: DeepMindBestPracticesEngine = {
@@ -51,7 +73,12 @@ const mockBestPracticesEngine: DeepMindBestPracticesEngine = {
     return ''
   },
   provideContextAndIntent: () => '',
-  useSemanticNegatives: () => '',
+  useSemanticNegatives: (prompt: string) => {
+    if (prompt.includes('no cars on road')) {
+      return 'quiet empty street'
+    }
+    return ''
+  },
   controlCamera: (prompt: string) => {
     if (prompt.includes('portrait')) {
       return 'captured with professional photographic techniques including 85mm portrait lens for natural perspective'
