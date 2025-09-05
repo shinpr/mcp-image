@@ -10,6 +10,19 @@ import { Err, Ok } from '../types/result'
 import { GeminiAPIError, InputValidationError } from '../utils/errors'
 import type { BestPracticesEngine, BestPracticesOptions } from './bestPracticesEngine'
 import type { POMLTemplate, POMLTemplateEngine } from './pomlTemplateEngine'
+import { OrchestrationMetrics as PerformanceMonitor } from '../infrastructure/monitoring/OrchestrationMetrics'
+import { PerformanceOptimizer } from '../infrastructure/optimization/performanceOptimizer'
+import { AlertingSystem } from '../infrastructure/monitoring/alertingSystem'
+import {
+  ProcessingStage as MonitoringStage,
+  FallbackTier,
+  type MemoryMetrics,
+  type PerformanceReport,
+  type CostAnalysis,
+  type CurrentMetrics,
+  type AlertStatus,
+  ReportingPeriod,
+} from '../types/performanceTypes'
 
 /**
  * Orchestration configuration for processing pipeline
@@ -93,6 +106,14 @@ export interface StructuredPromptOrchestrator {
 
   validateConfiguration(): Promise<Result<boolean, InputValidationError>>
   getProcessingMetrics(): OrchestrationMetrics
+
+  // Enhanced monitoring methods
+  getPerformanceReport(timeRange?: { start: number; end: number }): Promise<PerformanceReport>
+  getCostAnalysis(period?: ReportingPeriod): Promise<CostAnalysis>
+  getCurrentMetrics(): CurrentMetrics
+  getOptimizationRecommendations(): Promise<string[]>
+  getAlertStatus(): Promise<AlertStatus[]>
+  destroy(): void
 }
 
 /**
@@ -112,6 +133,9 @@ const DEFAULT_CONFIG: OrchestrationConfig = {
  */
 export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchestrator {
   private currentMetrics: OrchestrationMetrics
+  private metricsCollector: PerformanceMonitor
+  private performanceOptimizer: PerformanceOptimizer
+  private alertingSystem: AlertingSystem
 
   constructor(
     private geminiTextClient: GeminiTextClient,
@@ -120,6 +144,11 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
     private config: OrchestrationConfig = DEFAULT_CONFIG
   ) {
     this.currentMetrics = this.initializeMetrics()
+
+    // Initialize monitoring infrastructure
+    this.metricsCollector = new PerformanceMonitor()
+    this.performanceOptimizer = new PerformanceOptimizer(this.metricsCollector)
+    this.alertingSystem = new AlertingSystem()
   }
 
   /**
@@ -132,8 +161,19 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
     options?: OrchestrationOptions
   ): Promise<Result<OrchestrationResult, GeminiAPIError>> {
     const startTime = new Date()
+    const totalProcessingStartTime = Date.now()
     const stages: ProcessingStage[] = []
     const appliedStrategies: StrategyApplication[] = []
+
+    // Record memory usage at start
+    const initialMemory: MemoryMetrics = {
+      heapUsed: process.memoryUsage().heapUsed,
+      heapTotal: process.memoryUsage().heapTotal,
+      external: process.memoryUsage().external,
+      arrayBuffers: process.memoryUsage().arrayBuffers,
+      timestamp: Date.now(),
+    }
+    this.metricsCollector.recordMemoryUsage('orchestration_start', initialMemory)
 
     try {
       // Validate input
@@ -178,8 +218,30 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
 
       // Compile final result
       const endTime = new Date()
+      const totalProcessingTime = Date.now() - totalProcessingStartTime
       const metrics = this.calculateMetrics(startTime, endTime, stages)
 
+      // Record comprehensive performance metrics
+      this.metricsCollector.recordProcessingTime(
+        MonitoringStage.TOTAL_PROCESSING,
+        totalProcessingTime
+      )
+
+      // Record final memory usage
+      const finalMemory: MemoryMetrics = {
+        heapUsed: process.memoryUsage().heapUsed,
+        heapTotal: process.memoryUsage().heapTotal,
+        external: process.memoryUsage().external,
+        arrayBuffers: process.memoryUsage().arrayBuffers,
+        timestamp: Date.now(),
+      }
+      this.metricsCollector.recordMemoryUsage('orchestration_end', finalMemory)
+
+      // Check alerts for performance issues
+      const currentMetrics = this.metricsCollector.getCurrentMetrics()
+      await this.alertingSystem.checkAlerts(currentMetrics)
+
+      // Enhanced result with monitoring data
       const result: OrchestrationResult = {
         originalPrompt,
         structuredPrompt: stage2Result.data,
@@ -195,6 +257,10 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
         error instanceof GeminiAPIError
           ? error
           : new GeminiAPIError(`Orchestration failed: ${error}`)
+
+      // Record error in monitoring system
+      this.metricsCollector.recordError(MonitoringStage.TOTAL_PROCESSING, apiError)
+
       return await this.handleFallback(originalPrompt, stages, appliedStrategies, apiError)
     }
   }
@@ -213,6 +279,8 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
       startTime: new Date(),
     }
     stages.push(stage)
+
+    const stageStartTime = Date.now()
 
     try {
       const basicTemplate: POMLTemplate = {
@@ -252,6 +320,13 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
       stage.endTime = new Date()
       stage.output = pomlResult.data.structuredPrompt
 
+      // Record POML processing performance
+      const stageProcessingTime = Date.now() - stageStartTime
+      this.metricsCollector.recordProcessingTime(
+        MonitoringStage.POML_PROCESSING,
+        stageProcessingTime
+      )
+
       appliedStrategies.push({
         strategy: 'POML Structuring',
         applied: true,
@@ -263,6 +338,10 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
       stage.status = 'failed'
       stage.endTime = new Date()
       stage.error = error instanceof Error ? error : new GeminiAPIError('Stage 1 execution failed')
+
+      // Record stage error
+      this.metricsCollector.recordError(MonitoringStage.POML_PROCESSING, stage.error)
+
       return Err(
         stage.error instanceof GeminiAPIError
           ? stage.error
@@ -287,6 +366,8 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
     }
     stages.push(stage)
 
+    const stageStartTime = Date.now()
+
     try {
       const bestPracticesOptions: BestPracticesOptions = {
         aspectRatio: '16:9',
@@ -310,6 +391,13 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
       stage.endTime = new Date()
       stage.output = bestPracticesResult.data.enhancedPrompt
 
+      // Record best practices processing performance
+      const stageProcessingTime = Date.now() - stageStartTime
+      this.metricsCollector.recordProcessingTime(
+        MonitoringStage.BEST_PRACTICES,
+        stageProcessingTime
+      )
+
       appliedStrategies.push({
         strategy: 'Best Practices Enhancement',
         applied: true,
@@ -321,6 +409,10 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
       stage.status = 'failed'
       stage.endTime = new Date()
       stage.error = error instanceof Error ? error : new GeminiAPIError('Stage 2 execution failed')
+
+      // Record stage error
+      this.metricsCollector.recordError(MonitoringStage.BEST_PRACTICES, stage.error)
+
       return Err(
         stage.error instanceof GeminiAPIError
           ? stage.error
@@ -336,9 +428,14 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
     originalPrompt: string,
     stages: ProcessingStage[],
     appliedStrategies: StrategyApplication[],
-    _error: GeminiAPIError
+    error: GeminiAPIError
   ): Promise<Result<OrchestrationResult, GeminiAPIError>> {
+    // Record fallback event
+    this.metricsCollector.recordFallbackEvent(FallbackTier.DIRECT_PROMPT, error.message)
+    this.metricsCollector.recordError(MonitoringStage.FALLBACK_PROCESSING, error)
+
     // For now, implement basic fallback - return original with minimal enhancement
+    const fallbackStartTime = Date.now()
     const fallbackStage: ProcessingStage = {
       name: 'Fallback Processing',
       status: 'completed',
@@ -347,6 +444,13 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
       output: originalPrompt,
     }
     stages.push(fallbackStage)
+
+    // Record fallback processing time
+    const fallbackProcessingTime = Date.now() - fallbackStartTime
+    this.metricsCollector.recordProcessingTime(
+      MonitoringStage.FALLBACK_PROCESSING,
+      fallbackProcessingTime
+    )
 
     appliedStrategies.push({
       strategy: 'Fallback',
@@ -441,6 +545,56 @@ export class StructuredPromptOrchestratorImpl implements StructuredPromptOrchest
    */
   getProcessingMetrics(): OrchestrationMetrics {
     return { ...this.currentMetrics }
+  }
+
+  /**
+   * Get comprehensive performance monitoring data
+   */
+  async getPerformanceReport(timeRange?: { start: number; end: number }) {
+    const defaultTimeRange = {
+      start: Date.now() - 3600000, // 1 hour ago
+      end: Date.now(),
+    }
+    return await this.metricsCollector.getPerformanceReport(timeRange || defaultTimeRange)
+  }
+
+  /**
+   * Get cost analysis report
+   */
+  async getCostAnalysis(
+    period: ReportingPeriod = ReportingPeriod.LAST_HOUR
+  ): Promise<CostAnalysis> {
+    return await this.metricsCollector.getCostAnalysis(period)
+  }
+
+  /**
+   * Get current metrics snapshot
+   */
+  getCurrentMetrics(): CurrentMetrics {
+    return this.metricsCollector.getCurrentMetrics()
+  }
+
+  /**
+   * Get optimization recommendations
+   */
+  async getOptimizationRecommendations(): Promise<string[]> {
+    return await this.performanceOptimizer.getOptimizationRecommendations()
+  }
+
+  /**
+   * Get alert status
+   */
+  async getAlertStatus(): Promise<AlertStatus[]> {
+    return await this.metricsCollector.getAlertStatus()
+  }
+
+  /**
+   * Cleanup monitoring resources
+   */
+  destroy() {
+    this.metricsCollector.destroy()
+    this.performanceOptimizer.destroy()
+    this.alertingSystem.destroy()
   }
 
   /**

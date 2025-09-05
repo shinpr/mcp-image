@@ -192,7 +192,7 @@ export class AspectRatioControllerImpl implements AspectRatioController {
                 elements: [],
                 rationale: 'Content analysis failed, using fallback ratio',
               },
-              recommendedRatio: fallbackRatio,
+              recommendedRatio: fallbackRatio!,
               confidenceScore: 0.5,
             },
             reasoning: 'Fallback applied due to content analysis failure',
@@ -217,10 +217,10 @@ export class AspectRatioControllerImpl implements AspectRatioController {
         })
       } catch (error) {
         // Fallback for individual requirement failure
-        const fallbackRatio = requirement.aspectRatio || STANDARD_ASPECT_RATIOS.square
+        const fallbackRatio = requirement.aspectRatio || STANDARD_ASPECT_RATIOS['square']
         optimizations.push({
-          originalRatio: requirement.aspectRatio,
-          optimizedRatio: fallbackRatio,
+          originalRatio: getSafeAspectRatio(requirement.aspectRatio),
+          optimizedRatio: fallbackRatio!,
           optimization: {
             strategy: AspectRatioStrategy.ADAPTIVE,
             contentAnalysis: {
@@ -229,7 +229,7 @@ export class AspectRatioControllerImpl implements AspectRatioController {
               elements: [],
               rationale: 'Error in processing, using fallback',
             },
-            recommendedRatio: fallbackRatio,
+            recommendedRatio: fallbackRatio!,
             confidenceScore: 0.3,
           },
           reasoning: `Error in adaptive optimization: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -264,12 +264,22 @@ export class AspectRatioControllerImpl implements AspectRatioController {
     }
 
     // Find most common content type and composition
-    const mostCommonContent = Object.keys(contentTypes).reduce((a, b) =>
-      contentTypes[a] > contentTypes[b] ? a : b
-    )
-    const mostCommonComposition = Object.keys(compositions).reduce((a, b) =>
-      compositions[a] > compositions[b] ? a : b
-    )
+    const contentTypeKeys = Object.keys(contentTypes)
+    const compositionKeys = Object.keys(compositions)
+
+    const mostCommonContent =
+      contentTypeKeys.length > 0
+        ? contentTypeKeys.reduce((a, b) =>
+            (contentTypes[a] || 0) > (contentTypes[b] || 0) ? a : b
+          )
+        : 'portrait'
+
+    const mostCommonComposition =
+      compositionKeys.length > 0
+        ? compositionKeys.reduce((a, b) =>
+            (compositions[a] || 0) > (compositions[b] || 0) ? a : b
+          )
+        : 'portrait'
 
     // Select uniform ratio based on most common characteristics
     const uniformAnalysis: ContentAnalysis = {
@@ -332,10 +342,10 @@ export class AspectRatioControllerImpl implements AspectRatioController {
         })
       } catch (error) {
         // For content-driven, we want higher accuracy, so use more conservative fallback
-        const fallbackRatio = requirement.aspectRatio || STANDARD_ASPECT_RATIOS.landscape
+        const fallbackRatio = requirement.aspectRatio || STANDARD_ASPECT_RATIOS['landscape']
         optimizations.push({
-          originalRatio: requirement.aspectRatio,
-          optimizedRatio: fallbackRatio,
+          originalRatio: getSafeAspectRatio(requirement.aspectRatio),
+          optimizedRatio: fallbackRatio!,
           optimization: {
             strategy: AspectRatioStrategy.CONTENT_DRIVEN,
             contentAnalysis: {
@@ -344,7 +354,7 @@ export class AspectRatioControllerImpl implements AspectRatioController {
               elements: ['fallback processing'],
               rationale: 'Content-driven analysis failed, using conservative fallback',
             },
-            recommendedRatio: fallbackRatio,
+            recommendedRatio: fallbackRatio!,
             confidenceScore: 0.4,
           },
           reasoning: `Content-driven fallback: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -366,10 +376,11 @@ export class AspectRatioControllerImpl implements AspectRatioController {
     }
 
     // Find the last image with an aspect ratio
-    let lastImageRatio: AspectRatio = STANDARD_ASPECT_RATIOS['landscape'] // default fallback
+    let lastImageRatio: AspectRatio = STANDARD_ASPECT_RATIOS['landscape']! // default fallback
     for (let i = requirements.length - 1; i >= 0; i--) {
-      if (requirements[i].aspectRatio) {
-        lastImageRatio = requirements[i].aspectRatio
+      const requirementRatio = requirements[i]?.aspectRatio
+      if (requirementRatio) {
+        lastImageRatio = requirementRatio
         break
       }
     }
@@ -377,7 +388,7 @@ export class AspectRatioControllerImpl implements AspectRatioController {
     // If no explicit aspect ratio found from uploaded images, analyze last requirement
     if (lastImageRatio === STANDARD_ASPECT_RATIOS['landscape']) {
       const lastRequirement = requirements[requirements.length - 1]
-      const prompt = lastRequirement.specificPrompt || 'last image content'
+      const prompt = lastRequirement?.specificPrompt || 'last image content'
       const contentAnalysisResult = await this.analyzeContentForAspectRatio(prompt)
 
       if (contentAnalysisResult.success) {
@@ -423,9 +434,10 @@ export class AspectRatioControllerImpl implements AspectRatioController {
       return await this.adaptiveOptimization(requirements)
     } catch {
       // Complete fallback - use landscape for all
+      const fallbackRatio = STANDARD_ASPECT_RATIOS['landscape']
       return requirements.map((requirement) => ({
-        originalRatio: requirement.aspectRatio,
-        optimizedRatio: STANDARD_ASPECT_RATIOS.landscape,
+        originalRatio: getSafeAspectRatio(requirement.aspectRatio),
+        optimizedRatio: fallbackRatio!,
         optimization: {
           strategy: AspectRatioStrategy.ADAPTIVE,
           contentAnalysis: {
@@ -434,7 +446,7 @@ export class AspectRatioControllerImpl implements AspectRatioController {
             elements: ['default processing'],
             rationale: 'Default optimization applied due to processing failure',
           },
-          recommendedRatio: STANDARD_ASPECT_RATIOS.landscape,
+          recommendedRatio: fallbackRatio!,
           confidenceScore: 0.6,
         },
         reasoning: 'Default optimization applied',

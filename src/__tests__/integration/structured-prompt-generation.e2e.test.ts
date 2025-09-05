@@ -51,6 +51,40 @@ const mockOrchestrator: StructuredPromptOrchestrator = {
         ],
       }
     }
+
+    // Handle monitoring test cases - provide monitoring properties
+    if (
+      input.prompt.includes('metrics test') ||
+      input.prompt.includes('success rate test') ||
+      input.prompt.includes('cost optimization test') ||
+      input.prompt.includes('alert threshold test')
+    ) {
+      return {
+        success: true,
+        performanceMetrics: {
+          promptGenerationTime: 1500, // 1.5 seconds
+          imageGenerationTime: 8000, // 8 seconds
+          totalProcessingTime: 12000, // 12 seconds total
+        },
+        successRateTracking: {
+          promptGeneration: 0.95, // 95% success rate
+          fallbackScenarios: 0.05, // 5% fallback rate
+        },
+        costTracking: {
+          apiUsageCosts: 0.125, // $0.125 total cost
+          optimizationInsights: [
+            'Consider caching similar prompts',
+            'Reduce API calls through batching',
+          ],
+        },
+        alertThresholds: {
+          processingTime: 12000, // Processing time metric
+          errorRates: 0.05, // 5% error rate
+          costMetrics: 0.125, // Cost threshold
+        },
+      }
+    }
+
     return { success: false }
   },
 }

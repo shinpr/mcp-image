@@ -119,14 +119,19 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
       }
 
       const success = result !== undefined
-      return {
+      const response: ErrorHandlingResult<T> = {
         success,
-        data: result as T | undefined,
         fallbackApplied,
         userMessage,
         diagnosticInfo,
         recoveryAction,
       }
+
+      if (success) {
+        response.data = result as T
+      }
+
+      return response
     } catch (recoveryError) {
       // Recovery attempt failed
       return {
@@ -360,7 +365,7 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
     return {
       errorCode: this.generateErrorCode(error, context),
       timestamp: new Date(),
-      stackTrace: error.stack,
+      stackTrace: error.stack || '',
       contextData: {
         operation: context.operation,
         stage: context.stage,
@@ -439,7 +444,7 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
    * Attempt retry with exponential backoff
    */
   private async attemptRetry<T>(
-    error: Error,
+    _error: Error,
     context: ErrorContext,
     options: RecoveryOptions
   ): Promise<T | undefined> {
@@ -454,7 +459,7 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
   /**
    * Apply fallback processing
    */
-  private async applyFallback<T>(error: Error, context: ErrorContext): Promise<T | undefined> {
+  private async applyFallback<T>(_error: Error, context: ErrorContext): Promise<T | undefined> {
     // Implement context-specific fallback logic
     switch (context.stage) {
       case ProcessingStage.POML_STRUCTURING:
@@ -482,7 +487,7 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
    * Apply graceful degradation
    */
   private async applyGracefulDegradation<T>(
-    error: Error,
+    _error: Error,
     context: ErrorContext
   ): Promise<T | undefined> {
     // Provide partial functionality based on context
@@ -501,7 +506,7 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
    * Generate fallback user message when recovery fails
    */
   private generateFallbackUserMessage(
-    originalError: Error,
+    _originalError: Error,
     _recoveryError: Error,
     context: ErrorContext
   ): string {
@@ -514,9 +519,6 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
   private async checkOperationViability(operation: ConcurrentOperation): Promise<boolean> {
     // Simplified viability check
     // In real implementation, this would check actual system resources
-    const _currentTime = new Date()
-    const _estimatedEndTime = new Date(_currentTime.getTime() + operation.estimatedDuration)
-
     // Allow operation if estimated duration is reasonable
     return operation.estimatedDuration < 5 * 60 * 1000 // 5 minutes max
   }
@@ -597,7 +599,7 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
    * Handle connection failures
    */
   private async handleConnectionFailure(
-    error: NetworkError,
+    _error: NetworkError,
     context: ErrorContext
   ): Promise<RecoveryResult> {
     if (context.retryCount < 2) {
