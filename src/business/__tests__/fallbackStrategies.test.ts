@@ -176,6 +176,9 @@ describe('FallbackStrategies', () => {
       await fallbackStrategy.attemptExecution(mockOperation, context)
       expect(fallbackStrategy.getCurrentTier()).toBe('secondary')
 
+      // Wait for recovery check interval to pass
+      await new Promise((resolve) => setTimeout(resolve, 1100))
+
       const canRecover = await fallbackStrategy.canRecover()
       expect(canRecover).toBe(true)
     })
@@ -292,20 +295,20 @@ describe('FallbackStrategies', () => {
       // Red phase: This should fail until custom config support
       const customConfig: StagedFallbackConfig = {
         ...DEFAULT_FALLBACK_CONFIG,
-        primaryTimeout: 5000, // Custom 5 second timeout
+        primaryTimeout: 100, // Custom 100ms timeout
       }
 
       const customStrategy = new StagedFallbackStrategy(customConfig)
       mockOperation.mockImplementation(
         () =>
           new Promise((resolve) => {
-            setTimeout(() => resolve(Ok('delayed result')), 6000)
+            setTimeout(() => resolve(Ok('delayed result')), 200) // 200ms delay
           })
       )
 
       const result = await customStrategy.attemptExecution(mockOperation, context)
       expect(result.fallbackTriggered).toBe(true) // Should timeout with custom config
-    })
+    }, 2000)
 
     it('should allow disabling user notifications when configured', async () => {
       // Red phase: This should fail until notification toggle implementation

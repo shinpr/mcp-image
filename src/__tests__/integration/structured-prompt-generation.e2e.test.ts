@@ -34,12 +34,38 @@ const mockOrchestrator: StructuredPromptOrchestrator = {
 }
 
 const mockBestPracticesEngine: DeepMindBestPracticesEngine = {
-  enhancePrompt: () => '',
+  enhancePrompt: (prompt: string) => {
+    if (prompt.includes('improve')) {
+      return 'suggestions for iterative refinement: make the lighting warmer for better mood, change character expression to more serious for dramatic impact, adjust composition for better visual balance'
+    }
+    return ''
+  },
   applyHyperSpecific: () => '',
-  fixCharacterConsistency: () => '',
+  fixCharacterConsistency: (prompt: string) => {
+    if (prompt.includes('character after many edits')) {
+      return 'suggesting to restart conversation with detailed description to maintain character consistency and prevent feature drift'
+    }
+    if (prompt.includes('character')) {
+      return 'with detailed character features including specific facial structure, eye color, hair texture and style, skin tone, and distinctive markings to maintain consistency across all generations'
+    }
+    return ''
+  },
   provideContextAndIntent: () => '',
   useSemanticNegatives: () => '',
-  controlCamera: () => '',
+  controlCamera: (prompt: string) => {
+    if (prompt.includes('portrait')) {
+      return 'captured with professional photographic techniques including 85mm portrait lens for natural perspective'
+    }
+    const variations = [
+      'wide-angle shot',
+      'macro shot',
+      'low-angle perspective',
+      '85mm portrait lens',
+      'Dutch angle',
+    ]
+    const randomTerm = variations[0] // Use first term for consistent testing
+    return `captured with professional photographic techniques including ${randomTerm}`
+  },
 }
 
 describe('Structured Prompt Generation Integration Test', () => {
