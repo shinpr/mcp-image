@@ -4,32 +4,23 @@
  * Maintains 100% backward compatibility with existing functionality
  */
 
-import * as path from 'node:path'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import {
-  CallToolRequestSchema,
-  type CallToolResult,
-  ListToolsRequestSchema,
-  type ListToolsResult,
-} from '@modelcontextprotocol/sdk/types.js'
-
 // Base server functionality
-import { MCPServerImpl, type MCPServerDependencies } from './mcpServer'
+import { type MCPServerDependencies, MCPServerImpl } from './mcpServer'
 
 // Types and interfaces
-import type { MCPServerConfig } from '../types/mcp'
-import type { 
+import type { MCPServerConfig, McpToolResponse } from '../types/mcp'
+import type {
   GenerateImageWithOrchestrationParams,
   MCPOrchestrationConfig,
   MCPOrchestrationResult,
-  OrchestrationStatus
+  OrchestrationStatus,
 } from '../types/mcpOrchestrationTypes'
 import { DEFAULT_ORCHESTRATION_CONFIG } from '../types/mcpOrchestrationTypes'
 
 // Orchestration components
-import type { 
-  StructuredPromptOrchestrator, 
-  OrchestrationOptions 
+import type {
+  OrchestrationOptions,
+  StructuredPromptOrchestrator,
 } from '../business/promptOrchestrator'
 import { StructuredPromptOrchestratorImpl } from '../business/promptOrchestrator'
 import { StructuredPromptHandler } from './handlers/structuredPromptHandler'
@@ -37,8 +28,8 @@ import { StructuredPromptHandler } from './handlers/structuredPromptHandler'
 // Business logic and API clients
 import { type GeminiTextClient, createGeminiTextClient } from '../api/geminiTextClient'
 import { type BestPracticesEngine, BestPracticesEngineImpl } from '../business/bestPracticesEngine'
-import { type POMLTemplateEngine, POMLTemplateEngineImpl } from '../business/pomlTemplateEngine'
 import { validateGenerateImageParams } from '../business/inputValidator'
+import { type POMLTemplateEngine, POMLTemplateEngineImpl } from '../business/pomlTemplateEngine'
 
 // Utilities
 import { getConfig } from '../utils/config'
@@ -72,18 +63,18 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
     dependencies: MCPServerWithOrchestrationDependencies = {}
   ) {
     super(config, dependencies)
-    
+
     this.orchestrationConfig = { ...DEFAULT_ORCHESTRATION_CONFIG, ...orchestrationConfig }
-    
+
     // Initialize orchestration components if provided
     if (dependencies.structuredPromptHandler) {
       this.structuredPromptHandler = dependencies.structuredPromptHandler
     }
-    
+
     if (dependencies.geminiTextClient) {
       this.geminiTextClient = dependencies.geminiTextClient
     }
-    
+
     if (dependencies.structuredPromptOrchestrator) {
       this.orchestrator = dependencies.structuredPromptOrchestrator
     }
@@ -92,9 +83,7 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
   /**
    * Enable structured prompt generation with orchestration components
    */
-  async enableStructuredPromptGeneration(
-    config?: Partial<MCPOrchestrationConfig>
-  ): Promise<void> {
+  async enableStructuredPromptGeneration(config?: Partial<MCPOrchestrationConfig>): Promise<void> {
     try {
       if (config) {
         this.orchestrationConfig = { ...this.orchestrationConfig, ...config }
@@ -109,26 +98,32 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
         throw new Error('Failed to initialize orchestration components')
       }
 
-      // Create structured prompt handler
+      // Create structured prompt handler or update existing
       if (!this.structuredPromptHandler) {
         this.structuredPromptHandler = new StructuredPromptHandler(
           this.orchestrator,
           this.orchestrationConfig,
           { logger: new Logger() }
         )
+      } else {
+        // Update existing handler with new config
+        this.structuredPromptHandler.updateConfig(this.orchestrationConfig)
       }
 
       this.orchestrationConfig.enableOrchestration = true
-      
+
       const logger = new Logger()
       logger.info('mcp-orchestration', 'Structured prompt generation enabled', {
         mode: this.orchestrationConfig.orchestrationMode,
-        progressNotifications: this.orchestrationConfig.progressNotifications
+        progressNotifications: this.orchestrationConfig.progressNotifications,
       })
-
     } catch (error) {
       const logger = new Logger()
-      logger.error('mcp-orchestration', 'Failed to enable structured prompt generation', error as Error)
+      logger.error(
+        'mcp-orchestration',
+        'Failed to enable structured prompt generation',
+        error as Error
+      )
       throw error
     }
   }
@@ -145,8 +140,8 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
           totalAttempts: 0,
           successfulAttempts: 0,
           failedAttempts: 0,
-          averageProcessingTime: 0
-        }
+          averageProcessingTime: 0,
+        },
       }
     }
 
@@ -158,7 +153,7 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
    */
   updateOrchestrationConfig(newConfig: Partial<MCPOrchestrationConfig>): void {
     this.orchestrationConfig = { ...this.orchestrationConfig, ...newConfig }
-    
+
     if (this.structuredPromptHandler) {
       this.structuredPromptHandler.updateConfig(newConfig)
     }
@@ -167,24 +162,25 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
   /**
    * Override getToolsList to include orchestration parameters
    */
-  public getToolsList() {
+  public override getToolsList() {
     const baseTools = super.getToolsList()
-    
+
     // Extend generate_image tool with orchestration parameters
-    const generateImageTool = baseTools.tools.find(tool => tool.name === 'generate_image')
-    
+    const generateImageTool = baseTools.tools.find((tool) => tool.name === 'generate_image')
+
     if (generateImageTool && this.orchestrationConfig.enableOrchestration) {
-      generateImageTool.inputSchema.properties = {
-        ...generateImageTool.inputSchema.properties,
-        useStructuredPrompt: {
-          type: 'boolean' as const,
-          description: 'Enable structured prompt generation with 2-stage orchestration (optional, default: false)',
-          default: false
-        }
+      // Extend properties with orchestration parameter
+      const properties = generateImageTool.inputSchema.properties as Record<string, unknown>
+      properties['useStructuredPrompt'] = {
+        type: 'boolean' as const,
+        description:
+          'Enable structured prompt generation with 2-stage orchestration (optional, default: false)',
+        default: false,
       }
-      
+
       // Update description to mention orchestration
-      generateImageTool.description = 'Generate image with specified prompt and optional structured prompt enhancement'
+      generateImageTool.description =
+        'Generate image with specified prompt and optional structured prompt enhancement'
     }
 
     return baseTools
@@ -193,11 +189,15 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
   /**
    * Override callTool to handle orchestration
    */
-  public async callTool(name: string, args: unknown, progressToken?: string | number) {
+  public override async callTool(
+    name: string,
+    args: unknown,
+    progressToken?: string | number
+  ): Promise<McpToolResponse> {
     try {
       if (name === 'generate_image') {
         return await this.handleGenerateImageWithOrchestration(
-          args as GenerateImageWithOrchestrationParams, 
+          args as GenerateImageWithOrchestrationParams,
           progressToken
         )
       }
@@ -220,13 +220,13 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
   private async handleGenerateImageWithOrchestration(
     params: GenerateImageWithOrchestrationParams,
     progressToken?: string | number
-  ): Promise<CallToolResult> {
+  ): Promise<McpToolResponse> {
     const startTime = new Date()
-    
+
     // Use ErrorHandler.wrapWithResultType for safe execution
     const result = await ErrorHandler.wrapWithResultType(async () => {
       const logger = new Logger()
-      
+
       // Validate input parameters (same as base implementation)
       const validationResult = validateGenerateImageParams(params)
       if (!validationResult.success) {
@@ -239,20 +239,21 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
       let orchestrationTime = 0
 
       // Apply structured prompt generation if requested and enabled
-      if (params.useStructuredPrompt && 
-          this.orchestrationConfig.enableOrchestration && 
-          this.structuredPromptHandler) {
-        
+      if (
+        params.useStructuredPrompt &&
+        this.orchestrationConfig.enableOrchestration &&
+        this.structuredPromptHandler
+      ) {
         logger.info('mcp-orchestration', 'Starting structured prompt generation', {
-          originalPrompt: params.prompt
+          originalPrompt: params.prompt,
         })
 
         const orchestrationStart = new Date()
-        
+
         const orchestrationOptions: OrchestrationOptions = {
-          ...params.orchestrationOptions
+          ...params.orchestrationOptions,
         }
-        
+
         const orchestrationRes = await this.structuredPromptHandler.processStructuredPrompt(
           params.prompt,
           orchestrationOptions,
@@ -265,15 +266,15 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
         if (orchestrationRes.success) {
           structuredPrompt = orchestrationRes.data.structuredPrompt
           orchestrationResult = orchestrationRes.data
-          
+
           logger.info('mcp-orchestration', 'Structured prompt generation successful', {
             originalLength: params.prompt.length,
             enhancedLength: structuredPrompt.length,
-            orchestrationTime
+            orchestrationTime,
           })
         } else {
           logger.warn('mcp-orchestration', 'Structured prompt generation failed, using original', {
-            error: orchestrationRes.error.message
+            error: orchestrationRes.error.message,
           })
           // Continue with original prompt (graceful fallback)
         }
@@ -287,8 +288,8 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
             progressToken,
             progress: orchestrationResult ? 80 : 50,
             total: 100,
-            message: 'Starting image generation...'
-          }
+            message: 'Starting image generation...',
+          },
         })
       }
 
@@ -303,29 +304,32 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
       const enhancedResult: MCPOrchestrationResult = {
         content: baseResult.content || [],
         usedStructuredPrompt: !!params.useStructuredPrompt && !!orchestrationResult,
-        orchestrationResult,
+        ...(orchestrationResult && { orchestrationResult }),
         metadata: {
           totalProcessingTime: totalTime,
-          orchestrationTime: orchestrationTime > 0 ? orchestrationTime : undefined,
+          ...(orchestrationTime > 0 && { orchestrationTime }),
           imageGenerationTime,
-          fallbackUsed: params.useStructuredPrompt && !orchestrationResult
-        }
+          fallbackUsed: !!(params.useStructuredPrompt && !orchestrationResult),
+        },
       }
 
       return enhancedResult
     })
 
-    if (!result.success) {
+    if (!result.ok) {
       return ErrorHandler.handleError(result.error)
     }
 
+    // Return result with orchestration metadata
+    const orchestrationResult = result.value
     return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify(result.data, null, 2)
-        }
-      ]
+      content: orchestrationResult.content
+        .filter((item) => item.type === 'text')
+        .map((item) => ({
+          type: 'text' as const,
+          text: item.text || 'Image generated successfully',
+        })),
+      structuredContent: orchestrationResult,
     }
   }
 
@@ -350,10 +354,10 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
       }
 
       // Initialize Best Practices Engine
-      const bestPracticesEngine = new BestPracticesEngineImpl(this.geminiTextClient)
+      const bestPracticesEngine = new BestPracticesEngineImpl()
 
-      // Initialize POML Template Engine  
-      const pomlTemplateEngine = new POMLTemplateEngineImpl(this.geminiTextClient)
+      // Initialize POML Template Engine
+      const pomlTemplateEngine = new POMLTemplateEngineImpl()
 
       // Initialize Orchestrator
       this.orchestrator = new StructuredPromptOrchestratorImpl(
@@ -364,10 +368,13 @@ export class MCPServerWithOrchestration extends MCPServerImpl {
 
       const logger = new Logger()
       logger.info('mcp-orchestration', 'Orchestration components initialized successfully')
-
     } catch (error) {
       const logger = new Logger()
-      logger.error('mcp-orchestration', 'Failed to initialize orchestration components', error as Error)
+      logger.error(
+        'mcp-orchestration',
+        'Failed to initialize orchestration components',
+        error as Error
+      )
       throw error
     }
   }

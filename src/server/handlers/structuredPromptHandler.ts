@@ -4,22 +4,22 @@
  */
 
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import type { Result } from '../../types/result'
-import { Ok, Err } from '../../types/result'
-import type { 
-  StructuredPromptOrchestrator, 
-  OrchestrationResult, 
-  OrchestrationOptions 
+import type {
+  OrchestrationOptions,
+  OrchestrationResult,
+  StructuredPromptOrchestrator,
 } from '../../business/promptOrchestrator'
 import type {
   MCPOrchestrationConfig,
-  OrchestrationStatus,
+  OrchestrationProgressMessage,
   OrchestrationProgressStage,
-  OrchestrationProgressMessage
+  OrchestrationStatus,
 } from '../../types/mcpOrchestrationTypes'
 import { DEFAULT_ORCHESTRATION_CONFIG } from '../../types/mcpOrchestrationTypes'
-import { Logger } from '../../utils/logger'
+import type { Result } from '../../types/result'
+import { Err, Ok } from '../../types/result'
 import { GeminiAPIError } from '../../utils/errors'
+import { Logger } from '../../utils/logger'
 
 /**
  * Dependencies for StructuredPromptHandler
@@ -37,7 +37,7 @@ export class StructuredPromptHandler {
   private config: MCPOrchestrationConfig
   private status: OrchestrationStatus
   private logger: Logger
-  
+
   constructor(
     private orchestrator: StructuredPromptOrchestrator,
     initialConfig: Partial<MCPOrchestrationConfig> = {},
@@ -58,7 +58,7 @@ export class StructuredPromptHandler {
     progressToken?: string | number
   ): Promise<Result<OrchestrationResult, GeminiAPIError>> {
     const startTime = new Date()
-    
+
     try {
       // Check if orchestration is enabled
       if (!this.config.enableOrchestration) {
@@ -70,16 +70,12 @@ export class StructuredPromptHandler {
 
       // Send initial progress notification
       if (server && progressToken && this.config.progressNotifications) {
-        await this.sendProgressNotification(
-          server,
-          progressToken,
-          {
-            stage: 'starting' as OrchestrationProgressStage,
-            message: 'Starting structured prompt generation...',
-            progress: 0,
-            total: 100
-          }
-        )
+        await this.sendProgressNotification(server, progressToken, {
+          stage: 'starting' as OrchestrationProgressStage,
+          message: 'Starting structured prompt generation...',
+          progress: 0,
+          total: 100,
+        })
       }
 
       // Convert mode to orchestration options
@@ -87,30 +83,22 @@ export class StructuredPromptHandler {
 
       // POML Processing stage
       if (server && progressToken && this.config.progressNotifications) {
-        await this.sendProgressNotification(
-          server,
-          progressToken,
-          {
-            stage: 'poml_processing' as OrchestrationProgressStage,
-            message: 'Applying POML template structure...',
-            progress: 25,
-            total: 100
-          }
-        )
+        await this.sendProgressNotification(server, progressToken, {
+          stage: 'poml_processing' as OrchestrationProgressStage,
+          message: 'Applying POML template structure...',
+          progress: 25,
+          total: 100,
+        })
       }
 
       // Best Practices stage
       if (server && progressToken && this.config.progressNotifications) {
-        await this.sendProgressNotification(
-          server,
-          progressToken,
-          {
-            stage: 'best_practices_applying' as OrchestrationProgressStage,
-            message: 'Applying best practices enhancement...',
-            progress: 60,
-            total: 100
-          }
-        )
+        await this.sendProgressNotification(server, progressToken, {
+          stage: 'best_practices_applying' as OrchestrationProgressStage,
+          message: 'Applying best practices enhancement...',
+          progress: 60,
+          total: 100,
+        })
       }
 
       // Execute orchestration
@@ -129,32 +117,28 @@ export class StructuredPromptHandler {
 
       // Send completion notification
       if (server && progressToken && this.config.progressNotifications) {
-        await this.sendProgressNotification(
-          server,
-          progressToken,
-          {
-            stage: 'orchestration_complete' as OrchestrationProgressStage,
-            message: 'Structured prompt generation complete',
-            progress: 100,
-            total: 100
-          }
-        )
+        await this.sendProgressNotification(server, progressToken, {
+          stage: 'orchestration_complete' as OrchestrationProgressStage,
+          message: 'Structured prompt generation complete',
+          progress: 100,
+          total: 100,
+        })
       }
 
       this.logger.info('structured-prompt', 'Orchestration completed successfully', {
         originalLength: prompt.length,
         enhancedLength: result.data.structuredPrompt.length,
         processingTime,
-        stagesCompleted: result.data.processingStages.length
+        stagesCompleted: result.data.processingStages.length,
       })
 
       return result
-
     } catch (error) {
-      const apiError = error instanceof GeminiAPIError ? 
-        error : 
-        new GeminiAPIError(`Structured prompt processing failed: ${error}`)
-      
+      const apiError =
+        error instanceof GeminiAPIError
+          ? error
+          : new GeminiAPIError(`Structured prompt processing failed: ${error}`)
+
       return await this.handleOrchestrationFailure(apiError, prompt, server, progressToken)
     }
   }
@@ -169,62 +153,63 @@ export class StructuredPromptHandler {
     progressToken?: string | number
   ): Promise<Result<OrchestrationResult, GeminiAPIError>> {
     this.status.statistics.failedAttempts++
-    
+
     this.logger.warn('structured-prompt', 'Orchestration failed, applying fallback', {
       error: error.message,
-      fallbackBehavior: this.config.fallbackBehavior
+      fallbackBehavior: this.config.fallbackBehavior,
     })
 
     switch (this.config.fallbackBehavior) {
-      case 'graceful':
+      case 'graceful': {
         // Return graceful fallback result
         const fallbackResult: OrchestrationResult = {
           originalPrompt,
           structuredPrompt: originalPrompt, // Use original as fallback
-          processingStages: [{
-            name: 'Fallback',
-            status: 'completed',
-            startTime: new Date(),
-            endTime: new Date(),
-            output: originalPrompt
-          }],
-          appliedStrategies: [{
-            strategy: 'Graceful Fallback',
-            applied: true,
-            reason: 'Orchestration failed, using original prompt',
-            processingTime: 0
-          }],
+          processingStages: [
+            {
+              name: 'Fallback',
+              status: 'completed',
+              startTime: new Date(),
+              endTime: new Date(),
+              output: originalPrompt,
+            },
+          ],
+          appliedStrategies: [
+            {
+              strategy: 'Graceful Fallback',
+              applied: true,
+              reason: 'Orchestration failed, using original prompt',
+              processingTime: 0,
+            },
+          ],
           metrics: {
             totalProcessingTime: 0,
             stageCount: 1,
             successRate: 0,
             failureCount: 1,
             fallbacksUsed: 1,
-            timestamp: new Date()
-          }
+            timestamp: new Date(),
+          },
         }
-        
+
         if (server && progressToken) {
-          await this.sendProgressNotification(
-            server,
-            progressToken,
-            {
-              stage: 'orchestration_complete' as OrchestrationProgressStage,
-              message: 'Using fallback processing',
-              progress: 100,
-              total: 100
-            }
-          )
+          await this.sendProgressNotification(server, progressToken, {
+            stage: 'orchestration_complete' as OrchestrationProgressStage,
+            message: 'Using fallback processing',
+            progress: 100,
+            total: 100,
+          })
         }
-        
+
         return Ok(fallbackResult)
-        
+      }
+
       case 'retry':
         // Attempt one retry (simplified for now)
         this.logger.info('structured-prompt', 'Retrying orchestration once')
         // For now, just return graceful fallback to avoid infinite recursion
         return await this.handleOrchestrationFailure(error, originalPrompt, server, progressToken)
-        
+
       case 'fail':
       default:
         return Err(error)
@@ -246,13 +231,13 @@ export class StructuredPromptHandler {
           progressToken,
           progress: message.progress,
           total: message.total,
-          message: `[${message.stage}] ${message.message}`
-        }
+          message: `[${message.stage}] ${message.message}`,
+        },
       })
     } catch (error) {
       this.logger.warn('structured-prompt', 'Failed to send progress notification', {
         stage: message.stage,
-        error: (error as Error).message
+        error: (error as Error).message,
       })
     }
   }
@@ -262,7 +247,7 @@ export class StructuredPromptHandler {
    */
   private mergeWithModeOptions(options: OrchestrationOptions): OrchestrationOptions {
     const modeOptions: OrchestrationOptions = {}
-    
+
     switch (this.config.orchestrationMode) {
       case 'full':
         modeOptions.enablePOML = true
@@ -304,9 +289,10 @@ export class StructuredPromptHandler {
       totalAttempts: 0,
       successfulAttempts: 0,
       failedAttempts: 0,
-      averageProcessingTime: 0
+      averageProcessingTime: 0,
     }
-    this.status.lastResult = undefined
+    // Remove lastResult property using Reflect.deleteProperty to avoid type issues
+    Reflect.deleteProperty(this.status, 'lastResult')
     this.logger.info('structured-prompt', 'Statistics reset')
   }
 
@@ -321,8 +307,8 @@ export class StructuredPromptHandler {
         totalAttempts: 0,
         successfulAttempts: 0,
         failedAttempts: 0,
-        averageProcessingTime: 0
-      }
+        averageProcessingTime: 0,
+      },
     }
   }
 
@@ -332,7 +318,7 @@ export class StructuredPromptHandler {
   private updateAverageProcessingTime(newTime: number): void {
     const stats = this.status.statistics
     const totalSuccessful = stats.successfulAttempts
-    
+
     if (totalSuccessful === 1) {
       stats.averageProcessingTime = newTime
     } else {

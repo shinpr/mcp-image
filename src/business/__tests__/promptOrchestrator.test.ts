@@ -3,17 +3,17 @@
  * Tests 2-stage processing orchestration and integration with components
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GeminiTextClient, OptimizedPrompt } from '../../api/geminiTextClient'
-import type { BestPracticesEngine, BestPracticesResult } from '../bestPracticesEngine'
-import type { POMLTemplateEngine, POMLResult } from '../pomlTemplateEngine'
-import { 
-  StructuredPromptOrchestratorImpl,
-  type OrchestrationConfig,
-  type OrchestrationOptions
-} from '../promptOrchestrator'
-import { Ok, Err } from '../../types/result'
+import { Err, Ok } from '../../types/result'
 import { GeminiAPIError, InputValidationError } from '../../utils/errors'
+import type { BestPracticeItem, BestPracticesEngine, EnhancedPrompt } from '../bestPracticesEngine'
+import type { POMLTemplateEngine, StructuredPrompt } from '../pomlTemplateEngine'
+import {
+  type OrchestrationConfig,
+  type OrchestrationOptions,
+  StructuredPromptOrchestratorImpl,
+} from '../promptOrchestrator'
 
 describe('StructuredPromptOrchestrator', () => {
   let orchestrator: StructuredPromptOrchestratorImpl
@@ -28,23 +28,24 @@ describe('StructuredPromptOrchestrator', () => {
       generateOptimizedPrompt: vi.fn(),
       validateAPIKey: vi.fn().mockResolvedValue(Ok(true)),
       getModelInfo: vi.fn(),
-      setConfig: vi.fn()
+      setConfig: vi.fn(),
     } as ReturnType<typeof vi.mocked<GeminiTextClient>>
 
     // Mock BestPracticesEngine
     mockBestPracticesEngine = {
-      enhancePrompt: vi.fn(),
-      validateConfiguration: vi.fn().mockResolvedValue(Ok(true)),
-      getAvailablePractices: vi.fn(),
-      getProcessingMetrics: vi.fn()
+      applyBestPractices: vi.fn(),
+      analyzePracticeCompliance: vi.fn(),
+      getAppliedPractices: vi.fn(),
     } as ReturnType<typeof vi.mocked<BestPracticesEngine>>
 
     // Mock POMLTemplateEngine
     mockPOMLTemplateEngine = {
       applyTemplate: vi.fn(),
-      validateTemplate: vi.fn().mockResolvedValue(Ok(true)),
+      parseTemplate: vi.fn(),
+      validateTemplate: vi.fn(),
       getAvailableTemplates: vi.fn(),
-      getProcessingMetrics: vi.fn()
+      configureFeatureFlags: vi.fn(),
+      getFeatureFlags: vi.fn(),
     } as ReturnType<typeof vi.mocked<POMLTemplateEngine>>
 
     // Default config
@@ -53,7 +54,7 @@ describe('StructuredPromptOrchestrator', () => {
       enablePOML: true,
       bestPracticesMode: 'complete',
       fallbackStrategy: 'primary',
-      maxProcessingTime: 20000
+      maxProcessingTime: 20000,
     }
 
     orchestrator = new StructuredPromptOrchestratorImpl(
@@ -69,23 +70,56 @@ describe('StructuredPromptOrchestrator', () => {
 
     it('should successfully orchestrate 2-stage processing', async () => {
       // Mock POML stage success
-      const pomlResult: POMLResult = {
-        structuredPrompt: 'Role: Image generator\nTask: Create a beautiful landscape with mountains\nContext: Natural scenery',
-        appliedFeatures: ['role', 'task', 'context'],
-        processingTime: 1000,
-        templateUsed: 'basic'
+      const pomlResult: StructuredPrompt = {
+        originalPrompt: testPrompt,
+        structuredPrompt:
+          'Role: Image generator\nTask: Create a beautiful landscape with mountains\nContext: Natural scenery',
+        appliedTemplate: {
+          id: 'basic',
+          name: 'Basic Template',
+          structure: { role: 'Image generator', task: 'Create image' },
+          features: [],
+          metadata: {
+            version: '1.0.0',
+            author: 'test',
+            description: 'test template',
+            tags: [],
+            created: new Date(),
+            lastModified: new Date(),
+          },
+        },
+        processingMeta: {
+          processingTime: 1000,
+          appliedFeatures: ['role', 'task', 'context'],
+          featureFlags: {},
+          templateId: 'basic',
+          timestamp: new Date(),
+        },
       }
       mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
 
       // Mock Best Practices stage success
-      const bestPracticesResult: BestPracticesResult = {
-        enhancedPrompt: 'High-resolution, photorealistic landscape featuring majestic mountains with detailed terrain',
+      const bestPracticesResult: EnhancedPrompt = {
+        enhancedPrompt:
+          'High-resolution, photorealistic landscape featuring majestic mountains with detailed terrain',
         originalPrompt: pomlResult.structuredPrompt,
-        appliedPractices: ['hyper-specific', 'semantic-enhancement'],
-        processingTime: 1500,
-        enhancementLevel: 'complete'
+        appliedPractices: [
+          {
+            type: 'enhancement',
+            applied: true,
+            enhancement: 'Added hyper-specific details',
+            metadata: { processingTime: 500, confidence: 0.9 },
+          },
+        ],
+        transformationMeta: {
+          totalProcessingTime: 1500,
+          practicesAnalyzed: 2,
+          practicesApplied: 1,
+          qualityScore: 0.9,
+          timestamp: new Date(),
+        },
       }
-      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+      mockBestPracticesEngine.applyBestPractices.mockResolvedValue(Ok(bestPracticesResult))
 
       const result = await orchestrator.generateStructuredPrompt(testPrompt)
 
@@ -104,18 +138,30 @@ describe('StructuredPromptOrchestrator', () => {
 
     it('should skip POML stage when disabled in options', async () => {
       const options: OrchestrationOptions = {
-        enablePOML: false
+        enablePOML: false,
       }
 
       // Mock Best Practices stage success (directly on original prompt)
-      const bestPracticesResult: BestPracticesResult = {
+      const bestPracticesResult: EnhancedPrompt = {
         enhancedPrompt: 'High-resolution, photorealistic landscape featuring majestic mountains',
         originalPrompt: testPrompt,
-        appliedPractices: ['hyper-specific'],
-        processingTime: 1500,
-        enhancementLevel: 'complete'
+        appliedPractices: [
+          {
+            type: 'enhancement',
+            applied: true,
+            enhancement: 'Added hyper-specific details',
+            metadata: { processingTime: 500, confidence: 0.9 },
+          },
+        ],
+        transformationMeta: {
+          totalProcessingTime: 1500,
+          practicesAnalyzed: 1,
+          practicesApplied: 1,
+          qualityScore: 0.9,
+          timestamp: new Date(),
+        },
       }
-      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+      mockBestPracticesEngine.applyBestPractices.mockResolvedValue(Ok(bestPracticesResult))
 
       const result = await orchestrator.generateStructuredPrompt(testPrompt, options)
 
@@ -139,22 +185,24 @@ describe('StructuredPromptOrchestrator', () => {
       if (result.success) {
         expect(result.data.structuredPrompt).toBe(testPrompt) // Fallback to original
         expect(result.data.metrics.fallbacksUsed).toBe(1)
-        expect(result.data.processingStages.some(stage => stage.name === 'Fallback Processing')).toBe(true)
+        expect(
+          result.data.processingStages.some((stage) => stage.name === 'Fallback Processing')
+        ).toBe(true)
       }
     })
 
     it('should handle Stage 2 failure with fallback', async () => {
       // Mock POML stage success
-      const pomlResult: POMLResult = {
+      const pomlResult: StructuredPrompt = {
         structuredPrompt: 'Structured prompt from POML',
         appliedFeatures: ['role', 'task'],
         processingTime: 1000,
-        templateUsed: 'basic'
+        templateUsed: 'basic',
       }
       mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
 
       // Mock Best Practices stage failure
-      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(
+      mockBestPracticesEngine.applyBestPractices.mockResolvedValue(
         Err(new GeminiAPIError('Best practices enhancement failed'))
       )
 
@@ -180,26 +228,38 @@ describe('StructuredPromptOrchestrator', () => {
     it('should merge options with default config', async () => {
       const options: OrchestrationOptions = {
         bestPracticesMode: 'basic',
-        maxProcessingTime: 10000
+        maxProcessingTime: 10000,
       }
 
       // Mock successful processing to test option merging
-      const pomlResult: POMLResult = {
+      const pomlResult: StructuredPrompt = {
         structuredPrompt: 'POML structured prompt',
         appliedFeatures: ['role'],
         processingTime: 500,
-        templateUsed: 'basic'
+        templateUsed: 'basic',
       }
       mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
 
-      const bestPracticesResult: BestPracticesResult = {
+      const bestPracticesResult: EnhancedPrompt = {
         enhancedPrompt: 'Enhanced prompt',
         originalPrompt: pomlResult.structuredPrompt,
-        appliedPractices: ['hyper-specific'],
-        processingTime: 800,
-        enhancementLevel: 'basic'
+        appliedPractices: [
+          {
+            type: 'enhancement',
+            applied: true,
+            enhancement: 'Added hyper-specific details',
+            metadata: { processingTime: 400, confidence: 0.8 },
+          },
+        ],
+        transformationMeta: {
+          totalProcessingTime: 800,
+          practicesAnalyzed: 1,
+          practicesApplied: 1,
+          qualityScore: 0.8,
+          timestamp: new Date(),
+        },
       }
-      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+      mockBestPracticesEngine.applyBestPractices.mockResolvedValue(Ok(bestPracticesResult))
 
       const result = await orchestrator.generateStructuredPrompt(testPrompt, options)
 
@@ -241,7 +301,7 @@ describe('StructuredPromptOrchestrator', () => {
       const invalidConfig: OrchestrationConfig = {
         ...mockConfig,
         timeout: -1,
-        maxProcessingTime: -1
+        maxProcessingTime: -1,
       }
 
       const invalidOrchestrator = new StructuredPromptOrchestratorImpl(
@@ -277,22 +337,22 @@ describe('StructuredPromptOrchestrator', () => {
       const testPrompt = 'Test prompt for metrics'
 
       // Mock successful processing
-      const pomlResult: POMLResult = {
+      const pomlResult: StructuredPrompt = {
         structuredPrompt: 'POML result',
         appliedFeatures: ['role'],
         processingTime: 1000,
-        templateUsed: 'basic'
+        templateUsed: 'basic',
       }
       mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
 
-      const bestPracticesResult: BestPracticesResult = {
+      const bestPracticesResult: EnhancedPrompt = {
         enhancedPrompt: 'Enhanced result',
         originalPrompt: pomlResult.structuredPrompt,
         appliedPractices: ['hyper-specific'],
         processingTime: 1500,
-        enhancementLevel: 'complete'
+        enhancementLevel: 'complete',
       }
-      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+      mockBestPracticesEngine.applyBestPractices.mockResolvedValue(Ok(bestPracticesResult))
 
       await orchestrator.generateStructuredPrompt(testPrompt)
       const metrics = orchestrator.getProcessingMetrics()
@@ -311,23 +371,23 @@ describe('StructuredPromptOrchestrator', () => {
       const pomlOutput = 'Role: Artist\nTask: Create complex landscape prompt'
 
       // Mock POML stage with specific output
-      const pomlResult: POMLResult = {
+      const pomlResult: StructuredPrompt = {
         structuredPrompt: pomlOutput,
         appliedFeatures: ['role', 'task'],
         processingTime: 1200,
-        templateUsed: 'basic'
+        templateUsed: 'basic',
       }
       mockPOMLTemplateEngine.applyTemplate.mockResolvedValue(Ok(pomlResult))
 
       // Mock Best Practices stage
-      const bestPracticesResult: BestPracticesResult = {
+      const bestPracticesResult: EnhancedPrompt = {
         enhancedPrompt: 'Final enhanced prompt',
         originalPrompt: pomlOutput, // Should receive POML output
         appliedPractices: ['hyper-specific', 'semantic-enhancement'],
         processingTime: 1800,
-        enhancementLevel: 'complete'
+        enhancementLevel: 'complete',
       }
-      mockBestPracticesEngine.enhancePrompt.mockResolvedValue(Ok(bestPracticesResult))
+      mockBestPracticesEngine.applyBestPractices.mockResolvedValue(Ok(bestPracticesResult))
 
       const result = await orchestrator.generateStructuredPrompt(testPrompt)
 
@@ -338,7 +398,7 @@ describe('StructuredPromptOrchestrator', () => {
       )
 
       // Verify Best Practices was called with POML output
-      expect(mockBestPracticesEngine.enhancePrompt).toHaveBeenCalledWith(
+      expect(mockBestPracticesEngine.applyBestPractices).toHaveBeenCalledWith(
         pomlOutput, // Should receive structured output from Stage 1
         expect.any(Object)
       )

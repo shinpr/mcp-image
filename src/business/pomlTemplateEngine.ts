@@ -185,7 +185,16 @@ const DEFAULT_FEATURE_FLAGS: FeatureFlags = {
  * Implementation of POML Template Engine
  * Handles Microsoft POML syntax processing with granular feature control
  */
-class POMLTemplateEngineImpl implements POMLTemplateEngine {
+/**
+ * Factory function to create POMLTemplateEngine instance
+ * @param initialFlags Optional feature flags configuration
+ * @returns POMLTemplateEngine instance
+ */
+export function createPOMLTemplateEngine(initialFlags?: Partial<FeatureFlags>): POMLTemplateEngine {
+  return new POMLTemplateEngineImpl(initialFlags)
+}
+
+export class POMLTemplateEngineImpl implements POMLTemplateEngine {
   private featureFlags: FeatureFlags
   private templates: Map<string, POMLTemplate>
 
@@ -1060,13 +1069,4 @@ class POMLTemplateEngineImpl implements POMLTemplateEngine {
       }
     }
   }
-}
-
-/**
- * Factory function to create POML Template Engine
- * @param initialFlags Optional initial feature flag configuration
- * @returns New POMLTemplateEngine instance
- */
-export function createPOMLTemplateEngine(initialFlags?: Partial<FeatureFlags>): POMLTemplateEngine {
-  return new POMLTemplateEngineImpl(initialFlags)
 }

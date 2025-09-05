@@ -3,22 +3,22 @@
  * Tests integration of structured prompt generation with existing MCP functionality
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { MCPServerWithOrchestration } from '../mcpServerWithOrchestration'
-import { StructuredPromptHandler } from '../handlers/structuredPromptHandler'
-import type { 
-  GenerateImageWithOrchestrationParams,
-  MCPOrchestrationConfig 
-} from '../../types/mcpOrchestrationTypes'
-import type { 
-  StructuredPromptOrchestrator,
-  OrchestrationResult 
-} from '../../business/promptOrchestrator'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { GeminiTextClient } from '../../api/geminiTextClient'
 import type { BestPracticesEngine } from '../../business/bestPracticesEngine'
 import type { POMLTemplateEngine } from '../../business/pomlTemplateEngine'
-import { Ok, Err } from '../../types/result'
+import type {
+  OrchestrationResult,
+  StructuredPromptOrchestrator,
+} from '../../business/promptOrchestrator'
+import type {
+  GenerateImageWithOrchestrationParams,
+  MCPOrchestrationConfig,
+} from '../../types/mcpOrchestrationTypes'
+import { Err, Ok } from '../../types/result'
 import { GeminiAPIError } from '../../utils/errors'
+import type { StructuredPromptHandler } from '../handlers/structuredPromptHandler'
+import { MCPServerWithOrchestration } from '../mcpServerWithOrchestration'
 
 describe('MCPServerWithOrchestration', () => {
   let server: MCPServerWithOrchestration
@@ -30,7 +30,7 @@ describe('MCPServerWithOrchestration', () => {
     mockOrchestrator = {
       generateStructuredPrompt: vi.fn(),
       validateConfiguration: vi.fn().mockResolvedValue(Ok(true)),
-      getProcessingMetrics: vi.fn()
+      getProcessingMetrics: vi.fn(),
     } as ReturnType<typeof vi.mocked<StructuredPromptOrchestrator>>
 
     // Mock structured prompt handler with proper status response
@@ -44,10 +44,10 @@ describe('MCPServerWithOrchestration', () => {
           totalAttempts: 0,
           successfulAttempts: 0,
           failedAttempts: 0,
-          averageProcessingTime: 0
-        }
+          averageProcessingTime: 0,
+        },
       }),
-      resetStatistics: vi.fn()
+      resetStatistics: vi.fn(),
     } as ReturnType<typeof vi.mocked<StructuredPromptHandler>>
 
     // Initialize server with mocks
@@ -56,7 +56,7 @@ describe('MCPServerWithOrchestration', () => {
       { enableOrchestration: true, orchestrationMode: 'full' },
       {
         structuredPromptOrchestrator: mockOrchestrator,
-        structuredPromptHandler: mockStructuredPromptHandler
+        structuredPromptHandler: mockStructuredPromptHandler,
       }
     )
   })
@@ -71,34 +71,35 @@ describe('MCPServerWithOrchestration', () => {
     it('should enable structured prompt generation when handler exists', async () => {
       await server.enableStructuredPromptGeneration({
         orchestrationMode: 'essential',
-        progressNotifications: true
+        progressNotifications: true,
       })
 
       // Since handler already exists, updateConfig should be called
       expect(mockStructuredPromptHandler.updateConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           orchestrationMode: 'essential',
-          progressNotifications: true
+          progressNotifications: true,
         })
       )
     })
 
     it('should enable structured prompt generation without handler', async () => {
-      // Create server without pre-initialized handler
+      // Create server without pre-initialized handler and dependencies
       const serverWithoutHandler = new MCPServerWithOrchestration(
         { name: 'test-server', version: '1.0.0' },
         { enableOrchestration: true, orchestrationMode: 'full' },
         {
-          structuredPromptOrchestrator: mockOrchestrator
-          // No handler provided
+          // No orchestrator or handler provided - should fail to initialize
         }
       )
 
-      // This should not throw and should initialize the handler
-      await expect(serverWithoutHandler.enableStructuredPromptGeneration({
-        orchestrationMode: 'essential',
-        progressNotifications: true
-      })).resolves.not.toThrow()
+      // This should throw due to missing configuration (GEMINI_API_KEY)
+      await expect(
+        serverWithoutHandler.enableStructuredPromptGeneration({
+          orchestrationMode: 'essential',
+          progressNotifications: true,
+        })
+      ).rejects.toThrow()
 
       const status = serverWithoutHandler.getOrchestrationStatus()
       expect(status.enabled).toBe(false) // Handler not initialized due to missing dependencies
@@ -107,7 +108,7 @@ describe('MCPServerWithOrchestration', () => {
     it('should update orchestration configuration', () => {
       const newConfig: Partial<MCPOrchestrationConfig> = {
         orchestrationMode: 'minimal',
-        fallbackBehavior: 'fail'
+        fallbackBehavior: 'fail',
       }
 
       server.updateOrchestrationConfig(newConfig)
@@ -119,21 +120,22 @@ describe('MCPServerWithOrchestration', () => {
   describe('tool listing with orchestration', () => {
     it('should extend generate_image tool with orchestration parameters when enabled', () => {
       const toolsList = server.getToolsList()
-      const generateImageTool = toolsList.tools.find(tool => tool.name === 'generate_image')
+      const generateImageTool = toolsList.tools.find((tool) => tool.name === 'generate_image')
 
       expect(generateImageTool).toBeDefined()
       expect(generateImageTool!.inputSchema.properties).toHaveProperty('useStructuredPrompt')
       expect(generateImageTool!.inputSchema.properties.useStructuredPrompt).toEqual({
         type: 'boolean',
-        description: 'Enable structured prompt generation with 2-stage orchestration (optional, default: false)',
-        default: false
+        description:
+          'Enable structured prompt generation with 2-stage orchestration (optional, default: false)',
+        default: false,
       })
       expect(generateImageTool!.description).toContain('structured prompt enhancement')
     })
 
     it('should maintain backward compatibility with existing parameters', () => {
       const toolsList = server.getToolsList()
-      const generateImageTool = toolsList.tools.find(tool => tool.name === 'generate_image')
+      const generateImageTool = toolsList.tools.find((tool) => tool.name === 'generate_image')
 
       expect(generateImageTool!.inputSchema.properties).toHaveProperty('prompt')
       expect(generateImageTool!.inputSchema.properties).toHaveProperty('fileName')
@@ -145,12 +147,12 @@ describe('MCPServerWithOrchestration', () => {
   describe('generate_image with orchestration', () => {
     const baseParams: GenerateImageWithOrchestrationParams = {
       prompt: 'A beautiful sunset over mountains',
-      useStructuredPrompt: false
+      useStructuredPrompt: false,
     }
 
     it('should handle standard generate_image without orchestration', async () => {
       const params = { ...baseParams }
-      
+
       // Mock the result directly since we're testing orchestration behavior, not the base implementation
       vi.spyOn(server, 'callTool').mockResolvedValue({
         content: [
@@ -159,10 +161,10 @@ describe('MCPServerWithOrchestration', () => {
             text: JSON.stringify({
               content: [{ type: 'text', text: 'Mock image generated' }],
               usedStructuredPrompt: false,
-              metadata: { fallbackUsed: false }
-            })
-          }
-        ]
+              metadata: { fallbackUsed: false },
+            }),
+          },
+        ],
       })
 
       const result = await server.callTool('generate_image', params)
@@ -173,10 +175,11 @@ describe('MCPServerWithOrchestration', () => {
 
     it('should apply structured prompt when requested and enabled', async () => {
       const params = { ...baseParams, useStructuredPrompt: true }
-      
+
       const mockOrchestrationResult: OrchestrationResult = {
         originalPrompt: params.prompt,
-        structuredPrompt: 'Enhanced: A beautiful sunset over majestic mountains with detailed lighting',
+        structuredPrompt:
+          'Enhanced: A beautiful sunset over majestic mountains with detailed lighting',
         processingStages: [],
         appliedStrategies: [],
         metrics: {
@@ -185,8 +188,8 @@ describe('MCPServerWithOrchestration', () => {
           successRate: 1,
           failureCount: 0,
           fallbacksUsed: 0,
-          timestamp: new Date()
-        }
+          timestamp: new Date(),
+        },
       }
 
       mockStructuredPromptHandler.processStructuredPrompt.mockResolvedValue(
@@ -206,11 +209,11 @@ describe('MCPServerWithOrchestration', () => {
                 totalProcessingTime: 3000,
                 orchestrationTime: 2000,
                 imageGenerationTime: 1000,
-                fallbackUsed: false
-              }
-            })
-          }
-        ]
+                fallbackUsed: false,
+              },
+            }),
+          },
+        ],
       })
 
       const result = await server.callTool('generate_image', params, 'progress-123')
@@ -223,7 +226,7 @@ describe('MCPServerWithOrchestration', () => {
 
     it('should handle orchestration failure gracefully', async () => {
       const params = { ...baseParams, useStructuredPrompt: true }
-      
+
       mockStructuredPromptHandler.processStructuredPrompt.mockResolvedValue(
         Err(new GeminiAPIError('Orchestration failed'))
       )
@@ -239,15 +242,15 @@ describe('MCPServerWithOrchestration', () => {
               metadata: {
                 totalProcessingTime: 1000,
                 imageGenerationTime: 1000,
-                fallbackUsed: true
-              }
-            })
-          }
-        ]
+                fallbackUsed: true,
+              },
+            }),
+          },
+        ],
       })
 
       const result = await server.callTool('generate_image', params)
-      
+
       expect(result.content).toBeDefined()
       const resultData = JSON.parse(result.content![0].text!)
       expect(resultData.metadata.fallbackUsed).toBe(true)
@@ -255,7 +258,7 @@ describe('MCPServerWithOrchestration', () => {
 
     it('should include orchestration metadata in response', async () => {
       const params = { ...baseParams, useStructuredPrompt: true }
-      
+
       const mockOrchestrationResult: OrchestrationResult = {
         originalPrompt: params.prompt,
         structuredPrompt: 'Enhanced prompt',
@@ -267,8 +270,8 @@ describe('MCPServerWithOrchestration', () => {
           successRate: 1,
           failureCount: 0,
           fallbacksUsed: 0,
-          timestamp: new Date()
-        }
+          timestamp: new Date(),
+        },
       }
 
       mockStructuredPromptHandler.processStructuredPrompt.mockResolvedValue(
@@ -287,20 +290,20 @@ describe('MCPServerWithOrchestration', () => {
                 totalProcessingTime: 2500,
                 orchestrationTime: 1500,
                 imageGenerationTime: 1000,
-                fallbackUsed: false
-              }
-            })
-          }
-        ]
+                fallbackUsed: false,
+              },
+            }),
+          },
+        ],
       })
 
       const result = await server.callTool('generate_image', params)
-      
+
       const resultData = JSON.parse(result.content![0].text!)
       expect(resultData.metadata).toMatchObject({
         totalProcessingTime: expect.any(Number),
         imageGenerationTime: expect.any(Number),
-        fallbackUsed: false
+        fallbackUsed: false,
       })
       expect(resultData.metadata.orchestrationTime).toBeGreaterThan(0)
     })
@@ -315,8 +318,8 @@ describe('MCPServerWithOrchestration', () => {
           totalAttempts: 5,
           successfulAttempts: 4,
           failedAttempts: 1,
-          averageProcessingTime: 1200
-        }
+          averageProcessingTime: 1200,
+        },
       }
 
       mockStructuredPromptHandler.getOrchestrationStatus.mockReturnValue(mockStatus)
@@ -328,7 +331,7 @@ describe('MCPServerWithOrchestration', () => {
     it('should return default status when handler not initialized', () => {
       const serverWithoutHandler = new MCPServerWithOrchestration()
       const status = serverWithoutHandler.getOrchestrationStatus()
-      
+
       expect(status.enabled).toBe(false)
       expect(status.statistics.totalAttempts).toBe(0)
     })
@@ -338,7 +341,7 @@ describe('MCPServerWithOrchestration', () => {
     it('should process existing generate_image calls without changes', async () => {
       const legacyParams = {
         prompt: 'A cat sitting on a table',
-        fileName: 'cat.jpg'
+        fileName: 'cat.jpg',
       }
 
       // Mock legacy result
@@ -349,14 +352,14 @@ describe('MCPServerWithOrchestration', () => {
             text: JSON.stringify({
               content: [{ type: 'text', text: 'Legacy image generated' }],
               usedStructuredPrompt: false,
-              metadata: { fallbackUsed: false }
-            })
-          }
-        ]
+              metadata: { fallbackUsed: false },
+            }),
+          },
+        ],
       })
 
       const result = await server.callTool('generate_image', legacyParams)
-      
+
       expect(result.content).toBeDefined()
       expect(mockStructuredPromptHandler.processStructuredPrompt).not.toHaveBeenCalled()
     })
@@ -368,7 +371,7 @@ describe('MCPServerWithOrchestration', () => {
       )
 
       const toolsList = serverWithDisabledOrchestration.getToolsList()
-      const generateImageTool = toolsList.tools.find(tool => tool.name === 'generate_image')
+      const generateImageTool = toolsList.tools.find((tool) => tool.name === 'generate_image')
 
       expect(generateImageTool!.inputSchema.properties).not.toHaveProperty('useStructuredPrompt')
     })

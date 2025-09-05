@@ -3,8 +3,8 @@
  * Extends existing MCP types with structured prompt generation capabilities
  */
 
+import type { OrchestrationOptions, OrchestrationResult } from '../business/promptOrchestrator'
 import type { GenerateImageParams } from './mcp'
-import type { OrchestrationResult, OrchestrationOptions } from '../business/promptOrchestrator'
 
 /**
  * Extended generate_image parameters with orchestration support
@@ -15,7 +15,7 @@ export interface GenerateImageWithOrchestrationParams extends GenerateImageParam
    * When true, applies 2-stage orchestration before image generation
    */
   useStructuredPrompt?: boolean
-  
+
   /**
    * Orchestration configuration options
    */
@@ -30,7 +30,7 @@ export interface MCPOrchestrationConfig {
    * Global orchestration enablement flag
    */
   enableOrchestration: boolean
-  
+
   /**
    * Orchestration processing mode
    * - full: POML + all 7 best practices
@@ -38,12 +38,12 @@ export interface MCPOrchestrationConfig {
    * - minimal: best practices only, no POML
    */
   orchestrationMode: 'full' | 'essential' | 'minimal'
-  
+
   /**
    * Enable progress notifications during orchestration
    */
   progressNotifications: boolean
-  
+
   /**
    * Fallback behavior when orchestration fails
    */
@@ -53,10 +53,10 @@ export interface MCPOrchestrationConfig {
 /**
  * Fallback behavior options
  */
-export type FallbackBehavior = 
-  | 'graceful'    // Continue with original prompt
-  | 'retry'       // Attempt orchestration once more
-  | 'fail'        // Return error if orchestration fails
+export type FallbackBehavior =
+  | 'graceful' // Continue with original prompt
+  | 'retry' // Attempt orchestration once more
+  | 'fail' // Return error if orchestration fails
 
 /**
  * Orchestration status information
@@ -66,12 +66,12 @@ export interface OrchestrationStatus {
    * Whether orchestration is currently enabled
    */
   enabled: boolean
-  
+
   /**
    * Current orchestration mode
    */
   mode: MCPOrchestrationConfig['orchestrationMode']
-  
+
   /**
    * Processing statistics
    */
@@ -80,23 +80,23 @@ export interface OrchestrationStatus {
      * Total orchestration attempts
      */
     totalAttempts: number
-    
+
     /**
      * Successful orchestrations
      */
     successfulAttempts: number
-    
+
     /**
      * Failed orchestrations
      */
     failedAttempts: number
-    
+
     /**
      * Average processing time in milliseconds
      */
     averageProcessingTime: number
   }
-  
+
   /**
    * Last orchestration result (if any)
    */
@@ -116,17 +116,17 @@ export interface MCPOrchestrationResult {
     data?: string
     mimeType?: string
   }>
-  
+
   /**
    * Whether structured prompt was used
    */
   usedStructuredPrompt: boolean
-  
+
   /**
    * Orchestration result details (if structured prompt was used)
    */
   orchestrationResult?: OrchestrationResult
-  
+
   /**
    * Processing metadata
    */
@@ -135,17 +135,17 @@ export interface MCPOrchestrationResult {
      * Total processing time including orchestration
      */
     totalProcessingTime: number
-    
+
     /**
      * Time spent on orchestration (if applicable)
      */
     orchestrationTime?: number
-    
+
     /**
      * Time spent on image generation
      */
     imageGenerationTime: number
-    
+
     /**
      * Whether fallback was used
      */
@@ -162,7 +162,7 @@ export enum OrchestrationProgressStage {
   BEST_PRACTICES_APPLYING = 'best_practices_applying',
   ORCHESTRATION_COMPLETE = 'orchestration_complete',
   IMAGE_GENERATION_STARTING = 'image_generation_starting',
-  IMAGE_GENERATION_COMPLETE = 'image_generation_complete'
+  IMAGE_GENERATION_COMPLETE = 'image_generation_complete',
 }
 
 /**
@@ -182,5 +182,5 @@ export const DEFAULT_ORCHESTRATION_CONFIG: MCPOrchestrationConfig = {
   enableOrchestration: true,
   orchestrationMode: 'full',
   progressNotifications: true,
-  fallbackBehavior: 'graceful'
+  fallbackBehavior: 'graceful',
 }

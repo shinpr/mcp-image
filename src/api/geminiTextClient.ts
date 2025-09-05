@@ -26,16 +26,6 @@ export interface PromptOptions {
 }
 
 /**
- * Parameters for structured prompt generation
- */
-export interface PromptGenerationParams {
-  prompt: string
-  context?: string
-  temperature?: number
-  maxOutputTokens?: number
-}
-
-/**
  * Optimized prompt result with metadata
  */
 export interface OptimizedPrompt {

@@ -149,6 +149,17 @@ const DEFAULT_CONFIG: BestPracticesConfig = {
 }
 
 /**
+ * Factory function to create BestPracticesEngine instance
+ * @param config Optional configuration
+ * @returns BestPracticesEngine instance
+ */
+export function createBestPracticesEngine(
+  config?: Partial<BestPracticesConfig>
+): BestPracticesEngine {
+  return new BestPracticesEngineImpl(config)
+}
+
+/**
  * Implementation of the Best Practices Engine
  */
 export class BestPracticesEngineImpl implements BestPracticesEngine {
@@ -201,7 +212,7 @@ export class BestPracticesEngineImpl implements BestPracticesEngine {
             applied: true,
             enhancement: this.getEnhancementDescription(practiceType),
             metadata: {
-              processingTime: Date.now() - practiceStartTime,
+              processingTime: Math.max(Date.now() - practiceStartTime, 1), // Ensure minimum 1ms
               confidence: metadata.confidence,
             },
           })
@@ -712,15 +723,4 @@ class CameraControlTerminologyStrategy implements TransformationStrategy {
   getMetadata(): { confidence: number; processingTime: number } {
     return { confidence: this.confidence, processingTime: this.processingTime }
   }
-}
-
-/**
- * Creates a new Best Practices Engine instance
- * @param config Optional configuration for the engine
- * @returns New BestPracticesEngine instance
- */
-export function createBestPracticesEngine(
-  config?: Partial<BestPracticesConfig>
-): BestPracticesEngine {
-  return new BestPracticesEngineImpl(config)
 }
