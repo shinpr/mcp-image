@@ -112,7 +112,6 @@ export class OrchestrationErrorHandlerImpl implements OrchestrationErrorHandler 
           fallbackApplied = true
           break
 
-        case RecoveryAction.FAIL_SAFE:
         default:
           // Return failure with comprehensive information
           break

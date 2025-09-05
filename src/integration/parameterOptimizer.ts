@@ -303,12 +303,12 @@ export class ParameterOptimizerImpl implements ParameterOptimizer {
       /\b(details?)\b/g,
     ]
 
-    elementPatterns.forEach((pattern) => {
+    for (const pattern of elementPatterns) {
       const matches = prompt.match(pattern)
       if (matches) {
         elements.push(...matches)
       }
-    })
+    }
 
     return [...new Set(elements)] // Remove duplicates
   }

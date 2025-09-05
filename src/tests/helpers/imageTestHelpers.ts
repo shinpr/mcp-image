@@ -210,9 +210,10 @@ export function createTestImageBuffer(
   const buffer = Buffer.alloc(signature.length + dataSize)
 
   // Write format signature
-  signature.forEach((byte, index) => {
+  for (let index = 0; index < signature.length; index++) {
+    const byte = signature[index]
     buffer[index] = byte
-  })
+  }
 
   // Fill with random data
   for (let i = signature.length; i < buffer.length; i++) {

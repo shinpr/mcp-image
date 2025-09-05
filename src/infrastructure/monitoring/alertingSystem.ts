@@ -579,10 +579,10 @@ export class AlertingSystem {
     const alertsByRule: Record<string, number> = {}
     const alertsBySeverity: Record<string, number> = {}
 
-    this.alertHistory.forEach((alert) => {
+    for (const alert of this.alertHistory) {
       alertsByRule[alert.ruleId] = (alertsByRule[alert.ruleId] || 0) + 1
       alertsBySeverity[alert.severity] = (alertsBySeverity[alert.severity] || 0) + 1
-    })
+    }
 
     return {
       totalAlerts: this.alertHistory.length,
@@ -600,9 +600,9 @@ export class AlertingSystem {
     if (rule) {
       rule.threshold = newThreshold
       // Update conditions that use this threshold
-      rule.conditions.forEach((condition) => {
+      for (const condition of rule.conditions) {
         condition.value = newThreshold
-      })
+      }
       return true
     }
     return false

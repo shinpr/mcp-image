@@ -455,12 +455,13 @@ describe('POMLTemplateEngine', () => {
 
       const results = await Promise.all(promises)
 
-      results.forEach((result, index) => {
+      for (let index = 0; index < results.length; index++) {
+        const result = results[index]
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.originalPrompt).toBe(`prompt ${index + 1}`)
         }
-      })
+      }
     })
 
     it('should maintain feature flag isolation between instances', () => {

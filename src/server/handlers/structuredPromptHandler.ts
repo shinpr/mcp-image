@@ -210,7 +210,6 @@ export class StructuredPromptHandler {
         // For now, just return graceful fallback to avoid infinite recursion
         return await this.handleOrchestrationFailure(error, originalPrompt, server, progressToken)
 
-      case 'fail':
       default:
         return Err(error)
     }

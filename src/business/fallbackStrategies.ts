@@ -403,9 +403,9 @@ export class StagedFallbackStrategy implements FallbackStrategy {
    * Mark recent failures as recovered
    */
   private markFailuresRecovered(): void {
-    this.failureHistory.recentFailures.forEach((failure) => {
+    for (const failure of this.failureHistory.recentFailures) {
       failure.recovered = true
-    })
+    }
     this.failureHistory.currentFailureStreak = 0
     this.failureHistory.lastRecovery = new Date()
   }
@@ -502,9 +502,9 @@ export class StagedFallbackStrategy implements FallbackStrategy {
     this.failureHistory.lastRecovery = new Date()
 
     // Mark recent failures as recovered
-    this.failureHistory.recentFailures.forEach((failure) => {
+    for (const failure of this.failureHistory.recentFailures) {
       failure.recovered = true
-    })
+    }
   }
 
   /**

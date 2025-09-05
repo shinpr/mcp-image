@@ -135,9 +135,11 @@ export class TwoStageProcessorImpl implements TwoStageProcessor {
       } else {
         optimizedParams = paramResult.data
         // Record all optimization reasons
-        optimizedParams.optimizationReasons?.forEach((reason) => {
-          this.metadataManager.recordOptimization(sessionId, reason)
-        })
+        if (optimizedParams.optimizationReasons) {
+          for (const reason of optimizedParams.optimizationReasons) {
+            this.metadataManager.recordOptimization(sessionId, reason)
+          }
+        }
       }
     } else {
       optimizedParams = request.imageParameters || {}

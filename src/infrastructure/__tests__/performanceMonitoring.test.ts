@@ -219,10 +219,10 @@ describe('Performance Monitoring Infrastructure', () => {
         expect(recommendations.length).toBeGreaterThan(0)
 
         // Should provide meaningful recommendations
-        recommendations.forEach((recommendation) => {
+        for (const recommendation of recommendations) {
           expect(typeof recommendation).toBe('string')
           expect(recommendation.length).toBeGreaterThan(0)
-        })
+        }
       })
     })
 

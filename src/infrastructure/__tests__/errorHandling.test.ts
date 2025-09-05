@@ -139,10 +139,11 @@ describe('Error Handling Integration Tests', () => {
       const results = await Promise.all(promises)
 
       // RED: These assertions should fail until proper implementation
-      results.forEach((result, index) => {
+      for (let index = 0; index < results.length; index++) {
+        const result = results[index]
         expect(result.success).toBe(true)
         expect(result.data).toBe(`result${index + 1}`)
-      })
+      }
 
       // Verify no resource conflicts occurred
       expect(operation1).toHaveBeenCalledTimes(1)
@@ -225,10 +226,11 @@ describe('Error Handling Integration Tests', () => {
 
       // RED: These assertions should fail until proper implementation
       expect(sharedResource.counter).toBe(5) // No race conditions
-      results.forEach((result, index) => {
+      for (let index = 0; index < results.length; index++) {
+        const result = results[index]
         expect(result.success).toBe(true)
         expect(typeof result.data).toBe('number')
-      })
+      }
     })
   })
 
@@ -450,7 +452,7 @@ describe('Error Handling Integration Tests', () => {
       expect(successCount).toBeGreaterThanOrEqual(Math.ceil(testPrompts.length * 0.98))
 
       // Verify each successful result preserves original language
-      results.forEach(({ success, result, prompt }) => {
+      for (const { success, result, prompt } of results) {
         if (success && result.normalizedInput) {
           // Should contain original language characters
           const hasOriginalChars = prompt
@@ -458,7 +460,7 @@ describe('Error Handling Integration Tests', () => {
             .some((char) => result.normalizedInput!.toString().includes(char))
           expect(hasOriginalChars).toBe(true)
         }
-      })
+      }
     })
 
     it('should handle language detection edge cases', async () => {
@@ -531,13 +533,14 @@ describe('Error Handling Integration Tests', () => {
       const results = await Promise.all(promises)
 
       // RED: These assertions should fail until proper implementation
-      results.forEach((result, index) => {
+      for (let index = 0; index < results.length; index++) {
+        const result = results[index]
         expect(result).toBeDefined()
         // All results should use same configuration mode
         if (index > 0) {
           expect(result.valid).toBe(results[0].valid)
         }
-      })
+      }
     })
 
     it('should handle configuration validation errors', async () => {

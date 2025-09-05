@@ -134,9 +134,9 @@ export class OrchestrationMetrics implements IOrchestrationMetrics {
     const recentRecords = this.performanceRecords.filter(
       (r) => Date.now() - r.timestamp < 10000 // Last 10 seconds
     )
-    recentRecords.forEach((record) => {
+    for (const record of recentRecords) {
       record.fallbackTier = tier
-    })
+    }
 
     this.maintainRecordLimit()
   }
@@ -158,9 +158,9 @@ export class OrchestrationMetrics implements IOrchestrationMetrics {
     const recentRecords = this.performanceRecords.filter(
       (r) => r.stage === stage && Date.now() - r.timestamp < 5000 // Last 5 seconds
     )
-    recentRecords.forEach((record) => {
+    for (const record of recentRecords) {
       record.success = false
-    })
+    }
 
     this.maintainRecordLimit()
   }
@@ -260,11 +260,11 @@ export class OrchestrationMetrics implements IOrchestrationMetrics {
       ProcessingStage,
       number[]
     >
-    Object.values(ProcessingStage).forEach((stage) => {
+    for (const stage of Object.values(ProcessingStage)) {
       processingTime[stage] = recentPerformance
         .filter((r) => r.stage === stage && r.success)
         .map((r) => r.duration)
-    })
+    }
 
     const recentMemory = this.memoryRecords[this.memoryRecords.length - 1]?.metrics || {
       heapUsed: 0,

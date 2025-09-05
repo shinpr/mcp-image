@@ -127,7 +127,6 @@ class GeminiImageClientMock implements GeminiClient {
           )
         )
 
-      case 'success':
       default:
         return Ok(this.generateMockImageResult(params))
     }

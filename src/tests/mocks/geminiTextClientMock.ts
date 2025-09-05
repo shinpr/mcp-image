@@ -131,7 +131,6 @@ class GeminiTextClientMock implements GeminiTextClient {
           )
         )
 
-      case 'success':
       default:
         return Ok(this.generateMockResponse(params))
     }
@@ -207,10 +206,13 @@ class GeminiTextClientMock implements GeminiTextClient {
     switch (level) {
       case 'complete':
         practices.push('camera-control', 'aspect-ratio', 'semantic-negatives')
-      /* falls through */
+        practices.push('character-consistency', 'context-intent', 'iterate-refine')
+        practices.push('hyper-specific')
+        break
       case 'advanced':
         practices.push('character-consistency', 'context-intent', 'iterate-refine')
-      /* falls through */
+        practices.push('hyper-specific')
+        break
       case 'basic':
         practices.push('hyper-specific')
         break
