@@ -9,7 +9,6 @@ import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { GeminiAPIError } from '../utils/errors'
 
-
 /**
  * System prompt for structured prompt generation optimized for image generation
  */
@@ -75,10 +74,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         return Err(new GeminiAPIError('User prompt cannot be empty'))
       }
 
-
       // Build complete prompt with system instruction and meta-prompt
       const completePrompt = this.buildCompletePrompt(userPrompt, features)
-
 
       // Generate structured prompt using Gemini 2.0 Flash via pure API call
       const result = await this.geminiTextClient.generateText(completePrompt, {
@@ -94,7 +91,6 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       // Extract selected practices from the response
       const selectedPractices = this.inferSelectedPractices(result.data, features)
 
-
       return Ok({
         originalPrompt: userPrompt,
         structuredPrompt: result.data,
@@ -102,8 +98,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      
-      
+
       return Err(new GeminiAPIError(`Failed to generate structured prompt: ${errorMessage}`))
     }
   }
@@ -144,7 +139,7 @@ Now transform the user's request with similar attention to detail and creative e
 
     if (features.maintainCharacterConsistency) {
       requirements.push(
-        'MUST include distinctive character features: This character needs at least 3 recognizable visual markers that would identify them across different scenes. Include specific details like "distinctive scar", "signature clothing item", "unique hairstyle", or "characteristic accessory". Use words like "signature", "distinctive", "always wears/has" to emphasize these consistent features.'
+        'Character consistency is CRITICAL - MUST include distinctive character features: This character needs at least 3 recognizable visual markers that would identify them across different scenes. Include specific details like "distinctive scar", "signature clothing item", "unique hairstyle", or "characteristic accessory". Use words like "signature", "distinctive", "always wears/has" to emphasize these consistent features.'
       )
     }
 
@@ -156,24 +151,21 @@ Now transform the user's request with similar attention to detail and creative e
 
     if (features.useWorldKnowledge) {
       requirements.push(
-        'MUST incorporate authentic details: Apply accurate real-world knowledge about cultures, locations, or historical elements. Use specific terminology like "traditional [culture] style", "authentic [location] architecture", "typical of [region]", "historically accurate [period]". Be precise about cultural elements, geographical features, and factual details.'
+        'Apply accurate real-world knowledge - MUST incorporate authentic details: Apply accurate real-world knowledge about cultures, locations, or historical elements. Use specific terminology like "traditional [culture] style", "authentic [location] architecture", "typical of [region]", "historically accurate [period]". Be precise about cultural elements, geographical features, and factual details.'
       )
     }
 
     if (requirements.length > 0) {
       return `\nMANDATORY REQUIREMENTS - These MUST be clearly reflected in your enhanced prompt:\n\n${requirements.join('\n\n')}\n`
     }
-    
+
     return ''
   }
 
   /**
    * Infer which best practices were selected based on the generated prompt
    */
-  private inferSelectedPractices(
-    structuredPrompt: string,
-    features: FeatureFlags
-  ): string[] {
+  private inferSelectedPractices(structuredPrompt: string, features: FeatureFlags): string[] {
     const selected: string[] = []
     const promptLower = structuredPrompt.toLowerCase()
 
@@ -185,7 +177,7 @@ Now transform the user's request with similar attention to detail and creative e
       promptLower.includes('shadow') ||
       promptLower.includes('material')
     ) {
-      selected.push('Visual Detail Enhancement')
+      selected.push('Hyper-Specific Details')
     }
 
     // Check for character consistency markers
@@ -235,7 +227,7 @@ Now transform the user's request with similar attention to detail and creative e
       promptLower.includes('shot') ||
       promptLower.includes('depth of field')
     ) {
-      selected.push('Technical Precision')
+      selected.push('Camera Control Terminology')
     }
 
     // Check for atmospheric and mood enhancement

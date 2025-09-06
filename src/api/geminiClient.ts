@@ -205,13 +205,11 @@ class GeminiClientImpl implements GeminiClient {
         inputImageProvided: !!params.inputImage,
       }
 
-
       return Ok({
         imageData: imageBuffer,
         metadata,
       })
     } catch (error) {
-
       return this.handleError(error, params.prompt)
     }
   }

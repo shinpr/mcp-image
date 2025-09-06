@@ -22,7 +22,7 @@ vi.mock('@google/genai', () => ({
 
 mockGenerateContent.mockImplementation((params: { contents: string }) => {
   const prompt = typeof params.contents === 'string' ? params.contents : ''
-  
+
   // Handle error scenarios based on prompt content
   if (prompt.includes('network error')) {
     throw new Error('ECONNRESET Network error')

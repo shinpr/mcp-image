@@ -205,7 +205,8 @@ describe('MCP Server', () => {
     expect(schema.properties).toHaveProperty('prompt')
     expect(schema.properties?.prompt).toEqual({
       type: 'string',
-      description: 'The prompt for image generation',
+      description:
+        'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
     })
     expect(schema.properties).toHaveProperty('fileName')
     expect(schema.properties?.fileName).toEqual({

@@ -36,7 +36,6 @@ import { Logger } from '../utils/logger'
 import { SecurityManager } from '../utils/security'
 import { ErrorHandler } from './errorHandler'
 
-
 /**
  * Default MCP server configuration
  */
@@ -92,7 +91,8 @@ export class MCPServerImpl {
             properties: {
               prompt: {
                 type: 'string' as const,
-                description: 'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
+                description:
+                  'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
               },
               fileName: {
                 type: 'string' as const,
@@ -184,7 +184,6 @@ export class MCPServerImpl {
    */
   private async handleGenerateImage(params: GenerateImageParams) {
     const result = await ErrorHandler.wrapWithResultType(async () => {
-
       // Validate input
       const validationResult = validateGenerateImageParams(params)
       if (!validationResult.success) {
@@ -214,7 +213,6 @@ export class MCPServerImpl {
           features.useWorldKnowledge = params.useWorldKnowledge
         }
 
-
         const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
           params.prompt,
           features
@@ -222,15 +220,13 @@ export class MCPServerImpl {
 
         if (promptResult.success) {
           structuredPrompt = promptResult.data.structuredPrompt
-          
-          
+
           this.logger.info('mcp-server', 'Structured prompt generated', {
             originalLength: params.prompt.length,
             structuredLength: structuredPrompt.length,
             selectedPractices: promptResult.data.selectedPractices,
           })
         } else {
-          
           this.logger.warn('mcp-server', 'Using original prompt', {
             error: promptResult.error.message,
           })
@@ -249,7 +245,6 @@ export class MCPServerImpl {
         throw new Error('Gemini client not initialized')
       }
 
-
       const generationResult = await this.geminiClient.generateImage({
         prompt: structuredPrompt,
         ...(inputImageData && { inputImage: inputImageData }),
@@ -258,7 +253,6 @@ export class MCPServerImpl {
       if (!generationResult.success) {
         throw generationResult.error
       }
-
 
       // Save image file
       const fileName = params.fileName || this.fileManager.generateFileName()
@@ -276,7 +270,6 @@ export class MCPServerImpl {
       if (!saveResult.success) {
         throw saveResult.error
       }
-
 
       // Build response
       return this.responseBuilder.buildSuccessResponse(generationResult.data, saveResult.data)
