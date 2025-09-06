@@ -1,9 +1,9 @@
 /**
  * MCP Server implementation
- * Basic structure of MCP server using @modelcontextprotocol/sdk
+ * Simplified architecture with direct Gemini integration
  */
 
-// External libraries
+import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import {
@@ -13,24 +13,27 @@ import {
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
 
-// Types and interfaces
-import type { GenerateImageParams, MCPServerConfig, McpContent } from '../types/mcp'
+// Types
+import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
 
 // Business logic
 import { type FileManager, createFileManager } from '../business/fileManager'
-import { type ImageGenerator, createImageGenerator } from '../business/imageGenerator'
 import { validateGenerateImageParams } from '../business/inputValidator'
 import { type ResponseBuilder, createResponseBuilder } from '../business/responseBuilder'
+import {
+  type FeatureFlags,
+  type StructuredPromptGenerator,
+  createStructuredPromptGenerator,
+} from '../business/structuredPromptGenerator'
 
 // API clients
 import { type GeminiClient, createGeminiClient } from '../api/geminiClient'
+import { type GeminiTextClient, createGeminiTextClient } from '../api/geminiTextClient'
 
 // Utilities
 import { getConfig } from '../utils/config'
 import { Logger } from '../utils/logger'
 import { SecurityManager } from '../utils/security'
-
-// Same module
 import { ErrorHandler } from './errorHandler'
 
 /**
@@ -43,19 +46,7 @@ const DEFAULT_CONFIG: MCPServerConfig = {
 }
 
 /**
- * Dependencies for MCPServerImpl
- */
-export interface MCPServerDependencies {
-  fileManager?: FileManager
-  responseBuilder?: ResponseBuilder
-  logger?: Logger
-  securityManager?: SecurityManager
-  createImageGenerator?: (geminiClient: GeminiClient) => ImageGenerator
-}
-
-/**
- * Basic MCP server structure
- * Simple implementation focusing on testability
+ * Simplified MCP server
  */
 export class MCPServerImpl {
   private config: MCPServerConfig
@@ -64,62 +55,20 @@ export class MCPServerImpl {
   private fileManager: FileManager
   private responseBuilder: ResponseBuilder
   private securityManager: SecurityManager
-  private createImageGeneratorFn: (geminiClient: GeminiClient) => ImageGenerator
+  private structuredPromptGenerator: StructuredPromptGenerator | null = null
+  private geminiTextClient: GeminiTextClient | null = null
+  private geminiClient: GeminiClient | null = null
 
-  constructor(config: Partial<MCPServerConfig> = {}, dependencies: MCPServerDependencies = {}) {
+  constructor(config: Partial<MCPServerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
-    this.logger = dependencies.logger || new Logger()
-    this.fileManager = dependencies.fileManager || createFileManager()
-    this.responseBuilder = dependencies.responseBuilder || createResponseBuilder()
-    this.securityManager = dependencies.securityManager || new SecurityManager()
-    this.createImageGeneratorFn = dependencies.createImageGenerator || createImageGenerator
+    this.logger = new Logger()
+    this.fileManager = createFileManager()
+    this.responseBuilder = createResponseBuilder()
+    this.securityManager = new SecurityManager()
   }
 
   /**
-   * Send progress notification to client
-   */
-  private async sendProgress(
-    progressToken: string | number,
-    progress: number,
-    total?: number,
-    message?: string
-  ): Promise<void> {
-    if (!this.server || !progressToken) return
-
-    try {
-      await this.server.notification({
-        method: 'notifications/progress',
-        params: {
-          progressToken,
-          progress,
-          ...(total !== undefined && { total }),
-          ...(message && { message }),
-        },
-      })
-
-      this.logger.debug('mcp-progress', 'Progress notification sent', {
-        progressToken,
-        progress,
-        total,
-        message,
-      })
-    } catch (error) {
-      this.logger.warn('mcp-progress', 'Failed to send progress notification', {
-        progressToken,
-        error: (error as Error).message,
-      })
-    }
-  }
-
-  /**
-   * Get server instance (for testing)
-   */
-  public getServerInstance(): Server | null {
-    return this.server
-  }
-
-  /**
-   * Get server information
+   * Get server info
    */
   public getServerInfo() {
     return {
@@ -142,7 +91,8 @@ export class MCPServerImpl {
             properties: {
               prompt: {
                 type: 'string' as const,
-                description: 'The prompt for image generation',
+                description:
+                  'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
               },
               fileName: {
                 type: 'string' as const,
@@ -178,161 +128,161 @@ export class MCPServerImpl {
   }
 
   /**
-   * Tool execution with unified error handling
+   * Tool execution
    */
-  public async callTool(name: string, args: unknown, progressToken?: string | number) {
+  public async callTool(name: string, args: unknown) {
     try {
       if (name === 'generate_image') {
-        return await this.handleGenerateImage(args as GenerateImageParams, progressToken)
+        return await this.handleGenerateImage(args as GenerateImageParams)
       }
-
       throw new Error(`Unknown tool: ${name}`)
     } catch (error) {
-      this.logger.error('mcp-server', 'Tool execution failed', error as Error, {
-        toolName: name,
-        args,
-      })
+      this.logger.error('mcp-server', 'Tool execution failed', error as Error)
       return ErrorHandler.handleError(error as Error)
     }
   }
 
   /**
-   * Image generation tool handler with proper error handling
+   * Initialize Gemini clients lazily
    */
-  private async handleGenerateImage(params: GenerateImageParams, progressToken?: string | number) {
-    // Use ErrorHandler.wrapWithResultType for safe execution
-    const result = await ErrorHandler.wrapWithResultType(async () => {
-      // Send initial progress notification
-      if (progressToken) {
-        await this.sendProgress(progressToken, 0, 100, 'Starting image generation...')
-      }
+  private async initializeClients(): Promise<void> {
+    if (this.structuredPromptGenerator && this.geminiClient) return
 
-      // Step 1: Validate input parameters
+    const configResult = getConfig()
+    if (!configResult.success) {
+      throw configResult.error
+    }
+
+    // Initialize Gemini Text Client for prompt generation
+    if (!this.geminiTextClient) {
+      const textClientResult = createGeminiTextClient(configResult.data)
+      if (!textClientResult.success) {
+        throw textClientResult.error
+      }
+      this.geminiTextClient = textClientResult.data
+    }
+
+    // Initialize Structured Prompt Generator
+    if (!this.structuredPromptGenerator) {
+      this.structuredPromptGenerator = createStructuredPromptGenerator(this.geminiTextClient)
+    }
+
+    // Initialize Gemini Client for image generation
+    if (!this.geminiClient) {
+      const clientResult = createGeminiClient(configResult.data)
+      if (!clientResult.success) {
+        throw clientResult.error
+      }
+      this.geminiClient = clientResult.data
+    }
+
+    this.logger.info('mcp-server', 'Gemini clients initialized')
+  }
+
+  /**
+   * Simplified image generation handler
+   */
+  private async handleGenerateImage(params: GenerateImageParams) {
+    const result = await ErrorHandler.wrapWithResultType(async () => {
+      // Validate input
       const validationResult = validateGenerateImageParams(params)
       if (!validationResult.success) {
         throw validationResult.error
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 20, 100, 'Input parameters validated')
-      }
-
-      // Step 2: Load configuration
+      // Get configuration
       const configResult = getConfig()
       if (!configResult.success) {
         throw configResult.error
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 30, 100, 'Configuration loaded')
-      }
+      // Initialize clients
+      await this.initializeClients()
 
-      // Step 3: Initialize components
-      const geminiClientResult = createGeminiClient(configResult.data)
-      if (!geminiClientResult.success) {
-        throw geminiClientResult.error
-      }
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 50, 100, 'Client initialized')
-      }
-
-      const imageGenerator = this.createImageGeneratorFn(geminiClientResult.data)
-      const fileManager = this.fileManager
-      const responseBuilder = this.responseBuilder
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 60, 100, 'Generating image...')
-      }
-
-      // Step 4: Handle input image if provided
+      // Handle input image if provided
       let inputImageData: string | undefined
-      let inputImageMimeType: string | undefined
-
       if (params.inputImagePath) {
-        const fs = await import('node:fs/promises')
-        const path = await import('node:path')
-
-        // Read the image file
         const imageBuffer = await fs.readFile(params.inputImagePath)
         inputImageData = imageBuffer.toString('base64')
-
-        // Determine MIME type from extension
-        const ext = path.extname(params.inputImagePath).toLowerCase()
-        const mimeTypes: Record<string, string> = {
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.png': 'image/png',
-          '.webp': 'image/webp',
-          '.gif': 'image/gif',
-          '.bmp': 'image/bmp',
-        }
-        inputImageMimeType = mimeTypes[ext] || 'image/jpeg'
       }
 
-      // Step 5: Generate image with all parameters
-      const generationResult = await imageGenerator.generateImage({
-        prompt: params.prompt,
-        ...(inputImageData !== undefined && { inputImage: inputImageData }),
-        ...(inputImageMimeType !== undefined && { inputImageMimeType: inputImageMimeType }),
-        ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
-        ...(params.maintainCharacterConsistency !== undefined && {
-          maintainCharacterConsistency: params.maintainCharacterConsistency,
-        }),
-        ...(params.useWorldKnowledge !== undefined && {
-          useWorldKnowledge: params.useWorldKnowledge,
-        }),
+      // Generate structured prompt using Gemini 2.0 Flash (unless skipped)
+      let structuredPrompt = params.prompt
+      if (!configResult.data.skipPromptEnhancement && this.structuredPromptGenerator) {
+        const features: FeatureFlags = {}
+        if (params.maintainCharacterConsistency !== undefined) {
+          features.maintainCharacterConsistency = params.maintainCharacterConsistency
+        }
+        if (params.blendImages !== undefined) {
+          features.blendImages = params.blendImages
+        }
+        if (params.useWorldKnowledge !== undefined) {
+          features.useWorldKnowledge = params.useWorldKnowledge
+        }
+
+        const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
+          params.prompt,
+          features,
+          inputImageData // Pass image data for context-aware prompt generation
+        )
+
+        if (promptResult.success) {
+          structuredPrompt = promptResult.data.structuredPrompt
+
+          this.logger.info('mcp-server', 'Structured prompt generated', {
+            originalLength: params.prompt.length,
+            structuredLength: structuredPrompt.length,
+            selectedPractices: promptResult.data.selectedPractices,
+          })
+        } else {
+          this.logger.warn('mcp-server', 'Using original prompt', {
+            error: promptResult.error.message,
+          })
+        }
+      } else if (configResult.data.skipPromptEnhancement) {
+        this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
+      }
+
+      // Generate image using Gemini 2.5 Flash Image Preview
+      if (!this.geminiClient) {
+        throw new Error('Gemini client not initialized')
+      }
+
+      const generationResult = await this.geminiClient.generateImage({
+        prompt: structuredPrompt,
+        ...(inputImageData && { inputImage: inputImageData }),
       })
+
       if (!generationResult.success) {
         throw generationResult.error
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 90, 100, 'Image generated, building response...')
+      // Save image file
+      const fileName = params.fileName || this.fileManager.generateFileName()
+      const outputPath = path.join(configResult.data.imageOutputDir, fileName)
+
+      const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
+      if (!sanitizedPath.success) {
+        throw sanitizedPath.error
       }
 
-      // Step 6: Save image file to IMAGE_OUTPUT_DIR with specified or auto-generated name
-      // Determine file path: use provided fileName or generate one, always in IMAGE_OUTPUT_DIR
-      const finalFileName = params.fileName || fileManager.generateFileName()
-      const rawOutputPath = path.join(configResult.data.imageOutputDir, finalFileName)
-
-      // Security check: Sanitize output path
-      const securityManager = this.securityManager
-      const pathSanitizationResult = securityManager.sanitizeFilePath(rawOutputPath)
-      if (!pathSanitizationResult.success) {
-        throw pathSanitizationResult.error
-      }
-      const outputPath = pathSanitizationResult.data
-
-      // Always save to file (no more base64 responses)
-      const saveResult = await fileManager.saveImage(generationResult.data.imageData, outputPath)
+      const saveResult = await this.fileManager.saveImage(
+        generationResult.data.imageData,
+        sanitizedPath.data
+      )
       if (!saveResult.success) {
         throw saveResult.error
       }
-      const savedFilePath = saveResult.data
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 95, 100, 'Image saved to file')
-      }
-
-      // Step 6: Build structured response
-      const response = responseBuilder.buildSuccessResponse(generationResult.data, savedFilePath)
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 100, 100, 'Image generation completed')
-      }
-
-      return response
+      // Build response
+      return this.responseBuilder.buildSuccessResponse(generationResult.data, saveResult.data)
     }, 'image-generation')
 
-    // Handle the result
     if (result.ok) {
       return result.value
     }
 
-    // Build error response using ResponseBuilder
-    const responseBuilder = this.responseBuilder
-    return responseBuilder.buildErrorResponse(result.error)
+    return this.responseBuilder.buildErrorResponse(result.error)
   }
 
   /**
@@ -375,10 +325,8 @@ export class MCPServerImpl {
       CallToolRequestSchema,
       async (request): Promise<CallToolResult> => {
         const { name, arguments: args } = request.params
-        const progressToken = request.params._meta?.progressToken
-        const result = await this.callTool(name, args, progressToken)
-        // Extract content array from McpToolResponse and preserve structuredContent
-        const response: { content: McpContent[]; structuredContent?: { [x: string]: unknown } } = {
+        const result = await this.callTool(name, args)
+        const response: CallToolResult = {
           content: result.content,
         }
         if (result.structuredContent) {
@@ -391,12 +339,8 @@ export class MCPServerImpl {
 }
 
 /**
- * Factory function (for backward compatibility)
+ * Factory function to create MCP server
  */
-export function createMCPServer(
-  config: Partial<MCPServerConfig> = {},
-  dependencies: MCPServerDependencies = {}
-) {
-  const mcpServer = new MCPServerImpl(config, dependencies)
-  return mcpServer
+export function createMCPServer(config: Partial<MCPServerConfig> = {}) {
+  return new MCPServerImpl(config)
 }

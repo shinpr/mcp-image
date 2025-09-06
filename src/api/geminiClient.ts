@@ -11,11 +11,6 @@ import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
 
 /**
- * URL pattern for automatic URL detection
- */
-const URL_PATTERN = /https?:\/\/(?:[-\w.])+(?:\.[a-zA-Z]{2,})+(?:\/[-\w._~:\/?#[\]@!$&'()*+,;=]*)?/g
-
-/**
  * Basic types for Gemini API responses
  */
 interface ContentPart {
@@ -41,14 +36,13 @@ interface GeminiResponse {
 
 interface GeminiClientInstance {
   models: {
-    generateContent(request: {
+    generateContent(params: {
       model: string
-      prompt?: string
+      contents: unknown[] | string
       systemInstruction?: string
-      config?: {
+      generationConfig?: {
         [key: string]: unknown
       }
-      contents?: unknown[]
     }): Promise<GeminiResponse>
   }
 }
@@ -66,24 +60,14 @@ export interface GeminiGenerationMetadata {
   mimeType: string
   timestamp: Date
   inputImageProvided: boolean
-  contextMethod: string
-  /** Features usage metadata */
-  features?: {
-    blendImages: boolean
-    maintainCharacterConsistency: boolean
-    useWorldKnowledge: boolean
-  }
 }
 
 /**
- * Parameters for Gemini API image generation (with processed data)
+ * Parameters for Gemini API image generation
  */
 export interface GeminiApiParams {
   prompt: string
-  inputImage?: Buffer
-  blendImages?: boolean
-  maintainCharacterConsistency?: boolean
-  useWorldKnowledge?: boolean
+  inputImage?: string
 }
 
 /**
@@ -115,55 +99,40 @@ class GeminiClientImpl implements GeminiClient {
     params: GeminiApiParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     try {
-      // Enhance prompt with structured parameters for better accuracy
-      let enhancedPrompt = params.prompt
+      // Prepare the request content with proper structure for multimodal input
+      const requestContent: unknown[] = []
 
-      // Convert MCP parameters to structured prompt instructions
-      if (params.maintainCharacterConsistency) {
-        enhancedPrompt +=
-          ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]'
-      }
-
-      if (params.blendImages) {
-        enhancedPrompt +=
-          ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]'
-      }
-
-      if (params.useWorldKnowledge) {
-        enhancedPrompt +=
-          ' [INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]'
-      }
-
-      // Prepare the request content with enhanced prompt
-      const requestContent: unknown[] = [enhancedPrompt]
-
-      // Add input image if provided
+      // Structure the contents properly for image generation/editing
       if (params.inputImage) {
+        // For image editing: provide image first, then text instructions
         requestContent.push({
-          inlineData: {
-            data: params.inputImage.toString('base64'),
-            mimeType: 'image/jpeg', // Assume JPEG for input images
-          },
+          parts: [
+            {
+              inlineData: {
+                data: params.inputImage,
+                mimeType: 'image/jpeg', // TODO: Dynamic MIME type support
+              },
+            },
+            {
+              text: params.prompt,
+            },
+          ],
+        })
+      } else {
+        // For text-to-image: provide only text prompt
+        requestContent.push({
+          parts: [
+            {
+              text: params.prompt,
+            },
+          ],
         })
       }
 
-      // Prepare API configuration
-      const config: {
-        [key: string]: unknown
-      } = {}
-
-      // URL detection is maintained for potential future use
-      // Note: urlContext tool has been removed as it's not supported by the model
-      this.detectUrls(params.prompt)
-
-      // Note: Feature parameters are now handled via prompt enhancement
-      // The Gemini API does not directly support these as config parameters
-
-      // Generate content using Gemini API with official URL Context support
+      // Generate content using Gemini API (@google/genai v1.17.0+)
       const response = await this.genai.models.generateContent({
         model: this.modelName,
         contents: requestContent,
-        config,
       })
 
       // Extract image data from response
@@ -227,27 +196,13 @@ class GeminiClientImpl implements GeminiClient {
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
-      // Create metadata with features information
+      // Create simplified metadata
       const metadata: GeminiGenerationMetadata = {
         model: this.modelName,
-        prompt: params.prompt, // Original prompt, not enhanced
+        prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
-        contextMethod: 'prompt_only',
-      }
-
-      // Add features usage information if any features are specified (including false)
-      if (
-        params.blendImages !== undefined ||
-        params.maintainCharacterConsistency !== undefined ||
-        params.useWorldKnowledge !== undefined
-      ) {
-        metadata.features = {
-          blendImages: params.blendImages || false,
-          maintainCharacterConsistency: params.maintainCharacterConsistency || false,
-          useWorldKnowledge: params.useWorldKnowledge || false,
-        }
       }
 
       return Ok({
@@ -337,15 +292,6 @@ class GeminiClientImpl implements GeminiClient {
       return typeof error.status === 'number' ? error.status : undefined
     }
     return undefined
-  }
-
-  /**
-   * Detect URLs in prompt for automatic URL Context activation
-   * @param prompt The prompt text to analyze
-   * @returns True if URLs are detected, false otherwise
-   */
-  private detectUrls(prompt: string): boolean {
-    return URL_PATTERN.test(prompt)
   }
 }
 

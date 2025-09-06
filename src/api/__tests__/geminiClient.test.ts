@@ -134,11 +134,12 @@ describe('geminiClient', () => {
       const client = clientResult.data
 
       const inputImageBuffer = Buffer.from('fake-input-image-data')
+      const inputImageBase64 = inputImageBuffer.toString('base64')
 
       // Act
       const result = await client.generateImage({
         prompt: 'Enhance this image',
-        inputImage: inputImageBuffer,
+        inputImage: inputImageBase64,
       })
 
       // Assert
@@ -153,15 +154,20 @@ describe('geminiClient', () => {
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
         model: 'gemini-2.5-flash-image-preview',
         contents: [
-          'Enhance this image',
           {
-            inlineData: {
-              data: inputImageBuffer.toString('base64'),
-              mimeType: 'image/jpeg',
-            },
+            parts: [
+              {
+                inlineData: {
+                  data: inputImageBase64,
+                  mimeType: 'image/jpeg',
+                },
+              },
+              {
+                text: 'Enhance this image',
+              },
+            ],
           },
         ],
-        config: {},
       })
     })
 
@@ -246,7 +252,7 @@ describe('geminiClient', () => {
       }
     })
 
-    it('should generate image with new feature parameters', async () => {
+    it('should generate image with feature parameters (without processing)', async () => {
       // Arrange
       const mockResponse = {
         response: {
@@ -275,7 +281,7 @@ describe('geminiClient', () => {
       if (!clientResult.success) return
       const client = clientResult.data
 
-      // Act
+      // Act - feature parameters are passed but not processed by GeminiClient
       const result = await client.generateImage({
         prompt: 'Generate character with blending',
         blendImages: true,
@@ -288,26 +294,26 @@ describe('geminiClient', () => {
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
-        expect(result.data.metadata.features).toEqual({
-          blendImages: true,
-          maintainCharacterConsistency: true,
-          useWorldKnowledge: false,
-        })
+        // Features are passed to the API but not stored in metadata
+        expect(result.data.metadata.prompt).toBe('Generate character with blending')
       }
 
-      // Verify API was called with enhanced prompt
+      // Verify API was called with original prompt (no enhancement at GeminiClient level)
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
         model: 'gemini-2.5-flash-image-preview',
         contents: [
-          'Generate character with blending' +
-            ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]' +
-            ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]',
+          {
+            parts: [
+              {
+                text: 'Generate character with blending',
+              },
+            ],
+          },
         ],
-        config: {},
       })
     })
 
-    it('should generate image with only some new features enabled', async () => {
+    it('should generate image with some features enabled (parameters tracked only)', async () => {
       // Arrange
       const mockResponse = {
         response: {
@@ -345,21 +351,23 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.features).toEqual({
-          blendImages: false,
-          maintainCharacterConsistency: false,
-          useWorldKnowledge: true,
-        })
+        // Features are passed to the API but not stored in metadata
+        expect(result.data.metadata.prompt).toBe('Generate factually accurate historical scene')
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
       }
 
-      // Verify API was called with enhanced prompt
+      // Verify API was called with original prompt (no processing at GeminiClient level)
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
         model: 'gemini-2.5-flash-image-preview',
         contents: [
-          'Generate factually accurate historical scene' +
-            ' [INSTRUCTION: Apply accurate real-world knowledge including historical facts, geographical accuracy, cultural contexts, and realistic depictions]',
+          {
+            parts: [
+              {
+                text: 'Generate factually accurate historical scene',
+              },
+            ],
+          },
         ],
-        config: {},
       })
     })
 
@@ -400,18 +408,27 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.features).toBeUndefined()
+        // Features not specified - standard metadata only
+        expect(result.data.metadata.prompt).toBe('Generate simple landscape')
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
       }
 
       // Verify API was called without generation config
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
         model: 'gemini-2.5-flash-image-preview',
-        contents: ['Generate simple landscape'],
-        config: {},
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Generate simple landscape',
+              },
+            ],
+          },
+        ],
       })
     })
 
-    it('should generate image with new features and input image', async () => {
+    it('should generate image with features and input image (parameters tracked only)', async () => {
       // Arrange
       const mockResponse = {
         response: {
@@ -441,11 +458,12 @@ describe('geminiClient', () => {
       const client = clientResult.data
 
       const inputBuffer = Buffer.from('test-image-data')
+      const inputBase64 = inputBuffer.toString('base64')
 
       // Act
       const result = await client.generateImage({
         prompt: 'Blend this character with fantasy elements',
-        inputImage: inputBuffer,
+        inputImage: inputBase64,
         blendImages: true,
         maintainCharacterConsistency: true,
       })
@@ -454,28 +472,29 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.metadata.inputImageProvided).toBe(true)
-        expect(result.data.metadata.features).toEqual({
-          blendImages: true,
-          maintainCharacterConsistency: true,
-          useWorldKnowledge: false,
-        })
+        // Features are passed to the API but not stored in metadata
+        expect(result.data.metadata.prompt).toBe('Blend this character with fantasy elements')
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
       }
 
-      // Verify API was called with input image and enhanced prompt
+      // Verify API was called with input image and original prompt (no processing at GeminiClient level)
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
         model: 'gemini-2.5-flash-image-preview',
         contents: [
-          'Blend this character with fantasy elements' +
-            ' [INSTRUCTION: Maintain exact character appearance, including facial features, hairstyle, clothing, and all physical characteristics consistent throughout the image]' +
-            ' [INSTRUCTION: Seamlessly blend multiple visual elements into a natural, cohesive composition with smooth transitions]',
           {
-            inlineData: {
-              data: inputBuffer.toString('base64'),
-              mimeType: 'image/jpeg',
-            },
+            parts: [
+              {
+                inlineData: {
+                  data: inputBase64,
+                  mimeType: 'image/jpeg',
+                },
+              },
+              {
+                text: 'Blend this character with fantasy elements',
+              },
+            ],
           },
         ],
-        config: {},
       })
     })
   })

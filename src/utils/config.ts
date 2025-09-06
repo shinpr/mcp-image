@@ -14,6 +14,7 @@ export interface Config {
   geminiApiKey: string
   imageOutputDir: string
   apiTimeout: number
+  skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
 }
 
 /**
@@ -81,6 +82,7 @@ export function getConfig(): Result<Config, ConfigError> {
     geminiApiKey: process.env['GEMINI_API_KEY'] || '',
     imageOutputDir: process.env['IMAGE_OUTPUT_DIR'] || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
+    skipPromptEnhancement: process.env['SKIP_PROMPT_ENHANCEMENT'] === 'true',
   }
 
   return validateConfig(config)
