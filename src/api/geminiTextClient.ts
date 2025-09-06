@@ -52,16 +52,22 @@ const DEFAULT_GENERATION_CONFIG = {
 } as const
 
 /**
- * Interface for Gemini AI client instance
+ * Interface for Gemini AI client instance (@google/genai v1.17.0+)
  */
 interface GeminiAIInstance {
-  getGenerativeModel(config: { model: string; systemInstruction?: string }): {
-    generateContent(
-      prompt: string | unknown[],
-      options?: unknown
-    ): Promise<{
-      response: {
-        text(): string
+  models: {
+    generateContent(params: {
+      model: string
+      contents: string | Array<{ role?: string; parts: Array<{ text?: string }> }>
+      systemInstruction?: string
+      generationConfig?: {
+        temperature?: number
+        maxOutputTokens?: number
+      }
+    }): Promise<{
+      text: string
+      response?: {
+        text?: () => string
         candidates?: Array<{
           content: {
             parts: Array<{ text: string }>
@@ -115,23 +121,16 @@ class GeminiTextClientImpl implements GeminiTextClient {
    */
   private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
-      // Create generative model with optional system instruction
-      const modelConfig: { model: string; systemInstruction?: string } = {
-        model: this.modelName,
-      }
-
-      if (config.systemInstruction) {
-        modelConfig.systemInstruction = config.systemInstruction
-      }
-
-      const model = this.genai.getGenerativeModel(modelConfig)
-
       // Generate content with timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('API call timeout')), config.timeout || 15000)
       })
 
-      const apiCall = model.generateContent(prompt, {
+      // Use the updated API structure for @google/genai v1.17.0+
+      const apiCall = this.genai.models.generateContent({
+        model: this.modelName,
+        contents: prompt,
+        ...(config.systemInstruction && { systemInstruction: config.systemInstruction }),
         generationConfig: {
           temperature: config.temperature || 0.7,
           maxOutputTokens: config.maxTokens || 8192,
@@ -140,8 +139,17 @@ class GeminiTextClientImpl implements GeminiTextClient {
 
       const response = await Promise.race([apiCall, timeoutPromise])
 
-      // Extract text from response - Fixed API structure
-      const responseText = response.response.text()
+      // Extract text from response - handling both possible response structures
+      let responseText: string
+      if (typeof response.text === 'string') {
+        responseText = response.text
+      } else if (response.response?.text && typeof response.response.text === 'function') {
+        responseText = response.response.text()
+      } else if (response.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
+        responseText = response.response.candidates[0].content.parts[0].text
+      } else {
+        throw new Error('Unable to extract text from API response')
+      }
 
       if (!responseText || responseText.trim().length === 0) {
         throw new Error('Empty response from Gemini API')
@@ -158,20 +166,17 @@ class GeminiTextClientImpl implements GeminiTextClient {
 
   async validateConnection(): Promise<Result<boolean, GeminiAPIError | NetworkError>> {
     try {
-      // Validate by attempting to create a model instance
-      const model = this.genai.getGenerativeModel({ model: this.modelName })
-
-      // For invalid keys, this will fail during actual API calls
-      // For now, just validate that we can create the model instance
-      if (!model) {
+      // Validate by checking if the models object exists
+      if (!this.genai.models) {
         return Err(
           new GeminiAPIError(
-            'Failed to create Gemini model instance',
+            'Failed to access Gemini models',
             'Check your GEMINI_API_KEY configuration'
           )
         )
       }
 
+      // API key validation happens during actual API calls
       return Ok(true)
     } catch (error) {
       return this.handleError(error, 'connection validation')

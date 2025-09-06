@@ -36,14 +36,13 @@ interface GeminiResponse {
 
 interface GeminiClientInstance {
   models: {
-    generateContent(request: {
+    generateContent(params: {
       model: string
-      prompt?: string
+      contents: unknown[] | string
       systemInstruction?: string
-      config?: {
+      generationConfig?: {
         [key: string]: unknown
       }
-      contents?: unknown[]
     }): Promise<GeminiResponse>
   }
 }
@@ -130,7 +129,7 @@ class GeminiClientImpl implements GeminiClient {
         })
       }
 
-      // Generate content using Gemini API
+      // Generate content using Gemini API (@google/genai v1.17.0+)
       const response = await this.genai.models.generateContent({
         model: this.modelName,
         contents: requestContent,
@@ -206,11 +205,13 @@ class GeminiClientImpl implements GeminiClient {
         inputImageProvided: !!params.inputImage,
       }
 
+
       return Ok({
         imageData: imageBuffer,
         metadata,
       })
     } catch (error) {
+
       return this.handleError(error, params.prompt)
     }
   }

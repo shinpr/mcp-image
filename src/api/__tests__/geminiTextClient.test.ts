@@ -11,20 +11,18 @@ import type { GeminiTextClient, GenerationConfig } from '../geminiTextClient'
 
 // Mock GoogleGenAI external dependency
 const mockGenerateContent = vi.fn()
-const mockGetGenerativeModel = vi.fn()
 
 vi.mock('@google/genai', () => ({
   GoogleGenAI: vi.fn().mockImplementation(() => ({
-    getGenerativeModel: mockGetGenerativeModel,
+    models: {
+      generateContent: mockGenerateContent,
+    },
   })),
 }))
 
-// Setup default mock behavior
-mockGetGenerativeModel.mockReturnValue({
-  generateContent: mockGenerateContent,
-})
-
-mockGenerateContent.mockImplementation((prompt: string) => {
+mockGenerateContent.mockImplementation((params: { contents: string }) => {
+  const prompt = typeof params.contents === 'string' ? params.contents : ''
+  
   // Handle error scenarios based on prompt content
   if (prompt.includes('network error')) {
     throw new Error('ECONNRESET Network error')
@@ -39,8 +37,9 @@ mockGenerateContent.mockImplementation((prompt: string) => {
     throw new Error('Service temporarily unavailable')
   }
 
-  // Default successful response
+  // Default successful response matching the API v1.17.0+ structure
   return Promise.resolve({
+    text: 'Enhanced: test prompt with professional lighting, 85mm lens, dramatic composition',
     response: {
       text: () =>
         'Enhanced: test prompt with professional lighting, 85mm lens, dramatic composition',
@@ -55,9 +54,6 @@ describe('GeminiTextClient', () => {
   beforeEach(() => {
     // Reset mocks
     vi.clearAllMocks()
-    mockGetGenerativeModel.mockReturnValue({
-      generateContent: mockGenerateContent,
-    })
 
     config = {
       geminiApiKey: 'test-api-key',

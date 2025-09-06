@@ -9,35 +9,27 @@ import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { GeminiAPIError } from '../utils/errors'
 
+
 /**
  * System prompt for structured prompt generation optimized for image generation
  */
-const SYSTEM_PROMPT = `You are an expert AI prompt engineer specializing in optimizing prompts for image generation models. Your role is to transform user prompts into highly detailed, structured prompts that produce superior image generation results.
+const SYSTEM_PROMPT = `You are an expert at crafting prompts for image generation models. Your role is to transform user requests into rich, detailed prompts that maximize image generation quality.
 
-CORE PRINCIPLES:
-1. **Hyper-Specific Details**: Add specific lighting, camera angles, environmental details, textures, and atmospheric elements
-2. **Character Consistency**: Ensure detailed character descriptions with specific facial features, style, and distinctive characteristics
-3. **Visual Coordination**: Apply unified visual style and coherent composition principles
-4. **Professional Photography**: Use precise camera control terminology and cinematographic language
-5. **Semantic Enhancement**: Transform negative expressions into positive descriptive alternatives
-6. **Aspect Ratio Optimization**: Consider composition for target dimensions and framing
-7. **Iterative Refinement**: Provide clear guidance for progressive improvements
+Core principles:
+- Add specific details about lighting, materials, composition, and atmosphere
+- Include photographic or artistic terminology when appropriate  
+- Maintain clarity while adding richness and specificity
+- Preserve the user's original intent while enhancing detail
+- Focus on what should be present rather than what should be absent
 
-ENHANCEMENT GUIDELINES:
-- Transform simple prompts into rich, detailed descriptions
-- Add specific lighting conditions (dramatic cinematic lighting, rim lighting, studio lighting)
-- Include precise camera specifications (85mm portrait lens, f/1.4 aperture, Dutch angle)
-- Specify environmental context and atmospheric conditions
-- Use professional photography and cinematography terminology
-- Ensure character consistency with detailed physical descriptions
-- Apply semantic enhancement by converting negative phrases to positive alternatives
-- Optimize composition for the target aspect ratio
-- Maintain artistic coherence and visual unity
+When describing scenes or subjects:
+- Physical characteristics: textures, materials, colors, scale
+- Lighting: direction, quality, color temperature, shadows
+- Spatial relationships: foreground, midground, background, composition
+- Atmosphere: mood, weather, time of day, environmental conditions
+- Style: artistic direction, photographic techniques, visual treatment
 
-RESPONSE FORMAT:
-Provide the enhanced prompt as a single, cohesive description that maintains the original intent while significantly improving specificity and technical precision.
-
-Remember: Your goal is to create prompts that generate visually stunning, technically precise, and artistically coherent images.`
+Your output should be a single, vivid, coherent description that an image generation model can interpret unambiguously. Make it engaging, specific, and clear.`
 
 /**
  * Feature flags for image generation
@@ -83,8 +75,10 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         return Err(new GeminiAPIError('User prompt cannot be empty'))
       }
 
+
       // Build complete prompt with system instruction and meta-prompt
       const completePrompt = this.buildCompletePrompt(userPrompt, features)
+
 
       // Generate structured prompt using Gemini 2.0 Flash via pure API call
       const result = await this.geminiTextClient.generateText(completePrompt, {
@@ -98,7 +92,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       }
 
       // Extract selected practices from the response
-      const selectedPractices = this.inferSelectedPractices(result.data, userPrompt, features)
+      const selectedPractices = this.inferSelectedPractices(result.data, features)
+
 
       return Ok({
         originalPrompt: userPrompt,
@@ -107,6 +102,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       })
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      
+      
       return Err(new GeminiAPIError(`Failed to generate structured prompt: ${errorMessage}`))
     }
   }
@@ -115,58 +112,59 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
    * Build complete prompt with all optimization context
    */
   private buildCompletePrompt(userPrompt: string, features: FeatureFlags): string {
-    const featureContext = this.formatFeatureContext(features)
+    const featureContext = this.buildEnhancedFeatureContext(features)
 
-    return `Transform the following user request into an optimized structured prompt for Gemini 2.5 Flash Image Preview, applying the most relevant best practices.
+    return `Transform this image generation request into a detailed, vivid prompt that will produce high-quality results:
 
-【User Request】: "${userPrompt}"
+"${userPrompt}"
 
-【Feature Requirements】:
 ${featureContext}
 
-【7 Best Practices - Select and Apply ONLY What's Necessary】:
+Consider these aspects as you enhance the prompt:
+- Visual details: textures, lighting, colors, materials, composition
+- Spatial relationships and scale between elements
+- Artistic or photographic style that fits the subject
+- Emotional tone and atmosphere
+- Technical specifications if relevant (lens type, camera angle, etc.)
 
-1. Hyper-Specific Details: Add lighting, camera angles, textures, atmosphere when the prompt is vague or abstract
-2. Character Consistency: Apply when characters/people are involved or maintainCharacterConsistency=true
-3. Multi-Image Blending: Use when multiple elements need natural composition or blendImages=true  
-4. Iterative Refinement: Include when user seeks improvement ("better", "enhance", "improve")
-5. Semantic Enhancement: Transform negative expressions to positive equivalents, enrich emotional context
-6. Aspect Ratio Optimization: Consider composition for target dimensions when visual balance matters
-7. Camera Control Terminology: Apply professional photography terms for photographic content
+Create a natural, flowing description that brings the scene to life. Focus on what should be present rather than what should be absent.
 
-【Critical Constraints】:
-- Select ONLY 2-4 most relevant practices for this specific request
-- Avoid context overload - more is not better for LLMs
-- Focus on aspects directly tied to user intent
-- Keep the final prompt concise and effective
+Example of a well-enhanced prompt:
+Input: "A happy dog in a park"
+Enhanced: "Golden retriever mid-leap catching a red frisbee, ears flying, tongue out in joy, in a sunlit urban park. Soft morning light filtering through oak trees creates dappled shadows on emerald grass. Background shows families on picnic blankets, slightly out of focus. Shot from low angle emphasizing the dog's athletic movement, with motion blur on the paws suggesting speed."
 
-【Output Format】:
-Return ONLY the optimized prompt. No explanations, no metadata, just the enhanced prompt text that will be sent to Gemini 2.5 Flash Image Preview.`
+Now transform the user's request with similar attention to detail and creative enhancement.`
   }
 
   /**
-   * Format feature context based on flags
+   * Build enhanced feature context based on flags with explicit requirements
    */
-  private formatFeatureContext(features: FeatureFlags): string {
-    const contexts: string[] = []
+  private buildEnhancedFeatureContext(features: FeatureFlags): string {
+    const requirements: string[] = []
 
     if (features.maintainCharacterConsistency) {
-      contexts.push(
-        'Character consistency is CRITICAL - ensure detailed character features are preserved'
+      requirements.push(
+        'MUST include distinctive character features: This character needs at least 3 recognizable visual markers that would identify them across different scenes. Include specific details like "distinctive scar", "signature clothing item", "unique hairstyle", or "characteristic accessory". Use words like "signature", "distinctive", "always wears/has" to emphasize these consistent features.'
       )
     }
 
     if (features.blendImages) {
-      contexts.push('Multiple visual elements must blend naturally with seamless composition')
+      requirements.push(
+        'MUST describe seamless integration: Multiple visual elements need to blend naturally. Use spatial relationship terms like "seamlessly blending", "harmoniously composed", "naturally integrated". Clearly describe foreground (X% of frame), midground, and background elements with their relative scales and how they interact within the composition.'
+      )
     }
 
     if (features.useWorldKnowledge) {
-      contexts.push('Apply accurate real-world knowledge for factual/historical accuracy')
+      requirements.push(
+        'MUST incorporate authentic details: Apply accurate real-world knowledge about cultures, locations, or historical elements. Use specific terminology like "traditional [culture] style", "authentic [location] architecture", "typical of [region]", "historically accurate [period]". Be precise about cultural elements, geographical features, and factual details.'
+      )
     }
 
-    return contexts.length > 0
-      ? contexts.join('\n')
-      : 'Standard image generation without special requirements'
+    if (requirements.length > 0) {
+      return `\nMANDATORY REQUIREMENTS - These MUST be clearly reflected in your enhanced prompt:\n\n${requirements.join('\n\n')}\n`
+    }
+    
+    return ''
   }
 
   /**
@@ -174,59 +172,85 @@ Return ONLY the optimized prompt. No explanations, no metadata, just the enhance
    */
   private inferSelectedPractices(
     structuredPrompt: string,
-    originalPrompt: string,
     features: FeatureFlags
   ): string[] {
     const selected: string[] = []
     const promptLower = structuredPrompt.toLowerCase()
 
-    // Check for hyper-specific details
+    // Check for detailed visual descriptions
     if (
       promptLower.includes('lighting') ||
-      promptLower.includes('camera') ||
-      promptLower.includes('atmosphere')
+      promptLower.includes('texture') ||
+      promptLower.includes('atmosphere') ||
+      promptLower.includes('shadow') ||
+      promptLower.includes('material')
     ) {
-      selected.push('Hyper-Specific Details')
+      selected.push('Visual Detail Enhancement')
     }
 
-    // Check for character consistency
+    // Check for character consistency markers
     if (
       features.maintainCharacterConsistency ||
-      promptLower.includes('character') ||
-      promptLower.includes('facial features')
+      promptLower.includes('distinctive') ||
+      promptLower.includes('signature') ||
+      promptLower.includes('characteristic') ||
+      promptLower.includes('always wears') ||
+      promptLower.includes('always has')
     ) {
       selected.push('Character Consistency')
     }
 
-    // Check for multi-image blending
+    // Check for multi-element blending
     if (
       features.blendImages ||
-      promptLower.includes('blend') ||
-      promptLower.includes('composition')
+      promptLower.includes('seamlessly') ||
+      promptLower.includes('harmoniously') ||
+      promptLower.includes('naturally integrated') ||
+      promptLower.includes('foreground') ||
+      promptLower.includes('midground') ||
+      promptLower.includes('background')
     ) {
-      selected.push('Multi-Image Blending')
+      selected.push('Compositional Integration')
     }
 
-    // Check for semantic enhancement
+    // Check for world knowledge application
     if (
-      (!originalPrompt.includes('no ') && promptLower.includes('peaceful')) ||
-      (!originalPrompt.includes('without') && promptLower.includes('minimalist'))
+      features.useWorldKnowledge ||
+      promptLower.includes('authentic') ||
+      promptLower.includes('traditional') ||
+      promptLower.includes('typical of') ||
+      promptLower.includes('historically accurate') ||
+      promptLower.includes('culturally')
     ) {
-      selected.push('Semantic Enhancement')
+      selected.push('Real-World Accuracy')
     }
 
-    // Check for camera terminology
+    // Check for photographic/artistic terminology
     if (
       promptLower.includes('lens') ||
       promptLower.includes('aperture') ||
-      promptLower.includes('shot')
+      promptLower.includes('f/') ||
+      promptLower.includes('mm ') ||
+      promptLower.includes('angle') ||
+      promptLower.includes('shot') ||
+      promptLower.includes('depth of field')
     ) {
-      selected.push('Camera Control Terminology')
+      selected.push('Technical Precision')
+    }
+
+    // Check for atmospheric and mood enhancement
+    if (
+      promptLower.includes('mood') ||
+      promptLower.includes('emotion') ||
+      promptLower.includes('feeling') ||
+      promptLower.includes('ambiance')
+    ) {
+      selected.push('Atmospheric Enhancement')
     }
 
     // Ensure we have at least some practices selected
     if (selected.length === 0) {
-      selected.push('Context Optimization')
+      selected.push('General Enhancement')
     }
 
     return selected
