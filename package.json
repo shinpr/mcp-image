@@ -48,8 +48,8 @@
     "test:safe": "npm test && npm run cleanup:processes"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@google/genai": "^1.17.0"
+    "@google/genai": "^1.17.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

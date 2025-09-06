@@ -4,13 +4,13 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
+import type { GeneratedImageResult } from '../../api/geminiClient'
 import {
   FileOperationError,
   GeminiAPIError,
   InputValidationError,
   NetworkError,
 } from '../../utils/errors'
-import type { GenerationResult } from '../imageGenerator'
 import { type ResponseBuilder, createResponseBuilder } from '../responseBuilder'
 
 describe('ResponseBuilder', () => {
@@ -23,13 +23,14 @@ describe('ResponseBuilder', () => {
   describe('buildSuccessResponse', () => {
     it('should create file URI structured content response when filePath is provided', () => {
       const testImageData = Buffer.from('fake-image-data')
-      const generationResult: GenerationResult = {
+      const generationResult: GeneratedImageResult = {
         imageData: testImageData,
         metadata: {
           model: 'gemini-2.5-flash-image-preview',
-          processingTime: 1250,
-          contextMethod: 'prompt_only',
-          timestamp: '2025-08-28T12:00:00Z',
+          prompt: 'test prompt',
+          mimeType: 'image/png',
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
         },
       }
       const testFilePath = '/path/to/generated-image.png'
@@ -45,18 +46,24 @@ describe('ResponseBuilder', () => {
       expect(contentData.resource.uri).toBe('file:///path/to/generated-image.png')
       expect(contentData.resource.name).toBe('generated-image.png')
       expect(contentData.resource.mimeType).toBe('image/png')
-      expect(contentData.metadata).toEqual(generationResult.metadata)
+      expect(contentData.metadata).toEqual({
+        model: generationResult.metadata.model,
+        processingTime: 0,
+        contextMethod: 'structured_prompt',
+        timestamp: generationResult.metadata.timestamp.toISOString(),
+      })
     })
 
     it('should handle different file extensions for MIME type detection', () => {
       const testImageData = Buffer.from('fake-image-data')
-      const generationResult: GenerationResult = {
+      const generationResult: GeneratedImageResult = {
         imageData: testImageData,
         metadata: {
           model: 'gemini-2.5-flash-image-preview',
-          processingTime: 1250,
-          contextMethod: 'prompt_only',
-          timestamp: '2025-08-28T12:00:00Z',
+          prompt: 'test prompt',
+          mimeType: 'image/png',
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
         },
       }
 

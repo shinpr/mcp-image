@@ -1,7 +1,7 @@
 /**
- * Gemini Text Client for structured prompt generation using Gemini 2.0 Flash
- * Specialized for prompt optimization and best practices application
- * Integrates with Google AI Studio for text generation tasks
+ * Gemini Text Client for text generation using Gemini 2.0 Flash
+ * Pure API client for interacting with Google AI Studio
+ * Handles text generation without any prompt optimization logic
  */
 
 import { GoogleGenAI } from '@google/genai'
@@ -11,49 +11,29 @@ import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
 
 /**
- * Best practices mode for prompt generation
+ * Options for text generation
  */
-export type BestPracticesMode = 'basic' | 'advanced' | 'complete'
-
-/**
- * Options for prompt generation
- */
-export interface PromptOptions {
+export interface GenerationConfig {
   temperature?: number
   maxTokens?: number
   timeout?: number
-  bestPracticesMode?: BestPracticesMode
+  systemInstruction?: string
 }
 
 /**
- * Optimized prompt result with metadata
- */
-export interface OptimizedPrompt {
-  text: string
-  originalPrompt: string
-  appliedPractices: string[]
-  metadata: {
-    model: string
-    processingTime: number
-    timestamp: Date
-    enhancementLevel: BestPracticesMode
-  }
-}
-
-/**
- * Interface for Gemini Text Client specialized for prompt generation
+ * Interface for Gemini Text Client - pure API client
  */
 export interface GeminiTextClient {
   /**
-   * Generate a structured prompt optimized for image generation
-   * @param originalPrompt The original prompt to optimize
-   * @param options Optional parameters for generation
-   * @returns Result containing optimized prompt or error
+   * Generate text using Gemini 2.0 Flash API
+   * @param prompt The prompt to send to the API
+   * @param config Optional configuration for generation
+   * @returns Result containing generated text or error
    */
-  generateStructuredPrompt(
-    originalPrompt: string,
-    options?: PromptOptions
-  ): Promise<Result<OptimizedPrompt, GeminiAPIError | NetworkError>>
+  generateText(
+    prompt: string,
+    config?: GenerationConfig
+  ): Promise<Result<string, GeminiAPIError | NetworkError>>
 
   /**
    * Validate connection to Gemini 2.0 Flash API
@@ -63,13 +43,12 @@ export interface GeminiTextClient {
 }
 
 /**
- * Default configuration for prompt generation
+ * Default configuration for text generation
  */
-const DEFAULT_PROMPT_CONFIG = {
-  temperature: 0.3,
-  maxOutputTokens: 8192,
+const DEFAULT_GENERATION_CONFIG = {
+  temperature: 0.7,
+  maxTokens: 8192,
   timeout: 15000,
-  bestPracticesMode: 'complete' as BestPracticesMode,
 } as const
 
 /**
@@ -94,37 +73,7 @@ interface GeminiAIInstance {
 }
 
 /**
- * System prompt for structured prompt generation optimized for image generation
- */
-const SYSTEM_PROMPT = `You are an expert AI prompt engineer specializing in optimizing prompts for image generation models. Your role is to transform user prompts into highly detailed, structured prompts that produce superior image generation results.
-
-CORE PRINCIPLES:
-1. **Hyper-Specific Details**: Add specific lighting, camera angles, environmental details, textures, and atmospheric elements
-2. **Character Consistency**: Ensure detailed character descriptions with specific facial features, style, and distinctive characteristics
-3. **Visual Coordination**: Apply unified visual style and coherent composition principles
-4. **Professional Photography**: Use precise camera control terminology and cinematographic language
-5. **Semantic Enhancement**: Transform negative expressions into positive descriptive alternatives
-6. **Aspect Ratio Optimization**: Consider composition for target dimensions and framing
-7. **Iterative Refinement**: Provide clear guidance for progressive improvements
-
-ENHANCEMENT GUIDELINES:
-- Transform simple prompts into rich, detailed descriptions
-- Add specific lighting conditions (dramatic cinematic lighting, rim lighting, studio lighting)
-- Include precise camera specifications (85mm portrait lens, f/1.4 aperture, Dutch angle)
-- Specify environmental context and atmospheric conditions
-- Use professional photography and cinematography terminology
-- Ensure character consistency with detailed physical descriptions
-- Apply semantic enhancement by converting negative phrases to positive alternatives
-- Optimize composition for the target aspect ratio
-- Maintain artistic coherence and visual unity
-
-RESPONSE FORMAT:
-Provide the enhanced prompt as a single, cohesive description that maintains the original intent while significantly improving specificity and technical precision.
-
-Remember: Your goal is to create prompts that generate visually stunning, technically precise, and artistically coherent images.`
-
-/**
- * Implementation of Gemini Text Client for prompt generation
+ * Implementation of Gemini Text Client - pure API client
  */
 class GeminiTextClientImpl implements GeminiTextClient {
   private readonly modelName = 'gemini-2.0-flash'
@@ -136,96 +85,63 @@ class GeminiTextClientImpl implements GeminiTextClient {
     }) as unknown as GeminiAIInstance
   }
 
-  async generateStructuredPrompt(
-    originalPrompt: string,
-    options: PromptOptions = {}
-  ): Promise<Result<OptimizedPrompt, GeminiAPIError | NetworkError>> {
-    const startTime = Date.now()
-
+  async generateText(
+    prompt: string,
+    config: GenerationConfig = {}
+  ): Promise<Result<string, GeminiAPIError | NetworkError>> {
     // Merge with default configuration
-    const mergedOptions = {
-      ...DEFAULT_PROMPT_CONFIG,
-      ...options,
+    const mergedConfig = {
+      ...DEFAULT_GENERATION_CONFIG,
+      ...config,
     }
 
     // Validate input
-    const validationResult = this.validatePromptInput(originalPrompt)
+    const validationResult = this.validatePromptInput(prompt)
     if (!validationResult.success) {
       return validationResult
     }
 
     try {
-      // Determine enhancement level
-      const enhancementLevel = this.determineEnhancementLevel(
-        originalPrompt,
-        mergedOptions.bestPracticesMode
-      )
-
-      // Call actual Gemini 2.0-flash API for prompt enhancement
-      const structuredPrompt = await this.callGeminiAPI(
-        originalPrompt,
-        enhancementLevel,
-        mergedOptions
-      )
-
-      // Get applied practices based on enhancement level
-      const appliedPractices = this.getAppliedPractices(enhancementLevel)
-
-      const endTime = Date.now()
-      const actualProcessingTime = endTime - startTime
-
-      const result: OptimizedPrompt = {
-        text: structuredPrompt,
-        originalPrompt,
-        appliedPractices,
-        metadata: {
-          model: this.modelName,
-          processingTime: actualProcessingTime,
-          timestamp: new Date(),
-          enhancementLevel,
-        },
-      }
-
-      return Ok(result)
+      // Call Gemini API
+      const generatedText = await this.callGeminiAPI(prompt, mergedConfig)
+      return Ok(generatedText)
     } catch (error) {
-      return this.handleError(error, originalPrompt)
+      return this.handleError(error, 'text generation')
     }
   }
 
   /**
-   * Call Gemini 2.0-flash API to generate structured prompt
+   * Call Gemini 2.0-flash API to generate text
    */
-  private async callGeminiAPI(
-    originalPrompt: string,
-    enhancementLevel: BestPracticesMode,
-    options: PromptOptions
-  ): Promise<string> {
+  private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
-      // Create generative model with system instruction
-      const model = this.genai.getGenerativeModel({
+      // Create generative model with optional system instruction
+      const modelConfig: { model: string; systemInstruction?: string } = {
         model: this.modelName,
-        systemInstruction: SYSTEM_PROMPT,
-      })
+      }
 
-      // Prepare user prompt with enhancement level context
-      const userPrompt = this.prepareUserPrompt(originalPrompt, enhancementLevel, options)
+      if (config.systemInstruction) {
+        modelConfig.systemInstruction = config.systemInstruction
+      }
+
+      const model = this.genai.getGenerativeModel(modelConfig)
 
       // Generate content with timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('API call timeout')), options.timeout || 15000)
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('API call timeout')), config.timeout || 15000)
       })
 
-      const apiCall = model.generateContent(userPrompt, {
+      const apiCall = model.generateContent(prompt, {
         generationConfig: {
-          temperature: options.temperature || 0.3,
-          maxOutputTokens: options.maxTokens || 8192,
+          temperature: config.temperature || 0.7,
+          maxOutputTokens: config.maxTokens || 8192,
         },
       })
 
       const response = await Promise.race([apiCall, timeoutPromise])
 
-      // Extract text from response with proper typing
-      const responseText = (response as { response: { text(): string } }).response.text()
+      // Extract text from response - Fixed API structure
+      const responseText = response.response.text()
 
       if (!responseText || responseText.trim().length === 0) {
         throw new Error('Empty response from Gemini API')
@@ -238,38 +154,6 @@ class GeminiTextClientImpl implements GeminiTextClient {
         `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       )
     }
-  }
-
-  /**
-   * Prepare user prompt with enhancement level context
-   */
-  private prepareUserPrompt(
-    prompt: string,
-    level: BestPracticesMode,
-    options: PromptOptions
-  ): string {
-    const levelInstructions = {
-      basic: 'Apply basic enhancements with improved specificity and composition guidance.',
-      advanced:
-        'Apply advanced enhancements including character consistency, context purpose, and professional techniques.',
-      complete:
-        'Apply complete optimization with all best practices: hyper-specific details, character consistency, semantic enhancement, aspect ratio optimization, and precise cinematographic control.',
-    }
-
-    let userPrompt = `Enhancement Level: ${level.toUpperCase()}
-${levelInstructions[level]}
-
-Original Prompt: "${prompt}"
-
-Please enhance this prompt for optimal image generation results.`
-
-    // Add specific feature instructions if provided
-    if (options.bestPracticesMode === 'complete') {
-      userPrompt +=
-        '\n\nEnsure the enhanced prompt includes specific camera angles, lighting details, environmental context, and professional photography terminology.'
-    }
-
-    return userPrompt
   }
 
   async validateConnection(): Promise<Result<boolean, GeminiAPIError | NetworkError>> {
@@ -292,35 +176,6 @@ Please enhance this prompt for optimal image generation results.`
     } catch (error) {
       return this.handleError(error, 'connection validation')
     }
-  }
-
-  private determineEnhancementLevel(prompt: string, mode?: BestPracticesMode): BestPracticesMode {
-    if (mode) return mode
-
-    if (prompt.length < 10) return 'basic'
-    if (prompt.includes('character') || prompt.includes('detailed')) return 'advanced'
-    return 'complete'
-  }
-
-  private getAppliedPractices(level: BestPracticesMode): string[] {
-    const practices: string[] = []
-
-    switch (level) {
-      case 'complete':
-        practices.push('camera-control', 'aspect-ratio', 'semantic-negatives')
-        practices.push('character-consistency', 'context-intent', 'iterate-refine')
-        practices.push('hyper-specific')
-        break
-      case 'advanced':
-        practices.push('character-consistency', 'context-intent', 'iterate-refine')
-        practices.push('hyper-specific')
-        break
-      case 'basic':
-        practices.push('hyper-specific')
-        break
-    }
-
-    return practices
   }
 
   private handleError(

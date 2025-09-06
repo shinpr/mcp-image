@@ -1,9 +1,9 @@
 /**
  * MCP Server implementation
- * Basic structure of MCP server using @modelcontextprotocol/sdk
+ * Simplified architecture with direct Gemini integration
  */
 
-// External libraries
+import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import {
@@ -13,41 +13,27 @@ import {
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
 
-// Types and interfaces
-import type { GenerateImageParams, MCPServerConfig, McpContent } from '../types/mcp'
-import type {
-  MCPOrchestrationConfig,
-  MCPOrchestrationResult,
-  OrchestrationStatus,
-} from '../types/mcpOrchestrationTypes'
-import { DEFAULT_ORCHESTRATION_CONFIG } from '../types/mcpOrchestrationTypes'
+// Types
+import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
 
-import { type BestPracticesEngine, BestPracticesEngineImpl } from '../business/bestPracticesEngine'
 // Business logic
 import { type FileManager, createFileManager } from '../business/fileManager'
-import { type ImageGenerator, createImageGenerator } from '../business/imageGenerator'
 import { validateGenerateImageParams } from '../business/inputValidator'
-import { type POMLTemplateEngine, POMLTemplateEngineImpl } from '../business/pomlTemplateEngine'
-import {
-  type OrchestrationOptions,
-  type StructuredPromptOrchestrator,
-  StructuredPromptOrchestratorImpl,
-} from '../business/promptOrchestrator'
 import { type ResponseBuilder, createResponseBuilder } from '../business/responseBuilder'
+import {
+  type FeatureFlags,
+  type StructuredPromptGenerator,
+  createStructuredPromptGenerator,
+} from '../business/structuredPromptGenerator'
 
 // API clients
 import { type GeminiClient, createGeminiClient } from '../api/geminiClient'
 import { type GeminiTextClient, createGeminiTextClient } from '../api/geminiTextClient'
 
-// Handlers
-import { StructuredPromptHandler } from './handlers/structuredPromptHandler'
-
 // Utilities
 import { getConfig } from '../utils/config'
 import { Logger } from '../utils/logger'
 import { SecurityManager } from '../utils/security'
-
-// Same module
 import { ErrorHandler } from './errorHandler'
 
 /**
@@ -60,104 +46,29 @@ const DEFAULT_CONFIG: MCPServerConfig = {
 }
 
 /**
- * Dependencies for MCPServerImpl
- */
-export interface MCPServerDependencies {
-  fileManager?: FileManager
-  responseBuilder?: ResponseBuilder
-  logger?: Logger
-  securityManager?: SecurityManager
-  createImageGenerator?: (geminiClient: GeminiClient) => ImageGenerator
-  geminiTextClient?: GeminiTextClient
-  bestPracticesEngine?: BestPracticesEngine
-  pomlTemplateEngine?: POMLTemplateEngine
-  structuredPromptOrchestrator?: StructuredPromptOrchestrator
-  structuredPromptHandler?: StructuredPromptHandler
-}
-
-/**
- * MCP server with integrated orchestration
- * Provides AI-powered prompt optimization as standard feature
+ * Simplified MCP server
  */
 export class MCPServerImpl {
   private config: MCPServerConfig
-  private orchestrationConfig: MCPOrchestrationConfig
   private server: Server | null = null
   private logger: Logger
   private fileManager: FileManager
   private responseBuilder: ResponseBuilder
   private securityManager: SecurityManager
-  private createImageGeneratorFn: (geminiClient: GeminiClient) => ImageGenerator
-  private structuredPromptHandler: StructuredPromptHandler | null = null
+  private structuredPromptGenerator: StructuredPromptGenerator | null = null
   private geminiTextClient: GeminiTextClient | null = null
-  private orchestrator: StructuredPromptOrchestrator | null = null
+  private geminiClient: GeminiClient | null = null
 
-  constructor(config: Partial<MCPServerConfig> = {}, dependencies: MCPServerDependencies = {}) {
+  constructor(config: Partial<MCPServerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
-    this.orchestrationConfig = DEFAULT_ORCHESTRATION_CONFIG
-    this.logger = dependencies.logger || new Logger()
-    this.fileManager = dependencies.fileManager || createFileManager()
-    this.responseBuilder = dependencies.responseBuilder || createResponseBuilder()
-    this.securityManager = dependencies.securityManager || new SecurityManager()
-    this.createImageGeneratorFn = dependencies.createImageGenerator || createImageGenerator
-
-    // Initialize orchestration components if provided
-    if (dependencies.structuredPromptHandler) {
-      this.structuredPromptHandler = dependencies.structuredPromptHandler
-    }
-    if (dependencies.geminiTextClient) {
-      this.geminiTextClient = dependencies.geminiTextClient
-    }
-    if (dependencies.structuredPromptOrchestrator) {
-      this.orchestrator = dependencies.structuredPromptOrchestrator
-    }
+    this.logger = new Logger()
+    this.fileManager = createFileManager()
+    this.responseBuilder = createResponseBuilder()
+    this.securityManager = new SecurityManager()
   }
 
   /**
-   * Send progress notification to client
-   */
-  private async sendProgress(
-    progressToken: string | number,
-    progress: number,
-    total?: number,
-    message?: string
-  ): Promise<void> {
-    if (!this.server || !progressToken) return
-
-    try {
-      await this.server.notification({
-        method: 'notifications/progress',
-        params: {
-          progressToken,
-          progress,
-          ...(total !== undefined && { total }),
-          ...(message && { message }),
-        },
-      })
-
-      this.logger.debug('mcp-progress', 'Progress notification sent', {
-        progressToken,
-        progress,
-        total,
-        message,
-      })
-    } catch (error) {
-      this.logger.warn('mcp-progress', 'Failed to send progress notification', {
-        progressToken,
-        error: (error as Error).message,
-      })
-    }
-  }
-
-  /**
-   * Get server instance (for testing)
-   */
-  public getServerInstance(): Server | null {
-    return this.server
-  }
-
-  /**
-   * Get server information
+   * Get server info
    */
   public getServerInfo() {
     return {
@@ -216,360 +127,157 @@ export class MCPServerImpl {
   }
 
   /**
-   * Tool execution with unified error handling
+   * Tool execution
    */
-  public async callTool(name: string, args: unknown, progressToken?: string | number) {
+  public async callTool(name: string, args: unknown) {
     try {
       if (name === 'generate_image') {
-        return await this.handleGenerateImage(args as GenerateImageParams, progressToken)
+        return await this.handleGenerateImage(args as GenerateImageParams)
       }
-
       throw new Error(`Unknown tool: ${name}`)
     } catch (error) {
-      this.logger.error('mcp-server', 'Tool execution failed', error as Error, {
-        toolName: name,
-        args,
-      })
+      this.logger.error('mcp-server', 'Tool execution failed', error as Error)
       return ErrorHandler.handleError(error as Error)
     }
   }
 
   /**
-   * Initialize orchestration components lazily
+   * Initialize Gemini clients lazily
    */
-  private async initializeOrchestrationComponents(): Promise<void> {
-    if (this.orchestrator) return // Already initialized
+  private async initializeClients(): Promise<void> {
+    if (this.structuredPromptGenerator && this.geminiClient) return
 
-    try {
-      const configResult = getConfig()
-      if (!configResult.success) {
-        throw configResult.error
-      }
-
-      // Initialize Gemini Text Client if not provided
-      if (!this.geminiTextClient) {
-        const geminiTextClientResult = createGeminiTextClient(configResult.data)
-        if (!geminiTextClientResult.success) {
-          throw geminiTextClientResult.error
-        }
-        this.geminiTextClient = geminiTextClientResult.data
-      }
-
-      // Initialize Best Practices Engine
-      const bestPracticesEngine = new BestPracticesEngineImpl()
-
-      // Initialize POML Template Engine
-      const pomlTemplateEngine = new POMLTemplateEngineImpl()
-
-      // Initialize Orchestrator
-      this.orchestrator = new StructuredPromptOrchestratorImpl(
-        this.geminiTextClient,
-        bestPracticesEngine,
-        pomlTemplateEngine
-      )
-
-      // Initialize Structured Prompt Handler
-      if (!this.structuredPromptHandler) {
-        this.structuredPromptHandler = new StructuredPromptHandler(
-          this.orchestrator,
-          this.orchestrationConfig,
-          { logger: this.logger }
-        )
-      }
-
-      this.logger.info('mcp-orchestration', 'Orchestration components initialized')
-    } catch (error) {
-      this.logger.error(
-        'mcp-orchestration',
-        'Failed to initialize orchestration components',
-        error as Error
-      )
-      throw error
+    const configResult = getConfig()
+    if (!configResult.success) {
+      throw configResult.error
     }
+
+    // Initialize Gemini Text Client for prompt generation
+    if (!this.geminiTextClient) {
+      const textClientResult = createGeminiTextClient(configResult.data)
+      if (!textClientResult.success) {
+        throw textClientResult.error
+      }
+      this.geminiTextClient = textClientResult.data
+    }
+
+    // Initialize Structured Prompt Generator
+    if (!this.structuredPromptGenerator) {
+      this.structuredPromptGenerator = createStructuredPromptGenerator(this.geminiTextClient)
+    }
+
+    // Initialize Gemini Client for image generation
+    if (!this.geminiClient) {
+      const clientResult = createGeminiClient(configResult.data)
+      if (!clientResult.success) {
+        throw clientResult.error
+      }
+      this.geminiClient = clientResult.data
+    }
+
+    this.logger.info('mcp-server', 'Gemini clients initialized')
   }
 
   /**
-   * Get orchestration status information
+   * Simplified image generation handler
    */
-  public getOrchestrationStatus(): OrchestrationStatus {
-    if (!this.structuredPromptHandler) {
-      return {
-        enabled: true,
-        mode: this.orchestrationConfig.orchestrationMode,
-        statistics: {
-          totalAttempts: 0,
-          successfulAttempts: 0,
-          failedAttempts: 0,
-          averageProcessingTime: 0,
-        },
-      }
-    }
-    return this.structuredPromptHandler.getOrchestrationStatus()
-  }
-
-  /**
-   * Image generation tool handler with integrated prompt optimization
-   */
-  private async handleGenerateImage(params: GenerateImageParams, progressToken?: string | number) {
-    // Use ErrorHandler.wrapWithResultType for safe execution
+  private async handleGenerateImage(params: GenerateImageParams) {
     const result = await ErrorHandler.wrapWithResultType(async () => {
-      // Send initial progress notification
-      if (progressToken) {
-        await this.sendProgress(progressToken, 0, 100, 'Starting prompt optimization...')
-      }
-
-      // Step 1: Validate input parameters
+      // Validate input
       const validationResult = validateGenerateImageParams(params)
       if (!validationResult.success) {
         throw validationResult.error
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 10, 100, 'Input parameters validated')
-      }
-
-      // Step 2: Load configuration
+      // Get configuration
       const configResult = getConfig()
       if (!configResult.success) {
         throw configResult.error
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 15, 100, 'Configuration loaded')
-      }
+      // Initialize clients
+      await this.initializeClients()
 
-      // Step 3: Initialize orchestration components if needed
-      await this.initializeOrchestrationComponents()
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 20, 100, 'Optimizing prompt with AI...')
-      }
-
-      // Step 4: Apply prompt optimization (always enabled)
-      let optimizedPrompt = params.prompt
-      let orchestrationResult: MCPOrchestrationResult['orchestrationResult'] | undefined
-      let fallbackUsed = false
-
-      if (this.structuredPromptHandler) {
-        const orchestrationOptions: OrchestrationOptions = {
-          bestPracticesMode: 'complete',
-          enablePOML: true,
-          // Map feature parameters to orchestration options
-          ...(params.maintainCharacterConsistency !== undefined && {
-            maintainCharacterConsistency: params.maintainCharacterConsistency,
-          }),
-          ...(params.blendImages !== undefined && {
-            blendImages: params.blendImages,
-          }),
-          ...(params.useWorldKnowledge !== undefined && {
-            useWorldKnowledge: params.useWorldKnowledge,
-          }),
+      // Generate structured prompt using Gemini 2.0 Flash
+      let structuredPrompt = params.prompt
+      if (this.structuredPromptGenerator) {
+        const features: FeatureFlags = {}
+        if (params.maintainCharacterConsistency !== undefined) {
+          features.maintainCharacterConsistency = params.maintainCharacterConsistency
+        }
+        if (params.blendImages !== undefined) {
+          features.blendImages = params.blendImages
+        }
+        if (params.useWorldKnowledge !== undefined) {
+          features.useWorldKnowledge = params.useWorldKnowledge
         }
 
-        const startTime = Date.now()
-        const orchestrationRes = await this.structuredPromptHandler.processStructuredPrompt(
+        const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
           params.prompt,
-          orchestrationOptions,
-          this.server || undefined,
-          progressToken
+          features
         )
-        const orchestrationTime = Date.now() - startTime
 
-        if (orchestrationRes.success) {
-          optimizedPrompt = orchestrationRes.data.structuredPrompt
-          orchestrationResult = orchestrationRes.data
-
-          this.logger.info('mcp-orchestration', 'Prompt optimization successful', {
+        if (promptResult.success) {
+          structuredPrompt = promptResult.data.structuredPrompt
+          this.logger.info('mcp-server', 'Structured prompt generated', {
             originalLength: params.prompt.length,
-            optimizedLength: optimizedPrompt.length,
-            orchestrationTime,
+            structuredLength: structuredPrompt.length,
+            selectedPractices: promptResult.data.selectedPractices,
           })
         } else {
-          // Log warning but continue with original prompt (graceful fallback)
-          fallbackUsed = true
-          this.logger.warn('mcp-orchestration', 'Prompt optimization failed, using original', {
-            error: orchestrationRes.error.message,
+          this.logger.warn('mcp-server', 'Using original prompt', {
+            error: promptResult.error.message,
           })
         }
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 50, 100, 'Initializing image generation client...')
-      }
-
-      // Step 5: Initialize Gemini client for image generation
-      const geminiClientResult = createGeminiClient(configResult.data)
-      if (!geminiClientResult.success) {
-        throw geminiClientResult.error
-      }
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 55, 100, 'Client initialized')
-      }
-
-      const imageGenerator = this.createImageGeneratorFn(geminiClientResult.data)
-      const fileManager = this.fileManager
-      const responseBuilder = this.responseBuilder
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 60, 100, 'Generating image with optimized prompt...')
-      }
-
-      // Step 4: Handle input image if provided
+      // Handle input image if provided
       let inputImageData: string | undefined
-      let inputImageMimeType: string | undefined
-
       if (params.inputImagePath) {
-        const fs = await import('node:fs/promises')
-        const path = await import('node:path')
-
-        // Read the image file
         const imageBuffer = await fs.readFile(params.inputImagePath)
         inputImageData = imageBuffer.toString('base64')
-
-        // Determine MIME type from extension
-        const ext = path.extname(params.inputImagePath).toLowerCase()
-        const mimeTypes: Record<string, string> = {
-          '.jpg': 'image/jpeg',
-          '.jpeg': 'image/jpeg',
-          '.png': 'image/png',
-          '.webp': 'image/webp',
-          '.gif': 'image/gif',
-          '.bmp': 'image/bmp',
-        }
-        inputImageMimeType = mimeTypes[ext] || 'image/jpeg'
       }
 
-      // Step 5: Generate image with all parameters
-      const generationResult = await imageGenerator.generateImage({
-        prompt: params.prompt,
-        ...(inputImageData !== undefined && { inputImage: inputImageData }),
-        ...(inputImageMimeType !== undefined && { inputImageMimeType: inputImageMimeType }),
-        ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
-        ...(params.maintainCharacterConsistency !== undefined && {
-          maintainCharacterConsistency: params.maintainCharacterConsistency,
-        }),
-        ...(params.useWorldKnowledge !== undefined && {
-          useWorldKnowledge: params.useWorldKnowledge,
-        }),
+      // Generate image using Gemini 2.5 Flash Image Preview
+      if (!this.geminiClient) {
+        throw new Error('Gemini client not initialized')
+      }
+
+      const generationResult = await this.geminiClient.generateImage({
+        prompt: structuredPrompt,
+        ...(inputImageData && { inputImage: inputImageData }),
       })
+
       if (!generationResult.success) {
         throw generationResult.error
       }
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 90, 100, 'Image generated, saving to file...')
+      // Save image file
+      const fileName = params.fileName || this.fileManager.generateFileName()
+      const outputPath = path.join(configResult.data.imageOutputDir, fileName)
+
+      const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
+      if (!sanitizedPath.success) {
+        throw sanitizedPath.error
       }
 
-      // Step 8: Save image file to IMAGE_OUTPUT_DIR with specified or auto-generated name
-      // Determine file path: use provided fileName or generate one, always in IMAGE_OUTPUT_DIR
-      const finalFileName = params.fileName || fileManager.generateFileName()
-      const rawOutputPath = path.join(configResult.data.imageOutputDir, finalFileName)
-
-      // Security check: Sanitize output path
-      const securityManager = this.securityManager
-      const pathSanitizationResult = securityManager.sanitizeFilePath(rawOutputPath)
-      if (!pathSanitizationResult.success) {
-        throw pathSanitizationResult.error
-      }
-      const outputPath = pathSanitizationResult.data
-
-      // Always save to file (no more base64 responses)
-      const saveResult = await fileManager.saveImage(generationResult.data.imageData, outputPath)
+      const saveResult = await this.fileManager.saveImage(
+        generationResult.data.imageData,
+        sanitizedPath.data
+      )
       if (!saveResult.success) {
         throw saveResult.error
       }
-      const savedFilePath = saveResult.data
 
-      if (progressToken) {
-        await this.sendProgress(progressToken, 95, 100, 'Image saved to file')
-      }
-
-      // Step 9: Build structured response with orchestration metadata
-      const response = responseBuilder.buildSuccessResponse(generationResult.data, savedFilePath)
-
-      // Add orchestration metadata to response using structuredContent
-      const enhancedResponse = {
-        ...response,
-        structuredContent: {
-          ...((response.structuredContent as Record<string, unknown>) || {}),
-          metadata: {
-            fallbackUsed,
-            promptOptimized: !!orchestrationResult,
-            ...(orchestrationResult && {
-              originalPrompt: params.prompt,
-              optimizedPrompt: optimizedPrompt,
-              orchestrationDetails: orchestrationResult,
-            }),
-          },
-        },
-      }
-
-      if (progressToken) {
-        await this.sendProgress(progressToken, 100, 100, 'Image generation completed')
-      }
-
-      return enhancedResponse
+      // Build response
+      return this.responseBuilder.buildSuccessResponse(generationResult.data, saveResult.data)
     }, 'image-generation')
 
-    // Handle the result
     if (result.ok) {
       return result.value
     }
 
-    // Build error response using ResponseBuilder
-    const responseBuilder = this.responseBuilder
-    const errorResponse = responseBuilder.buildErrorResponse(result.error)
-
-    // Add fallback information even for errors if orchestration was attempted
-    if (this.structuredPromptHandler) {
-      return {
-        ...errorResponse,
-        structuredContent: {
-          ...((errorResponse.structuredContent as Record<string, unknown>) || {}),
-          metadata: {
-            fallbackUsed: true,
-            promptOptimized: false,
-            errorOccurred: true,
-          },
-        },
-      }
-    }
-
-    return errorResponse
-  }
-
-  /**
-   * Enable or configure structured prompt generation
-   */
-  async enableStructuredPromptGeneration(options?: {
-    fallbackBehavior?: 'graceful' | 'retry' | 'fail'
-    orchestrationMode?: 'full' | 'essential' | 'minimal'
-    progressNotifications?: boolean
-  }): Promise<void> {
-    if (options) {
-      if (options.fallbackBehavior) {
-        this.orchestrationConfig = {
-          ...this.orchestrationConfig,
-          fallbackBehavior: options.fallbackBehavior,
-        }
-      }
-      if (options.orchestrationMode) {
-        this.orchestrationConfig = {
-          ...this.orchestrationConfig,
-          orchestrationMode: options.orchestrationMode,
-        }
-      }
-      if (options.progressNotifications !== undefined) {
-        this.orchestrationConfig = {
-          ...this.orchestrationConfig,
-          progressNotifications: options.progressNotifications,
-        }
-      }
-    }
-
-    // Initialize orchestration components if not already done
-    await this.initializeOrchestrationComponents()
+    return this.responseBuilder.buildErrorResponse(result.error)
   }
 
   /**
@@ -612,10 +320,8 @@ export class MCPServerImpl {
       CallToolRequestSchema,
       async (request): Promise<CallToolResult> => {
         const { name, arguments: args } = request.params
-        const progressToken = request.params._meta?.progressToken
-        const result = await this.callTool(name, args, progressToken)
-        // Extract content array from McpToolResponse and preserve structuredContent
-        const response: { content: McpContent[]; structuredContent?: { [x: string]: unknown } } = {
+        const result = await this.callTool(name, args)
+        const response: CallToolResult = {
           content: result.content,
         }
         if (result.structuredContent) {
@@ -628,12 +334,8 @@ export class MCPServerImpl {
 }
 
 /**
- * Factory function (for backward compatibility)
+ * Factory function to create MCP server
  */
-export function createMCPServer(
-  config: Partial<MCPServerConfig> = {},
-  dependencies: MCPServerDependencies = {}
-) {
-  const mcpServer = new MCPServerImpl(config, dependencies)
-  return mcpServer
+export function createMCPServer(config: Partial<MCPServerConfig> = {}) {
+  return new MCPServerImpl(config)
 }

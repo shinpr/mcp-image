@@ -168,7 +168,6 @@ describe('geminiClient', () => {
             ],
           },
         ],
-        config: {},
       })
     })
 
@@ -295,11 +294,8 @@ describe('geminiClient', () => {
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
-        expect(result.data.metadata.features).toEqual({
-          blendImages: true,
-          maintainCharacterConsistency: true,
-          useWorldKnowledge: false,
-        })
+        // Features are passed to the API but not stored in metadata
+        expect(result.data.metadata.prompt).toBe('Generate character with blending')
       }
 
       // Verify API was called with original prompt (no enhancement at GeminiClient level)
@@ -314,7 +310,6 @@ describe('geminiClient', () => {
             ],
           },
         ],
-        config: {},
       })
     })
 
@@ -356,11 +351,9 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.features).toEqual({
-          blendImages: false,
-          maintainCharacterConsistency: false,
-          useWorldKnowledge: true,
-        })
+        // Features are passed to the API but not stored in metadata
+        expect(result.data.metadata.prompt).toBe('Generate factually accurate historical scene')
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
       }
 
       // Verify API was called with original prompt (no processing at GeminiClient level)
@@ -375,7 +368,6 @@ describe('geminiClient', () => {
             ],
           },
         ],
-        config: {},
       })
     })
 
@@ -416,7 +408,9 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.features).toBeUndefined()
+        // Features not specified - standard metadata only
+        expect(result.data.metadata.prompt).toBe('Generate simple landscape')
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
       }
 
       // Verify API was called without generation config
@@ -431,7 +425,6 @@ describe('geminiClient', () => {
             ],
           },
         ],
-        config: {},
       })
     })
 
@@ -479,11 +472,9 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.metadata.inputImageProvided).toBe(true)
-        expect(result.data.metadata.features).toEqual({
-          blendImages: true,
-          maintainCharacterConsistency: true,
-          useWorldKnowledge: false,
-        })
+        // Features are passed to the API but not stored in metadata
+        expect(result.data.metadata.prompt).toBe('Blend this character with fantasy elements')
+        expect(result.data.metadata.model).toBe('gemini-2.5-flash-image-preview')
       }
 
       // Verify API was called with input image and original prompt (no processing at GeminiClient level)
@@ -504,7 +495,6 @@ describe('geminiClient', () => {
             ],
           },
         ],
-        config: {},
       })
     })
   })

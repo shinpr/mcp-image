@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Config } from '../../utils/config'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
 import { createGeminiTextClient } from '../geminiTextClient'
-import type { GeminiTextClient, PromptOptions } from '../geminiTextClient'
+import type { GeminiTextClient, GenerationConfig } from '../geminiTextClient'
 
 // Mock GoogleGenAI external dependency
 const mockGenerateContent = vi.fn()
@@ -74,40 +74,32 @@ describe('GeminiTextClient', () => {
   })
 
   describe('Public API Contract', () => {
-    it('should generate structured prompt with proper response format', async () => {
-      const result = await client.generateStructuredPrompt('create a logo')
+    it('should generate text with proper response format', async () => {
+      const result = await client.generateText('create a logo')
 
       expect(result.success).toBe(true)
 
       if (result.success) {
-        expect(result.data).toHaveProperty('text')
-        expect(result.data).toHaveProperty('originalPrompt', 'create a logo')
-        expect(result.data).toHaveProperty('appliedPractices')
-        expect(result.data).toHaveProperty('metadata')
-        expect(result.data.metadata).toHaveProperty('model', 'gemini-2.0-flash')
-        expect(result.data.metadata).toHaveProperty('enhancementLevel')
-        expect(result.data.metadata).toHaveProperty('processingTime')
-        expect(typeof result.data.metadata.processingTime).toBe('number')
+        expect(typeof result.data).toBe('string')
+        expect(result.data).toContain('Enhanced')
+        expect(result.data.length).toBeGreaterThan(0)
       }
     })
 
-    it('should handle different enhancement levels', async () => {
-      const basicResult = await client.generateStructuredPrompt('test prompt', {
-        bestPracticesMode: 'basic',
+    it('should handle different generation configurations', async () => {
+      const lowTempResult = await client.generateText('test prompt', {
+        temperature: 0.1,
       })
-      const completeResult = await client.generateStructuredPrompt('test prompt', {
-        bestPracticesMode: 'complete',
+      const highTempResult = await client.generateText('test prompt', {
+        temperature: 0.9,
       })
 
-      expect(basicResult.success).toBe(true)
-      expect(completeResult.success).toBe(true)
+      expect(lowTempResult.success).toBe(true)
+      expect(highTempResult.success).toBe(true)
 
-      if (basicResult.success && completeResult.success) {
-        expect(basicResult.data.metadata.enhancementLevel).toBe('basic')
-        expect(completeResult.data.metadata.enhancementLevel).toBe('complete')
-        expect(completeResult.data.appliedPractices.length).toBeGreaterThan(
-          basicResult.data.appliedPractices.length
-        )
+      if (lowTempResult.success && highTempResult.success) {
+        expect(typeof lowTempResult.data).toBe('string')
+        expect(typeof highTempResult.data).toBe('string')
       }
     })
 
@@ -123,7 +115,7 @@ describe('GeminiTextClient', () => {
 
   describe('Error Handling', () => {
     it('should handle network errors gracefully', async () => {
-      const result = await client.generateStructuredPrompt('network error')
+      const result = await client.generateText('network error')
 
       expect(result.success).toBe(false)
       if (!result.success) {
@@ -133,7 +125,7 @@ describe('GeminiTextClient', () => {
     })
 
     it('should handle rate limit errors', async () => {
-      const result = await client.generateStructuredPrompt('rate limit')
+      const result = await client.generateText('rate limit')
 
       expect(result.success).toBe(false)
       if (!result.success) {
@@ -143,7 +135,7 @@ describe('GeminiTextClient', () => {
     })
 
     it('should handle quota exceeded scenarios', async () => {
-      const result = await client.generateStructuredPrompt('quota')
+      const result = await client.generateText('quota')
 
       expect(result.success).toBe(false)
       if (!result.success) {
@@ -153,7 +145,7 @@ describe('GeminiTextClient', () => {
     })
 
     it('should handle service degradation', async () => {
-      const result = await client.generateStructuredPrompt('degradation')
+      const result = await client.generateText('degradation')
 
       expect(result.success).toBe(false)
       if (!result.success) {

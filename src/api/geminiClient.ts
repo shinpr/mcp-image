@@ -11,11 +11,6 @@ import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
 
 /**
- * URL pattern for automatic URL detection
- */
-const URL_PATTERN = /https?:\/\/(?:[-\w.])+(?:\.[a-zA-Z]{2,})+(?:\/[-\w._~:\/?#[\]@!$&'()*+,;=]*)?/g
-
-/**
  * Basic types for Gemini API responses
  */
 interface ContentPart {
@@ -66,24 +61,14 @@ export interface GeminiGenerationMetadata {
   mimeType: string
   timestamp: Date
   inputImageProvided: boolean
-  contextMethod: string
-  /** Features usage metadata */
-  features?: {
-    blendImages: boolean
-    maintainCharacterConsistency: boolean
-    useWorldKnowledge: boolean
-  }
 }
 
 /**
- * Parameters for Gemini API image generation (with processed data)
+ * Parameters for Gemini API image generation
  */
 export interface GeminiApiParams {
   prompt: string
   inputImage?: string
-  blendImages?: boolean
-  maintainCharacterConsistency?: boolean
-  useWorldKnowledge?: boolean
 }
 
 /**
@@ -145,23 +130,10 @@ class GeminiClientImpl implements GeminiClient {
         })
       }
 
-      // Prepare API configuration
-      const config: {
-        [key: string]: unknown
-      } = {}
-
-      // URL detection is maintained for potential future use
-      // Note: urlContext tool has been removed as it's not supported by the model
-      this.detectUrls(params.prompt)
-
-      // Note: Feature parameters are now handled by the orchestration layer
-      // They are no longer processed directly in GeminiClient
-
-      // Generate content using Gemini API with official URL Context support
+      // Generate content using Gemini API
       const response = await this.genai.models.generateContent({
         model: this.modelName,
         contents: requestContent,
-        config,
       })
 
       // Extract image data from response
@@ -225,27 +197,13 @@ class GeminiClientImpl implements GeminiClient {
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
-      // Create metadata with features information
+      // Create simplified metadata
       const metadata: GeminiGenerationMetadata = {
         model: this.modelName,
-        prompt: params.prompt, // Original prompt, not enhanced
+        prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
-        contextMethod: 'prompt_only',
-      }
-
-      // Add features usage information if any features are specified (including false)
-      if (
-        params.blendImages !== undefined ||
-        params.maintainCharacterConsistency !== undefined ||
-        params.useWorldKnowledge !== undefined
-      ) {
-        metadata.features = {
-          blendImages: params.blendImages || false,
-          maintainCharacterConsistency: params.maintainCharacterConsistency || false,
-          useWorldKnowledge: params.useWorldKnowledge || false,
-        }
       }
 
       return Ok({
@@ -335,15 +293,6 @@ class GeminiClientImpl implements GeminiClient {
       return typeof error.status === 'number' ? error.status : undefined
     }
     return undefined
-  }
-
-  /**
-   * Detect URLs in prompt for automatic URL Context activation
-   * @param prompt The prompt text to analyze
-   * @returns True if URLs are detected, false otherwise
-   */
-  private detectUrls(prompt: string): boolean {
-    return URL_PATTERN.test(prompt)
   }
 }
 

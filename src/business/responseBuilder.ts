@@ -4,6 +4,7 @@
  */
 
 import * as path from 'node:path'
+import type { GeneratedImageResult } from '../api/geminiClient'
 import type { McpToolResponse, StructuredContent } from '../types/mcp'
 import {
   type BaseError,
@@ -14,7 +15,6 @@ import {
   NetworkError,
   SecurityError,
 } from '../utils/errors'
-import type { GenerationResult } from './imageGenerator'
 
 // Constants for MIME types and error handling
 const MIME_TYPES = {
@@ -37,7 +37,7 @@ const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the pro
  * Interface for response builder functionality
  */
 export interface ResponseBuilder {
-  buildSuccessResponse(generationResult: GenerationResult, filePath: string): McpToolResponse
+  buildSuccessResponse(generationResult: GeneratedImageResult, filePath: string): McpToolResponse
   buildErrorResponse(error: BaseError | Error): McpToolResponse
 }
 
@@ -114,7 +114,10 @@ export function createResponseBuilder(): ResponseBuilder {
      * @param filePath Absolute path to the saved image file (required)
      * @returns MCP tool response with structured content containing file path
      */
-    buildSuccessResponse(generationResult: GenerationResult, filePath: string): McpToolResponse {
+    buildSuccessResponse(
+      generationResult: GeneratedImageResult,
+      filePath: string
+    ): McpToolResponse {
       // File-based implementation: Always return file path, never base64
       // This avoids MCP token limit issues (25,000 tokens max)
       const mimeType = getMimeTypeFromPath(filePath)
@@ -127,7 +130,12 @@ export function createResponseBuilder(): ResponseBuilder {
           name: fileName,
           mimeType,
         },
-        metadata: generationResult.metadata,
+        metadata: {
+          model: generationResult.metadata.model,
+          processingTime: 0, // Not tracked in simplified version
+          contextMethod: 'structured_prompt',
+          timestamp: generationResult.metadata.timestamp.toISOString(),
+        },
       }
 
       return {
