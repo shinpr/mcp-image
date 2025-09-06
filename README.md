@@ -5,7 +5,13 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 ## ✨ Features
 
 - **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image Preview
+- **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.0 Flash for superior image quality
+  - Adds photographic and artistic details
+  - Enriches lighting, composition, and atmosphere descriptions
+  - Preserves your intent while maximizing generation quality
 - **Image Editing**: Transform existing images with natural language instructions
+  - Context-aware editing that preserves original style
+  - Maintains visual consistency with source image
 - **Advanced Options**: 
   - Multi-image blending for composite scenes
   - Character consistency across generations
@@ -62,6 +68,18 @@ Add to your Cursor settings:
 - Defaults to `./output` in the current working directory if not specified
 - Directory will be created automatically if it doesn't exist
 
+### Optional: Skip Prompt Enhancement
+
+Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and send your prompts directly to the image generator. Useful when you need full control over the exact prompt wording.
+
+**Claude Code:**
+```bash
+claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env SKIP_PROMPT_ENHANCEMENT=true -- npx -y mcp-image
+```
+
+**Cursor:**
+Add `"SKIP_PROMPT_ENHANCEMENT": "true"` to the env section in your config.
+
 ## 📖 Usage Examples
 
 Once configured, your AI assistant can generate images using natural language:
@@ -72,13 +90,14 @@ Once configured, your AI assistant can generate images using natural language:
 "Generate a serene mountain landscape at sunset with a lake reflection"
 ```
 
+The system automatically enhances this to include rich details about lighting, materials, composition, and atmosphere for optimal results.
+
 ### Image Editing
 
 ```
 "Edit this image to make the person face right"
 (with inputImagePath: "/path/to/image.jpg")
 ```
-
 
 ### Advanced Features
 
@@ -91,7 +110,9 @@ Once configured, your AI assistant can generate images using natural language:
 
 ### `generate_image` Tool
 
-The MCP server exposes a single tool for all image operations:
+The MCP server exposes a single tool for all image operations. Internally, it uses a two-stage process:
+1. **Prompt Optimization**: Gemini 2.0 Flash analyzes and enriches your prompt
+2. **Image Generation**: Gemini 2.5 Flash Image Preview creates the final image
 
 #### Parameters
 
@@ -142,17 +163,20 @@ The MCP server exposes a single tool for all image operations:
 
 ### Performance Tips
 
-- Image generation: 30-60 seconds typical
-- Image editing: 15-45 seconds typical  
-- Use specific, descriptive prompts for better results
+- Image generation: 30-60 seconds typical (includes prompt optimization)
+- Image editing: 15-45 seconds typical (includes context analysis)
+- Simple prompts work great - the AI automatically adds professional details
+- Complex prompts are preserved and further enhanced
 - Consider enabling `useWorldKnowledge` for historical or factual subjects
-
 
 ## 💰 Usage Notes
 
-- This MCP server uses the paid Gemini API for image generation
+- This MCP server uses the paid Gemini API for both prompt optimization and image generation
+  - Gemini 2.0 Flash for intelligent prompt enhancement (minimal token usage)
+  - Gemini 2.5 Flash Image Preview for actual image generation
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
+- The prompt optimization step adds minimal cost while significantly improving output quality
 
 ## 📄 License
 
