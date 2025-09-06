@@ -31,6 +31,18 @@ When describing scenes or subjects:
 Your output should be a single, vivid, coherent description that an image generation model can interpret unambiguously. Make it engaging, specific, and clear.`
 
 /**
+ * Additional system prompt for image editing mode (when input image is provided)
+ */
+const IMAGE_EDITING_CONTEXT = `
+
+IMPORTANT: An input image has been provided. Your task is to:
+1. Analyze the visual context, style, and atmosphere of the input image
+2. Preserve the original image's core characteristics (color palette, lighting style, composition) while applying the requested changes
+3. Focus on maintaining visual consistency - describe modifications relative to the existing image
+4. Be specific about what to keep unchanged vs what to modify
+5. Use phrases like "maintain the existing...", "preserve the original...", "keep the same..." to ensure fidelity to source`
+
+/**
  * Feature flags for image generation
  */
 export interface FeatureFlags {
@@ -54,7 +66,8 @@ export interface StructuredPromptResult {
 export interface StructuredPromptGenerator {
   generateStructuredPrompt(
     userPrompt: string,
-    features?: FeatureFlags
+    features?: FeatureFlags,
+    inputImageData?: string // Optional base64-encoded image for context
   ): Promise<Result<StructuredPromptResult, Error>>
 }
 
@@ -66,7 +79,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
 
   async generateStructuredPrompt(
     userPrompt: string,
-    features: FeatureFlags = {}
+    features: FeatureFlags = {},
+    inputImageData?: string
   ): Promise<Result<StructuredPromptResult, Error>> {
     try {
       // Validate input
@@ -75,14 +89,21 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       }
 
       // Build complete prompt with system instruction and meta-prompt
-      const completePrompt = this.buildCompletePrompt(userPrompt, features)
+      const completePrompt = this.buildCompletePrompt(userPrompt, features, !!inputImageData)
+
+      // Combine system prompts for image editing mode
+      const systemInstruction = inputImageData
+        ? SYSTEM_PROMPT + IMAGE_EDITING_CONTEXT
+        : SYSTEM_PROMPT
 
       // Generate structured prompt using Gemini 2.0 Flash via pure API call
-      const result = await this.geminiTextClient.generateText(completePrompt, {
+      const config = {
         temperature: 0.7,
         maxTokens: 500,
-        systemInstruction: SYSTEM_PROMPT,
-      })
+        systemInstruction,
+        ...(inputImageData && { inputImage: inputImageData }), // Only include if available
+      }
+      const result = await this.geminiTextClient.generateText(completePrompt, config)
 
       if (!result.success) {
         return Err(result.error)
@@ -106,13 +127,22 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
   /**
    * Build complete prompt with all optimization context
    */
-  private buildCompletePrompt(userPrompt: string, features: FeatureFlags): string {
+  private buildCompletePrompt(
+    userPrompt: string,
+    features: FeatureFlags,
+    hasInputImage: boolean
+  ): string {
     const featureContext = this.buildEnhancedFeatureContext(features)
+
+    // Add image editing context if an input image is provided
+    const imageEditingInstruction = hasInputImage
+      ? `\nNOTE: An input image has been provided. Focus on preserving its original characteristics while applying the requested modifications. Maintain consistency with the source image's style, colors, and atmosphere.\n`
+      : ''
 
     return `Transform this image generation request into a detailed, vivid prompt that will produce high-quality results:
 
 "${userPrompt}"
-
+${imageEditingInstruction}
 ${featureContext}
 
 Consider these aspects as you enhance the prompt:

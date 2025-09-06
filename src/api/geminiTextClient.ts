@@ -18,6 +18,7 @@ export interface GenerationConfig {
   maxTokens?: number
   timeout?: number
   systemInstruction?: string
+  inputImage?: string // Optional base64-encoded image for multimodal context
 }
 
 /**
@@ -126,10 +127,40 @@ class GeminiTextClientImpl implements GeminiTextClient {
         setTimeout(() => reject(new Error('API call timeout')), config.timeout || 15000)
       })
 
+      // Build contents based on whether input image is provided (multimodal support)
+      let contents:
+        | string
+        | Array<{
+            role?: string
+            parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }>
+          }>
+
+      if (config.inputImage) {
+        // Multimodal request: combine image and text
+        contents = [
+          {
+            parts: [
+              {
+                inlineData: {
+                  data: config.inputImage,
+                  mimeType: 'image/jpeg', // Assuming JPEG for simplicity; can be enhanced later
+                },
+              },
+              {
+                text: prompt,
+              },
+            ],
+          },
+        ]
+      } else {
+        // Text-only request
+        contents = prompt
+      }
+
       // Use the updated API structure for @google/genai v1.17.0+
       const apiCall = this.genai.models.generateContent({
         model: this.modelName,
-        contents: prompt,
+        contents,
         ...(config.systemInstruction && { systemInstruction: config.systemInstruction }),
         generationConfig: {
           temperature: config.temperature || 0.7,

@@ -199,9 +199,16 @@ export class MCPServerImpl {
       // Initialize clients
       await this.initializeClients()
 
-      // Generate structured prompt using Gemini 2.0 Flash
+      // Handle input image if provided
+      let inputImageData: string | undefined
+      if (params.inputImagePath) {
+        const imageBuffer = await fs.readFile(params.inputImagePath)
+        inputImageData = imageBuffer.toString('base64')
+      }
+
+      // Generate structured prompt using Gemini 2.0 Flash (unless skipped)
       let structuredPrompt = params.prompt
-      if (this.structuredPromptGenerator) {
+      if (!configResult.data.skipPromptEnhancement && this.structuredPromptGenerator) {
         const features: FeatureFlags = {}
         if (params.maintainCharacterConsistency !== undefined) {
           features.maintainCharacterConsistency = params.maintainCharacterConsistency
@@ -215,7 +222,8 @@ export class MCPServerImpl {
 
         const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
           params.prompt,
-          features
+          features,
+          inputImageData // Pass image data for context-aware prompt generation
         )
 
         if (promptResult.success) {
@@ -231,13 +239,8 @@ export class MCPServerImpl {
             error: promptResult.error.message,
           })
         }
-      }
-
-      // Handle input image if provided
-      let inputImageData: string | undefined
-      if (params.inputImagePath) {
-        const imageBuffer = await fs.readFile(params.inputImagePath)
-        inputImageData = imageBuffer.toString('base64')
+      } else if (configResult.data.skipPromptEnhancement) {
+        this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
       }
 
       // Generate image using Gemini 2.5 Flash Image Preview
