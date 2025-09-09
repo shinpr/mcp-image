@@ -102,7 +102,7 @@ export class MCPServerImpl {
               inputImagePath: {
                 type: 'string' as const,
                 description:
-                  'Optional absolute path to input image for image editing (must be an absolute path)',
+                  'Optional absolute path to source image for image-to-image generation. Use when generating variations, style transfers, or similar images based on an existing image (must be an absolute path)',
               },
               blendImages: {
                 type: 'boolean' as const,
