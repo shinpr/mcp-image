@@ -99,7 +99,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       // Generate structured prompt using Gemini 2.0 Flash via pure API call
       const config = {
         temperature: 0.7,
-        maxTokens: 500,
+        maxTokens: 2000,
         systemInstruction,
         ...(inputImageData && { inputImage: inputImageData }), // Only include if available
       }
