@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
   "name": "io.github.shinpr/mcp-image",
-  "description": "AI-powered image generation and editing MCP server using Google's Gemini 2.5 Flash Image API with intelligent prompt enhancement",
+  "description": "AI image generation MCP server using Nano Banana with intelligent prompt enhancement",
   "status": "active",
   "vendor": "Shinsuke Kagawa",
   "license": "MIT",
