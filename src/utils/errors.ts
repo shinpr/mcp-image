@@ -141,6 +141,15 @@ export class GeminiAPIError extends BaseError {
       return this.customSuggestion
     }
 
+    // Check if suggestion is in context
+    if (
+      this.context &&
+      'suggestion' in this.context &&
+      typeof this.context['suggestion'] === 'string'
+    ) {
+      return this.context['suggestion']
+    }
+
     // Otherwise use intelligent suggestion system
     const message = this.message.toLowerCase()
 

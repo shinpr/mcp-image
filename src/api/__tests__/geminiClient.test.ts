@@ -252,6 +252,195 @@ describe('geminiClient', () => {
       }
     })
 
+    it('should handle prompt feedback blocking with safety reasons', async () => {
+      // Arrange
+      const mockBlockedResponse = {
+        response: {
+          promptFeedback: {
+            blockReason: 'SAFETY',
+            blockReasonMessage: 'The prompt was blocked due to safety reasons',
+            safetyRatings: [
+              {
+                category: 'HARM_CATEGORY_VIOLENCE',
+                probability: 'HIGH',
+                blocked: true,
+              },
+            ],
+          },
+          candidates: [],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockBlockedResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate violent content',
+      })
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(GeminiAPIError)
+        expect(result.error.message).toContain('Image generation blocked')
+        expect(result.error.message).toContain('safety reasons')
+        expect(result.error.suggestion).toContain('Rephrase your prompt')
+        expect(result.error.context).toMatchObject({
+          blockReason: 'SAFETY',
+          stage: 'prompt_analysis',
+        })
+      }
+    })
+
+    it('should handle finish reason SAFETY with detailed information', async () => {
+      // Arrange
+      const mockSafetyStoppedResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [], // No image parts due to safety stop
+              },
+              finishReason: 'IMAGE_SAFETY',
+              safetyRatings: [
+                {
+                  category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT',
+                  probability: 'HIGH',
+                  blocked: true,
+                },
+                {
+                  category: 'HARM_CATEGORY_VIOLENCE',
+                  probability: 'MEDIUM',
+                  blocked: false,
+                },
+              ],
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSafetyStoppedResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate inappropriate image',
+      })
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(GeminiAPIError)
+        expect(result.error.message).toContain('Image generation stopped')
+        expect(result.error.message).toContain('safety reasons')
+        expect(result.error.suggestion).toContain('Modify your prompt')
+        expect(result.error.context).toMatchObject({
+          finishReason: 'IMAGE_SAFETY',
+          stage: 'generation_stopped',
+        })
+        // Safety ratings should be formatted
+        expect(result.error.context?.safetyRatings).toContain('Sexually Explicit (BLOCKED)')
+      }
+    })
+
+    it('should handle finish reason MAX_TOKENS', async () => {
+      // Arrange
+      const mockMaxTokensResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [], // No image due to token limit
+              },
+              finishReason: 'MAX_TOKENS',
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockMaxTokensResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate extremely complex scene with many details',
+      })
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(GeminiAPIError)
+        expect(result.error.message).toContain('Maximum token limit reached')
+        expect(result.error.suggestion).toContain('shorter or simpler prompt')
+        expect(result.error.context).toMatchObject({
+          finishReason: 'MAX_TOKENS',
+          stage: 'generation_stopped',
+        })
+      }
+    })
+
+    it('should handle prohibited content blocking', async () => {
+      // Arrange
+      const mockProhibitedResponse = {
+        response: {
+          promptFeedback: {
+            blockReason: 'PROHIBITED_CONTENT',
+            blockReasonMessage: 'The prompt contains prohibited content',
+          },
+          candidates: [],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockProhibitedResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate prohibited content',
+      })
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(GeminiAPIError)
+        expect(result.error.message).toContain('prohibited content')
+        expect(result.error.suggestion).toContain('Remove any prohibited content')
+        expect(result.error.context).toMatchObject({
+          blockReason: 'PROHIBITED_CONTENT',
+          stage: 'prompt_analysis',
+        })
+      }
+    })
+
     it('should generate image with feature parameters (without processing)', async () => {
       // Arrange
       const mockResponse = {
