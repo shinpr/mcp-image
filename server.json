@@ -1,0 +1,71 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "name": "io.github.shinpr/mcp-image",
+  "description": "AI-powered image generation and editing MCP server using Google's Gemini 2.5 Flash Image API with intelligent prompt enhancement",
+  "status": "active",
+  "vendor": "Shinsuke Kagawa",
+  "license": "MIT",
+  "repository": {
+    "url": "https://github.com/shinpr/mcp-image",
+    "source": "github"
+  },
+  "version": "0.2.2",
+  "packages": [
+    {
+      "registry_type": "npm",
+      "registry_base_url": "https://registry.npmjs.org",
+      "identifier": "mcp-image",
+      "version": "0.2.2",
+      "transport": {
+        "type": "stdio"
+      },
+      "environment_variables": [
+        {
+          "name": "GEMINI_API_KEY",
+          "description": "Google Gemini API key for image generation (get from https://aistudio.google.com/apikey)",
+          "is_required": true,
+          "format": "string",
+          "is_secret": true
+        },
+        {
+          "name": "IMAGE_OUTPUT_DIR",
+          "description": "Absolute path to directory where generated images will be saved (defaults to ./output)",
+          "is_required": false,
+          "format": "string",
+          "is_secret": false
+        },
+        {
+          "name": "SKIP_PROMPT_ENHANCEMENT",
+          "description": "Set to 'true' to disable automatic prompt optimization and use direct prompts",
+          "is_required": false,
+          "format": "boolean",
+          "is_secret": false
+        }
+      ],
+      "features": {
+        "tools": {
+          "supported": true,
+          "list": [
+            "generate_image"
+          ]
+        },
+        "prompts": {
+          "supported": false
+        },
+        "resources": {
+          "supported": true,
+          "list": [
+            "file"
+          ]
+        }
+      }
+    }
+  ],
+  "tags": [
+    "image-generation",
+    "ai",
+    "nano-banana"
+  ],
+  "homepage": "https://github.com/shinpr/mcp-image",
+  "documentation": "https://github.com/shinpr/mcp-image#readme"
+}

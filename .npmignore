@@ -23,6 +23,7 @@ tsconfig.json
 vitest.config.ts
 vitest.config.mjs
 CLAUDE.md
+server.json
 
 # Test files
 __tests__/
