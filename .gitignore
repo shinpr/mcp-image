@@ -16,6 +16,9 @@ build/
 .env.test.local
 .env.production.local
 
+# MCP Registry authentication tokens
+.mcpregistry_*
+
 # Log files
 logs
 *.log
