@@ -79,6 +79,7 @@ function convertErrorToStructured(error: Error): {
   message: string
   suggestion: string
   timestamp: string
+  details?: Record<string, unknown>
 } {
   const baseError = {
     timestamp: new Date().toISOString(),
@@ -91,11 +92,28 @@ function convertErrorToStructured(error: Error): {
     error instanceof NetworkError ||
     error instanceof ConfigError
   ) {
-    return {
+    const errorResponse = {
       ...baseError,
       code: error.code,
       message: error.message,
       suggestion: error.suggestion,
+    } as Record<string, unknown>
+
+    // Include context details for GeminiAPIError to provide better debugging info
+    if (error instanceof GeminiAPIError && error.context) {
+      // Add non-sensitive context information
+      const { suggestion, ...otherContext } = error.context as Record<string, unknown>
+      if (Object.keys(otherContext).length > 0) {
+        errorResponse['details'] = otherContext
+      }
+    }
+
+    return errorResponse as {
+      code: string
+      message: string
+      suggestion: string
+      timestamp: string
+      details?: Record<string, unknown>
     }
   }
 

@@ -9,13 +9,13 @@
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.2.2",
+  "version": "0.2.3",
   "packages": [
     {
       "registry_type": "npm",
       "registry_base_url": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "transport": {
         "type": "stdio"
       },

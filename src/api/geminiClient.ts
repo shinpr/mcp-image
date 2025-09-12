@@ -11,46 +11,8 @@ import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
 
 /**
- * Gemini API response types with safety and blocking information
+ * Simplified Gemini API response types
  */
-
-// Enums for Gemini API response statuses
-type FinishReason =
-  | 'STOP'
-  | 'MAX_TOKENS'
-  | 'SAFETY'
-  | 'RECITATION'
-  | 'LANGUAGE'
-  | 'IMAGE_SAFETY'
-  | 'MALFORMED_FUNCTION_CALL'
-  | 'OTHER'
-
-type BlockReason =
-  | 'BLOCKED_REASON_UNSPECIFIED'
-  | 'SAFETY'
-  | 'OTHER'
-  | 'BLOCKLIST'
-  | 'PROHIBITED_CONTENT'
-  | 'IMAGE_SAFETY'
-
-type HarmCategory =
-  | 'HARM_CATEGORY_UNSPECIFIED'
-  | 'HARM_CATEGORY_DEROGATORY'
-  | 'HARM_CATEGORY_TOXICITY'
-  | 'HARM_CATEGORY_VIOLENCE'
-  | 'HARM_CATEGORY_SEXUAL'
-  | 'HARM_CATEGORY_MEDICAL'
-  | 'HARM_CATEGORY_DANGEROUS'
-  | 'HARM_CATEGORY_HARASSMENT'
-  | 'HARM_CATEGORY_HATE_SPEECH'
-  | 'HARM_CATEGORY_SEXUALLY_EXPLICIT'
-  | 'HARM_CATEGORY_DANGEROUS_CONTENT'
-
-interface SafetyRating {
-  category: HarmCategory
-  probability: string
-  blocked?: boolean
-}
 
 interface ContentPart {
   inlineData?: {
@@ -60,27 +22,17 @@ interface ContentPart {
   text?: string
 }
 
-interface ResponseContent {
-  parts?: ContentPart[]
-}
-
-interface PromptFeedback {
-  blockReason?: BlockReason
-  blockReasonMessage?: string
-  safetyRatings?: SafetyRating[]
-}
-
-interface ResponseCandidate {
-  content?: ResponseContent
-  finishReason?: FinishReason
-  safetyRatings?: SafetyRating[]
-}
-
 interface GeminiResponse {
-  response: {
-    candidates?: ResponseCandidate[]
-    promptFeedback?: PromptFeedback
-  }
+  candidates?: Array<{
+    content?: {
+      parts?: ContentPart[]
+    }
+    finishReason?: string
+  }>
+  modelVersion?: string
+  responseId?: string
+  sdkHttpResponse?: unknown
+  usageMetadata?: unknown
 }
 
 interface GeminiClientInstance {
@@ -97,16 +49,67 @@ interface GeminiClientInstance {
 }
 
 /**
- * Type guards for safe type checking
+ * Safely analyze response structure for debugging (removes sensitive data)
+ */
+function analyzeResponseStructure(obj: unknown): Record<string, unknown> {
+  if (!obj || typeof obj !== 'object') {
+    return { type: typeof obj, value: obj }
+  }
+
+  const seen = new WeakSet()
+
+  const sanitize = (value: unknown, depth = 0): unknown => {
+    if (depth > 3) return '[max depth]'
+
+    if (value === null || value === undefined) return value
+    if (typeof value !== 'object')
+      return typeof value === 'string' && value.length > 100
+        ? `[string length: ${value.length}]`
+        : value
+
+    if (seen.has(value)) return '[circular]'
+    seen.add(value)
+
+    if (Array.isArray(value)) {
+      return value.slice(0, 3).map((v) => sanitize(v, depth + 1))
+    }
+
+    const record = value as Record<string, unknown>
+    const result: Record<string, unknown> = {}
+
+    for (const [key, val] of Object.entries(record)) {
+      // Skip sensitive keys
+      if (/apikey|token|secret|password|credential/i.test(key)) {
+        result[key] = '[REDACTED]'
+      } else if (key === 'data' && typeof val === 'string' && val.length > 100) {
+        // Likely base64 image data
+        result[key] = `[base64 data, length: ${val.length}]`
+      } else {
+        result[key] = sanitize(val, depth + 1)
+      }
+    }
+
+    return result
+  }
+
+  return sanitize(obj) as Record<string, unknown>
+}
+
+/**
+ * Type guard for Gemini response validation
  */
 function isGeminiResponse(obj: unknown): obj is GeminiResponse {
   if (!obj || typeof obj !== 'object') return false
-  const candidate = obj as Record<string, unknown>
-  return (
-    'response' in candidate &&
-    candidate['response'] !== null &&
-    typeof candidate['response'] === 'object'
-  )
+  const response = obj as Record<string, unknown>
+
+  // Check if it has response property (wrapped response)
+  if ('response' in response && response['response'] && typeof response['response'] === 'object') {
+    const innerResponse = response['response'] as Record<string, unknown>
+    return 'candidates' in innerResponse && Array.isArray(innerResponse['candidates'])
+  }
+
+  // Check direct candidates property (direct response)
+  return 'candidates' in response && Array.isArray(response['candidates'])
 }
 
 interface ErrorWithCode extends Error {
@@ -122,6 +125,9 @@ export interface GeminiGenerationMetadata {
   mimeType: string
   timestamp: Date
   inputImageProvided: boolean
+  // Additional metadata from flat structure responses
+  modelVersion?: string
+  responseId?: string
 }
 
 /**
@@ -199,41 +205,66 @@ class GeminiClientImpl implements GeminiClient {
 
       // Validate response structure with type guard
       if (!isGeminiResponse(rawResponse)) {
-        return Err(
-          new GeminiAPIError(
-            'Invalid response structure from Gemini API',
-            'The API returned an unexpected response format',
-            { responseType: typeof rawResponse }
+        const responseStructure = analyzeResponseStructure(rawResponse)
+
+        // Check if it's an error response from Gemini
+        const asRecord = rawResponse as Record<string, unknown>
+        if (asRecord['error']) {
+          const error = asRecord['error'] as Record<string, unknown>
+          return Err(
+            new GeminiAPIError(`Gemini API Error: ${error['message'] || 'Unknown error'}`, {
+              code: error['code'],
+              status: error['status'],
+              details: error['details'] || responseStructure,
+              stage: 'api_error',
+            })
           )
+        }
+
+        return Err(
+          new GeminiAPIError('Invalid response structure from Gemini API', {
+            message: 'The API returned an unexpected response format',
+            responseStructure: responseStructure,
+            stage: 'response_validation',
+            suggestion: 'Check if the API endpoint or model configuration is correct',
+          })
         )
       }
 
-      const response = rawResponse as GeminiResponse
+      // Extract the actual response data (handle wrapped responses)
+      const responseData = (rawResponse as Record<string, unknown>)['response']
+        ? ((rawResponse as Record<string, unknown>)['response'] as GeminiResponse)
+        : (rawResponse as GeminiResponse)
 
-      // Check for prompt feedback (content filtering before generation)
-      const promptFeedback = response.response?.promptFeedback
-      if (promptFeedback?.blockReason) {
-        const blockReason = promptFeedback.blockReason
-        const blockMessage = this.getBlockReasonMessage(blockReason)
-        const safetyDetails = this.formatSafetyRatings(promptFeedback.safetyRatings)
-
-        return Err(
-          new GeminiAPIError(
-            `Image generation blocked: ${promptFeedback.blockReasonMessage || blockMessage}`,
-            {
-              blockReason: blockReason,
-              safetyRatings: safetyDetails,
+      // Check for prompt feedback (safety blocking)
+      const responseAsRecord = responseData as Record<string, unknown>
+      if (responseAsRecord['promptFeedback']) {
+        const promptFeedback = responseAsRecord['promptFeedback'] as Record<string, unknown>
+        if (promptFeedback['blockReason'] === 'SAFETY') {
+          return Err(
+            new GeminiAPIError('Image generation blocked for safety reasons', {
               stage: 'prompt_analysis',
-              suggestion: this.getBlockReasonSuggestion(blockReason),
-            }
+              blockReason: promptFeedback['blockReason'],
+              suggestion: 'Rephrase your prompt to avoid potentially sensitive content',
+            })
           )
-        )
+        }
+        if (
+          promptFeedback['blockReason'] === 'OTHER' ||
+          promptFeedback['blockReason'] === 'PROHIBITED_CONTENT'
+        ) {
+          return Err(
+            new GeminiAPIError('Image generation blocked due to prohibited content', {
+              stage: 'prompt_analysis',
+              blockReason: promptFeedback['blockReason'],
+              suggestion: 'Remove any prohibited content from your prompt and try again',
+            })
+          )
+        }
       }
 
       // Check for candidates
-      const candidates = response.response?.candidates
-      if (!candidates || candidates.length === 0) {
-        // No candidates usually means the prompt was blocked
+      if (!responseData.candidates || responseData.candidates.length === 0) {
         return Err(
           new GeminiAPIError('No image generated: Content may have been filtered', {
             stage: 'generation',
@@ -243,33 +274,61 @@ class GeminiClientImpl implements GeminiClient {
         )
       }
 
-      const candidate = candidates[0]
-      if (!candidate) {
+      const candidate = responseData.candidates[0]
+      if (!candidate || !candidate.content || !candidate.content.parts) {
         return Err(
-          new GeminiAPIError('No valid candidate in response', {
+          new GeminiAPIError('No valid content in response', {
             stage: 'candidate_extraction',
             suggestion: 'The API response was incomplete. Please try again',
           })
         )
       }
 
-      // Check finish reason for generation issues
-      if (candidate.finishReason && candidate.finishReason !== 'STOP') {
-        const finishMessage = this.getFinishReasonMessage(candidate.finishReason)
-        const finishSuggestion = this.getFinishReasonSuggestion(candidate.finishReason)
-        const safetyDetails = this.formatSafetyRatings(candidate.safetyRatings)
+      const parts = candidate.content.parts
 
-        return Err(
-          new GeminiAPIError(`Image generation stopped: ${finishMessage}`, {
-            finishReason: candidate.finishReason,
-            safetyRatings: safetyDetails,
-            stage: 'generation_stopped',
-            suggestion: finishSuggestion,
-          })
-        )
+      // Handle finish reason specific errors before checking parts
+      if (candidate.finishReason) {
+        const finishReason = candidate.finishReason
+
+        if (finishReason === 'IMAGE_SAFETY') {
+          return Err(
+            new GeminiAPIError('Image generation stopped for safety reasons', {
+              finishReason,
+              stage: 'generation_stopped',
+              suggestion: 'Modify your prompt to avoid potentially sensitive content',
+              safetyRatings: (candidate as Record<string, unknown>)['safetyRatings']
+                ? (
+                    (candidate as Record<string, unknown>)['safetyRatings'] as Record<
+                      string,
+                      unknown
+                    >[]
+                  )
+                    ?.map((rating: Record<string, unknown>) => {
+                      const category = (rating['category'] as string)
+                        .replace('HARM_CATEGORY_', '')
+                        .split('_')
+                        .map((word: string) => word.charAt(0) + word.slice(1).toLowerCase())
+                        .join(' ')
+                      return `${category} (${rating['blocked'] ? 'BLOCKED' : 'ALLOWED'})`
+                    })
+                    .join(', ')
+                : undefined,
+            })
+          )
+        }
+
+        if (finishReason === 'MAX_TOKENS') {
+          return Err(
+            new GeminiAPIError('Maximum token limit reached during generation', {
+              finishReason,
+              stage: 'generation_stopped',
+              suggestion: 'Try using a shorter or simpler prompt',
+            })
+          )
+        }
       }
-      const parts = candidate.content?.parts
-      if (!parts || parts.length === 0) {
+
+      if (parts.length === 0) {
         return Err(
           new GeminiAPIError('No content parts in response', {
             stage: 'content_extraction',
@@ -278,22 +337,20 @@ class GeminiClientImpl implements GeminiClient {
         )
       }
 
-      // Find the image part
+      // Check if we got an image or text (error message)
       const imagePart = parts.find((part) => part.inlineData?.data)
+      const textPart = parts.find((part) => part.text)
 
       if (!imagePart?.inlineData) {
-        // Check if there are text parts (might indicate an error message)
-        const textParts = parts.filter((part) => part.text).map((part) => part.text)
-        const errorContext =
-          textParts.length > 0
-            ? { textResponse: textParts.join(' '), stage: 'image_extraction' }
-            : { stage: 'image_extraction' }
+        // If there's text, it's likely an error message from Gemini
+        const errorMessage = textPart?.text || 'Image generation failed'
 
         return Err(
-          new GeminiAPIError('No image data in response', {
-            ...errorContext,
+          new GeminiAPIError('Image generation failed due to content filtering', {
+            reason: errorMessage,
+            stage: 'image_extraction',
             suggestion:
-              'The model returned text instead of an image. Try a more specific image generation prompt',
+              'The prompt was blocked by safety filters. Try rephrasing your prompt to avoid potentially sensitive content.',
           })
         )
       }
@@ -302,13 +359,15 @@ class GeminiClientImpl implements GeminiClient {
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
-      // Create simplified metadata
+      // Create metadata
       const metadata: GeminiGenerationMetadata = {
         model: this.modelName,
         prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
+        ...(responseData.modelVersion && { modelVersion: responseData.modelVersion }),
+        ...(responseData.responseId && { responseId: responseData.responseId }),
       }
 
       return Ok({
@@ -398,110 +457,6 @@ class GeminiClientImpl implements GeminiClient {
       return typeof error.status === 'number' ? error.status : undefined
     }
     return undefined
-  }
-
-  private getBlockReasonMessage(blockReason: BlockReason): string {
-    switch (blockReason) {
-      case 'SAFETY':
-        return 'Content was blocked due to safety concerns'
-      case 'PROHIBITED_CONTENT':
-        return 'The prompt contains prohibited content'
-      case 'IMAGE_SAFETY':
-        return 'Image generation blocked for safety reasons'
-      case 'BLOCKLIST':
-        return 'Content contains blocked terms'
-      case 'OTHER':
-        return 'Content was blocked for other reasons'
-      default:
-        return 'Content was blocked'
-    }
-  }
-
-  private getBlockReasonSuggestion(blockReason: BlockReason): string {
-    switch (blockReason) {
-      case 'SAFETY':
-      case 'IMAGE_SAFETY':
-        return 'Rephrase your prompt to avoid potentially harmful or sensitive content'
-      case 'PROHIBITED_CONTENT':
-        return 'Remove any prohibited content from your prompt and try again'
-      case 'BLOCKLIST':
-        return 'Avoid using specific terms that may be restricted'
-      case 'OTHER':
-        return 'Try a different prompt or contact support if the issue persists'
-      default:
-        return 'Modify your prompt and try again'
-    }
-  }
-
-  private getFinishReasonMessage(finishReason: FinishReason): string {
-    switch (finishReason) {
-      case 'SAFETY':
-        return 'Generation stopped due to safety concerns'
-      case 'IMAGE_SAFETY':
-        return 'Image generation stopped for safety reasons'
-      case 'MAX_TOKENS':
-        return 'Maximum token limit reached'
-      case 'RECITATION':
-        return 'Generation stopped to prevent recitation'
-      case 'LANGUAGE':
-        return 'Unsupported language detected'
-      case 'MALFORMED_FUNCTION_CALL':
-        return 'Invalid function call detected'
-      case 'OTHER':
-        return 'Generation stopped for other reasons'
-      default:
-        return 'Generation stopped unexpectedly'
-    }
-  }
-
-  private getFinishReasonSuggestion(finishReason: FinishReason): string {
-    switch (finishReason) {
-      case 'SAFETY':
-      case 'IMAGE_SAFETY':
-        return 'Modify your prompt to avoid content that may violate safety guidelines'
-      case 'MAX_TOKENS':
-        return 'Try a shorter or simpler prompt'
-      case 'RECITATION':
-        return 'Avoid requesting copyrighted or memorized content'
-      case 'LANGUAGE':
-        return 'Use a supported language (English recommended for best results)'
-      case 'MALFORMED_FUNCTION_CALL':
-        return 'Check your prompt format and try again'
-      case 'OTHER':
-        return 'Try rephrasing your prompt or contact support'
-      default:
-        return 'Please try again with a different prompt'
-    }
-  }
-
-  private formatSafetyRatings(ratings?: SafetyRating[]): string | undefined {
-    if (!ratings || ratings.length === 0) return undefined
-
-    const blockedRatings = ratings.filter((r) => r.blocked)
-    if (blockedRatings.length === 0) {
-      return ratings
-        .map((r) => `${this.formatHarmCategory(r.category)}: ${r.probability}`)
-        .join(', ')
-    }
-
-    return blockedRatings.map((r) => `${this.formatHarmCategory(r.category)} (BLOCKED)`).join(', ')
-  }
-
-  private formatHarmCategory(category: HarmCategory): string {
-    const categoryMap: Record<HarmCategory, string> = {
-      HARM_CATEGORY_UNSPECIFIED: 'Unspecified',
-      HARM_CATEGORY_DEROGATORY: 'Derogatory',
-      HARM_CATEGORY_TOXICITY: 'Toxicity',
-      HARM_CATEGORY_VIOLENCE: 'Violence',
-      HARM_CATEGORY_SEXUAL: 'Sexual',
-      HARM_CATEGORY_MEDICAL: 'Medical',
-      HARM_CATEGORY_DANGEROUS: 'Dangerous',
-      HARM_CATEGORY_HARASSMENT: 'Harassment',
-      HARM_CATEGORY_HATE_SPEECH: 'Hate Speech',
-      HARM_CATEGORY_SEXUALLY_EXPLICIT: 'Sexually Explicit',
-      HARM_CATEGORY_DANGEROUS_CONTENT: 'Dangerous Content',
-    }
-    return categoryMap[category] || category
   }
 }
 
