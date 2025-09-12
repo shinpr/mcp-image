@@ -11,27 +11,28 @@ import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
 
 /**
- * Basic types for Gemini API responses
+ * Simplified Gemini API response types
  */
+
 interface ContentPart {
   inlineData?: {
     data: string
     mimeType: string
   }
-}
-
-interface ResponseContent {
-  parts?: ContentPart[]
-}
-
-interface ResponseCandidate {
-  content?: ResponseContent
+  text?: string
 }
 
 interface GeminiResponse {
-  response: {
-    candidates?: ResponseCandidate[]
-  }
+  candidates?: Array<{
+    content?: {
+      parts?: ContentPart[]
+    }
+    finishReason?: string
+  }>
+  modelVersion?: string
+  responseId?: string
+  sdkHttpResponse?: unknown
+  usageMetadata?: unknown
 }
 
 interface GeminiClientInstance {
@@ -43,8 +44,72 @@ interface GeminiClientInstance {
       generationConfig?: {
         [key: string]: unknown
       }
-    }): Promise<GeminiResponse>
+    }): Promise<unknown> // Response is unknown, we'll validate with type guards
   }
+}
+
+/**
+ * Safely analyze response structure for debugging (removes sensitive data)
+ */
+function analyzeResponseStructure(obj: unknown): Record<string, unknown> {
+  if (!obj || typeof obj !== 'object') {
+    return { type: typeof obj, value: obj }
+  }
+
+  const seen = new WeakSet()
+
+  const sanitize = (value: unknown, depth = 0): unknown => {
+    if (depth > 3) return '[max depth]'
+
+    if (value === null || value === undefined) return value
+    if (typeof value !== 'object')
+      return typeof value === 'string' && value.length > 100
+        ? `[string length: ${value.length}]`
+        : value
+
+    if (seen.has(value)) return '[circular]'
+    seen.add(value)
+
+    if (Array.isArray(value)) {
+      return value.slice(0, 3).map((v) => sanitize(v, depth + 1))
+    }
+
+    const record = value as Record<string, unknown>
+    const result: Record<string, unknown> = {}
+
+    for (const [key, val] of Object.entries(record)) {
+      // Skip sensitive keys
+      if (/apikey|token|secret|password|credential/i.test(key)) {
+        result[key] = '[REDACTED]'
+      } else if (key === 'data' && typeof val === 'string' && val.length > 100) {
+        // Likely base64 image data
+        result[key] = `[base64 data, length: ${val.length}]`
+      } else {
+        result[key] = sanitize(val, depth + 1)
+      }
+    }
+
+    return result
+  }
+
+  return sanitize(obj) as Record<string, unknown>
+}
+
+/**
+ * Type guard for Gemini response validation
+ */
+function isGeminiResponse(obj: unknown): obj is GeminiResponse {
+  if (!obj || typeof obj !== 'object') return false
+  const response = obj as Record<string, unknown>
+
+  // Check if it has response property (wrapped response)
+  if ('response' in response && response['response'] && typeof response['response'] === 'object') {
+    const innerResponse = response['response'] as Record<string, unknown>
+    return 'candidates' in innerResponse && Array.isArray(innerResponse['candidates'])
+  }
+
+  // Check direct candidates property (direct response)
+  return 'candidates' in response && Array.isArray(response['candidates'])
 }
 
 interface ErrorWithCode extends Error {
@@ -60,6 +125,9 @@ export interface GeminiGenerationMetadata {
   mimeType: string
   timestamp: Date
   inputImageProvided: boolean
+  // Additional metadata from flat structure responses
+  modelVersion?: string
+  responseId?: string
 }
 
 /**
@@ -130,65 +198,160 @@ class GeminiClientImpl implements GeminiClient {
       }
 
       // Generate content using Gemini API (@google/genai v1.17.0+)
-      const response = await this.genai.models.generateContent({
+      const rawResponse = await this.genai.models.generateContent({
         model: this.modelName,
         contents: requestContent,
       })
 
-      // Extract image data from response
-      if (!response || typeof response !== 'object') {
-        return Err(
-          new GeminiAPIError(
-            'Invalid response from Gemini API',
-            'The API returned an unexpected response format'
+      // Validate response structure with type guard
+      if (!isGeminiResponse(rawResponse)) {
+        const responseStructure = analyzeResponseStructure(rawResponse)
+
+        // Check if it's an error response from Gemini
+        const asRecord = rawResponse as Record<string, unknown>
+        if (asRecord['error']) {
+          const error = asRecord['error'] as Record<string, unknown>
+          return Err(
+            new GeminiAPIError(`Gemini API Error: ${error['message'] || 'Unknown error'}`, {
+              code: error['code'],
+              status: error['status'],
+              details: error['details'] || responseStructure,
+              stage: 'api_error',
+            })
           )
+        }
+
+        return Err(
+          new GeminiAPIError('Invalid response structure from Gemini API', {
+            message: 'The API returned an unexpected response format',
+            responseStructure: responseStructure,
+            stage: 'response_validation',
+            suggestion: 'Check if the API endpoint or model configuration is correct',
+          })
         )
       }
 
-      // Handle different response structures
-      const candidates =
-        response.response?.candidates ||
-        (response as unknown as { candidates?: unknown[] }).candidates
-      if (!candidates || candidates.length === 0) {
-        return Err(
-          new GeminiAPIError(
-            'No image generated by Gemini API',
-            'Try rephrasing your prompt or check if the model supports your request type'
+      // Extract the actual response data (handle wrapped responses)
+      const responseData = (rawResponse as Record<string, unknown>)['response']
+        ? ((rawResponse as Record<string, unknown>)['response'] as GeminiResponse)
+        : (rawResponse as GeminiResponse)
+
+      // Check for prompt feedback (safety blocking)
+      const responseAsRecord = responseData as Record<string, unknown>
+      if (responseAsRecord['promptFeedback']) {
+        const promptFeedback = responseAsRecord['promptFeedback'] as Record<string, unknown>
+        if (promptFeedback['blockReason'] === 'SAFETY') {
+          return Err(
+            new GeminiAPIError('Image generation blocked for safety reasons', {
+              stage: 'prompt_analysis',
+              blockReason: promptFeedback['blockReason'],
+              suggestion: 'Rephrase your prompt to avoid potentially sensitive content',
+            })
           )
+        }
+        if (
+          promptFeedback['blockReason'] === 'OTHER' ||
+          promptFeedback['blockReason'] === 'PROHIBITED_CONTENT'
+        ) {
+          return Err(
+            new GeminiAPIError('Image generation blocked due to prohibited content', {
+              stage: 'prompt_analysis',
+              blockReason: promptFeedback['blockReason'],
+              suggestion: 'Remove any prohibited content from your prompt and try again',
+            })
+          )
+        }
+      }
+
+      // Check for candidates
+      if (!responseData.candidates || responseData.candidates.length === 0) {
+        return Err(
+          new GeminiAPIError('No image generated: Content may have been filtered', {
+            stage: 'generation',
+            candidatesCount: 0,
+            suggestion: 'Try rephrasing your prompt to avoid potentially sensitive content',
+          })
         )
       }
 
-      const candidate = candidates[0]
-      if (!candidate) {
+      const candidate = responseData.candidates[0]
+      if (!candidate || !candidate.content || !candidate.content.parts) {
         return Err(
-          new GeminiAPIError(
-            'No candidate found in Gemini API response',
-            'The API response was malformed. Try again or contact support if the issue persists'
-          )
-        )
-      }
-      const parts = (candidate as unknown as { content?: { parts?: unknown[] } }).content?.parts
-      if (!parts || parts.length === 0) {
-        return Err(
-          new GeminiAPIError(
-            'No image data in response from Gemini API',
-            'The API response was malformed. Try again or contact support if the issue persists'
-          )
+          new GeminiAPIError('No valid content in response', {
+            stage: 'candidate_extraction',
+            suggestion: 'The API response was incomplete. Please try again',
+          })
         )
       }
 
-      // Find the image part with proper type guards
-      const imagePart = parts.find((part: unknown) => {
-        const p = part as { inlineData?: { data: string; mimeType: string } }
-        return p.inlineData?.data
-      }) as { inlineData?: { data: string; mimeType: string } } | undefined
+      const parts = candidate.content.parts
+
+      // Handle finish reason specific errors before checking parts
+      if (candidate.finishReason) {
+        const finishReason = candidate.finishReason
+
+        if (finishReason === 'IMAGE_SAFETY') {
+          return Err(
+            new GeminiAPIError('Image generation stopped for safety reasons', {
+              finishReason,
+              stage: 'generation_stopped',
+              suggestion: 'Modify your prompt to avoid potentially sensitive content',
+              safetyRatings: (candidate as Record<string, unknown>)['safetyRatings']
+                ? (
+                    (candidate as Record<string, unknown>)['safetyRatings'] as Record<
+                      string,
+                      unknown
+                    >[]
+                  )
+                    ?.map((rating: Record<string, unknown>) => {
+                      const category = (rating['category'] as string)
+                        .replace('HARM_CATEGORY_', '')
+                        .split('_')
+                        .map((word: string) => word.charAt(0) + word.slice(1).toLowerCase())
+                        .join(' ')
+                      return `${category} (${rating['blocked'] ? 'BLOCKED' : 'ALLOWED'})`
+                    })
+                    .join(', ')
+                : undefined,
+            })
+          )
+        }
+
+        if (finishReason === 'MAX_TOKENS') {
+          return Err(
+            new GeminiAPIError('Maximum token limit reached during generation', {
+              finishReason,
+              stage: 'generation_stopped',
+              suggestion: 'Try using a shorter or simpler prompt',
+            })
+          )
+        }
+      }
+
+      if (parts.length === 0) {
+        return Err(
+          new GeminiAPIError('No content parts in response', {
+            stage: 'content_extraction',
+            suggestion: 'The generation was incomplete. Please try again',
+          })
+        )
+      }
+
+      // Check if we got an image or text (error message)
+      const imagePart = parts.find((part) => part.inlineData?.data)
+      const textPart = parts.find((part) => part.text)
 
       if (!imagePart?.inlineData) {
+        // If there's text, it's likely an error message from Gemini
+        const errorMessage = textPart?.text || 'Image generation failed'
+
         return Err(
-          new GeminiAPIError(
-            'No image data found in Gemini API response',
-            'The model may not have generated an image. Try a different prompt'
-          )
+          new GeminiAPIError('Image generation failed due to content filtering', {
+            reason: errorMessage,
+            stage: 'image_extraction',
+            suggestion:
+              'The prompt was blocked by safety filters. Try rephrasing your prompt to avoid potentially sensitive content.',
+          })
         )
       }
 
@@ -196,13 +359,15 @@ class GeminiClientImpl implements GeminiClient {
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
       const mimeType = imagePart.inlineData.mimeType || 'image/png'
 
-      // Create simplified metadata
+      // Create metadata
       const metadata: GeminiGenerationMetadata = {
         model: this.modelName,
         prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
         inputImageProvided: !!params.inputImage,
+        ...(responseData.modelVersion && { modelVersion: responseData.modelVersion }),
+        ...(responseData.responseId && { responseId: responseData.responseId }),
       }
 
       return Ok({
