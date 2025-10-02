@@ -702,4 +702,172 @@ describe('geminiClient', () => {
       })
     })
   })
+
+  describe('GeminiClient.generateImage with aspectRatio', () => {
+    it('should call API with imageConfig when aspectRatio is specified', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-image-data-16-9',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'test prompt for aspect ratio',
+        aspectRatio: '16:9',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'test prompt for aspect ratio',
+              },
+            ],
+          },
+        ],
+        config: {
+          imageConfig: { aspectRatio: '16:9' },
+          responseModalities: ['IMAGE'],
+        },
+      })
+    })
+
+    it('should use default when aspectRatio is not specified', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-default-image',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'test prompt without aspect ratio',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'test prompt without aspect ratio',
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
+      })
+      // Verify imageConfig.aspectRatio is not included
+      const callArgs = (mockGeminiClientInstance.models.generateContent as any).mock.calls[0][0]
+      expect(callArgs.config.imageConfig).toBeUndefined()
+    })
+
+    it('should include responseModalities: ["IMAGE"] in API call with aspectRatio', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-image-data-21-9',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'test prompt with 21:9 aspect ratio',
+        aspectRatio: '21:9',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-2.5-flash-image',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'test prompt with 21:9 aspect ratio',
+              },
+            ],
+          },
+        ],
+        config: {
+          imageConfig: { aspectRatio: '21:9' },
+          responseModalities: ['IMAGE'],
+        },
+      })
+    })
+  })
 })
