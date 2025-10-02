@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { GenerateImageParams } from '../../types/mcp'
+import type { AspectRatio, GenerateImageParams } from '../../types/mcp'
 import { validateBase64Image, validateGenerateImageParams, validatePrompt } from '../inputValidator'
 
 describe('inputValidator', () => {
@@ -204,6 +204,81 @@ describe('inputValidator', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toEqual(validParams)
+      }
+    })
+  })
+
+  describe('validateGenerateImageParams with aspectRatio', () => {
+    it('should accept all 10 supported aspect ratios', () => {
+      // Arrange
+      const supportedRatios: AspectRatio[] = [
+        '1:1',
+        '2:3',
+        '3:2',
+        '3:4',
+        '4:3',
+        '4:5',
+        '5:4',
+        '9:16',
+        '16:9',
+        '21:9',
+      ]
+
+      // Act & Assert
+      for (const ratio of supportedRatios) {
+        const result = validateGenerateImageParams({
+          prompt: 'test',
+          aspectRatio: ratio,
+        })
+        expect(result.success).toBe(true)
+      }
+    })
+
+    it('should reject invalid aspect ratio "4:1"', () => {
+      // Arrange
+      const invalidParams: GenerateImageParams = {
+        prompt: 'test',
+        aspectRatio: '4:1' as AspectRatio, // Type assertion for test
+      }
+
+      // Act
+      const result = validateGenerateImageParams(invalidParams)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.message).toContain('Invalid aspect ratio')
+      }
+    })
+
+    it('should accept undefined aspectRatio (default)', () => {
+      // Arrange
+      const validParams: GenerateImageParams = {
+        prompt: 'test',
+      }
+
+      // Act
+      const result = validateGenerateImageParams(validParams)
+
+      // Assert
+      expect(result.success).toBe(true)
+    })
+
+    it('should include supported values list in validation error message', () => {
+      // Arrange
+      const invalidParams: GenerateImageParams = {
+        prompt: 'test',
+        aspectRatio: 'invalid' as AspectRatio,
+      }
+
+      // Act
+      const result = validateGenerateImageParams(invalidParams)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.message).toContain('1:1')
+        expect(result.error.message).toContain('21:9')
       }
     })
   })

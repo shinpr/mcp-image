@@ -220,8 +220,8 @@ export function validateGenerateImageParams(
   if (params.aspectRatio && !SUPPORTED_ASPECT_RATIOS.includes(params.aspectRatio)) {
     return Err(
       new InputValidationError(
-        `Invalid aspect ratio: ${params.aspectRatio}`,
-        `Supported values: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`
+        `Invalid aspect ratio: ${params.aspectRatio}. Supported values: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`,
+        `Please use one of the supported aspect ratios: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`
       )
     )
   }
