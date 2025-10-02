@@ -44,6 +44,12 @@ interface GeminiClientInstance {
       generationConfig?: {
         [key: string]: unknown
       }
+      config?: {
+        imageConfig?: {
+          aspectRatio?: string
+        }
+        responseModalities?: string[]
+      }
     }): Promise<unknown> // Response is unknown, we'll validate with type guards
   }
 }
@@ -136,6 +142,7 @@ export interface GeminiGenerationMetadata {
 export interface GeminiApiParams {
   prompt: string
   inputImage?: string
+  aspectRatio?: string
 }
 
 /**
@@ -197,10 +204,21 @@ class GeminiClientImpl implements GeminiClient {
         })
       }
 
+      // Construct config object for generateContent
+      const config = params.aspectRatio
+        ? {
+            imageConfig: { aspectRatio: params.aspectRatio },
+            responseModalities: ['IMAGE'],
+          }
+        : {
+            responseModalities: ['IMAGE'],
+          }
+
       // Generate content using Gemini API (@google/genai v1.17.0+)
       const rawResponse = await this.genai.models.generateContent({
         model: this.modelName,
         contents: requestContent,
+        config,
       })
 
       // Validate response structure with type guard

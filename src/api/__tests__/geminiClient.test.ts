@@ -168,6 +168,9 @@ describe('geminiClient', () => {
             ],
           },
         ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
       })
     })
 
@@ -499,6 +502,9 @@ describe('geminiClient', () => {
             ],
           },
         ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
       })
     })
 
@@ -557,6 +563,9 @@ describe('geminiClient', () => {
             ],
           },
         ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
       })
     })
 
@@ -602,7 +611,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.model).toBe('gemini-2.5-flash-image')
       }
 
-      // Verify API was called without generation config
+      // Verify API was called with config
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
         model: 'gemini-2.5-flash-image',
         contents: [
@@ -614,6 +623,9 @@ describe('geminiClient', () => {
             ],
           },
         ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
       })
     })
 
@@ -684,6 +696,9 @@ describe('geminiClient', () => {
             ],
           },
         ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
       })
     })
   })
