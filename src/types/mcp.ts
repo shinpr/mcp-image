@@ -42,6 +42,8 @@ export interface GenerateImageParams {
   maintainCharacterConsistency?: boolean
   /** Use world knowledge integration for more accurate context (default: false) */
   useWorldKnowledge?: boolean
+  /** Aspect ratio for generated image (default: "1:1") */
+  aspectRatio?: AspectRatio
 }
 
 /**
