@@ -119,6 +119,11 @@ export class MCPServerImpl {
                 description:
                   'Use real-world knowledge for accurate context. Enable for historical figures, landmarks, or factual scenarios',
               },
+              aspectRatio: {
+                type: 'string' as const,
+                description: 'Aspect ratio for the generated image',
+                enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+              },
             },
             required: ['prompt'],
           },
@@ -251,6 +256,7 @@ export class MCPServerImpl {
       const generationResult = await this.geminiClient.generateImage({
         prompt: structuredPrompt,
         ...(inputImageData && { inputImage: inputImageData }),
+        ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
       })
 
       if (!generationResult.success) {

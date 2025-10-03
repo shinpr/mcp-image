@@ -8,6 +8,21 @@
  */
 
 /**
+ * Supported aspect ratios for Gemini 2.5 Flash Image
+ */
+export type AspectRatio =
+  | '1:1' // Square (default)
+  | '2:3' // Portrait
+  | '3:2' // Landscape
+  | '3:4' // Portrait
+  | '4:3' // Landscape
+  | '4:5' // Portrait
+  | '5:4' // Landscape
+  | '9:16' // Vertical (social media)
+  | '16:9' // Horizontal (cinematic)
+  | '21:9' // Ultra-wide
+
+/**
  * Parameters for image generation using Gemini API
  */
 export interface GenerateImageParams {
@@ -27,6 +42,8 @@ export interface GenerateImageParams {
   maintainCharacterConsistency?: boolean
   /** Use world knowledge integration for more accurate context (default: false) */
   useWorldKnowledge?: boolean
+  /** Aspect ratio for generated image (default: "1:1") */
+  aspectRatio?: AspectRatio
 }
 
 /**

@@ -315,3 +315,49 @@ describe('MCP Server', () => {
     expect(responseData.error.suggestion).toContain('descriptive prompt')
   })
 })
+
+// Test suite for aspectRatio parameter in generate_image tool schema
+describe('MCPServer tool schema - aspectRatio', () => {
+  it('should include aspectRatio in generate_image schema', () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    const toolsList = mcpServer.getToolsList()
+    const generateImageTool = toolsList.tools.find((t) => t.name === 'generate_image')
+
+    // Assert
+    expect(generateImageTool).toBeDefined()
+    expect(generateImageTool?.inputSchema.properties).toHaveProperty('aspectRatio')
+    expect(generateImageTool?.inputSchema.properties?.aspectRatio.type).toBe('string')
+  })
+
+  it('should define enum with 10 supported aspect ratios in schema', () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    const toolsList = mcpServer.getToolsList()
+    const generateImageTool = toolsList.tools.find((t) => t.name === 'generate_image')
+    const aspectRatioEnum = generateImageTool?.inputSchema.properties?.aspectRatio.enum
+
+    // Assert
+    expect(aspectRatioEnum).toHaveLength(10)
+    expect(aspectRatioEnum).toContain('1:1')
+    expect(aspectRatioEnum).toContain('16:9')
+    expect(aspectRatioEnum).toContain('21:9')
+  })
+
+  it('should mark aspectRatio as optional in schema', () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    const toolsList = mcpServer.getToolsList()
+    const generateImageTool = toolsList.tools.find((t) => t.name === 'generate_image')
+
+    // Assert
+    expect(generateImageTool?.inputSchema.required).toContain('prompt')
+    expect(generateImageTool?.inputSchema.required).not.toContain('aspectRatio')
+  })
+})

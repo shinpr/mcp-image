@@ -5,7 +5,7 @@
 
 import { existsSync } from 'node:fs'
 import { extname } from 'node:path'
-import type { GenerateImageParams } from '../types/mcp'
+import type { AspectRatio, GenerateImageParams } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { InputValidationError } from '../utils/errors'
@@ -15,6 +15,18 @@ const PROMPT_MIN_LENGTH = 1
 const PROMPT_MAX_LENGTH = 4000
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
 const SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp']
+const SUPPORTED_ASPECT_RATIOS: readonly AspectRatio[] = [
+  '1:1',
+  '2:3',
+  '3:2',
+  '3:4',
+  '4:3',
+  '4:5',
+  '5:4',
+  '9:16',
+  '16:9',
+  '21:9',
+] as const
 
 /**
  * Converts bytes to MB with proper formatting
@@ -202,6 +214,16 @@ export function validateGenerateImageParams(
     if (!imageResult.success) {
       return Err(imageResult.error)
     }
+  }
+
+  // Validate aspectRatio parameter
+  if (params.aspectRatio && !SUPPORTED_ASPECT_RATIOS.includes(params.aspectRatio)) {
+    return Err(
+      new InputValidationError(
+        `Invalid aspect ratio: ${params.aspectRatio}. Supported values: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`,
+        `Please use one of the supported aspect ratios: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`
+      )
+    )
   }
 
   return Ok(params)
