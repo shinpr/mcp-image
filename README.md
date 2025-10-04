@@ -2,7 +2,7 @@
 
 > Powered by Gemini 2.5 Flash Image - Nano Banana 🍌
 
-A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 2.5 Flash Image (Nano Banana 🍌). Seamlessly integrate advanced image generation capabilities into Claude Code, Cursor, and other MCP-compatible AI tools.
+A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 2.5 Flash Image (Nano Banana 🍌). Seamlessly integrate advanced image generation capabilities into Codex, Cursor, Claude Code, and other MCP-compatible AI tools.
 
 ## ✨ Features
 
@@ -25,7 +25,7 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 
 - **Node.js** 20 or higher
 - **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey)
-- **Claude Code** or **Cursor** (or any MCP-compatible AI tool)
+- **Codex**, **Cursor**, or **Claude Code** (file I/O capable AI tools)
 - Basic terminal/command line knowledge
 
 ## 🚀 Quick Start
@@ -36,10 +36,18 @@ Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
 
 ### 2. MCP Configuration
 
-#### For Claude Code
+#### For Codex
 
-```bash
-claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.mcp-image]
+command = "npx"
+args = ["-y", "mcp-image"]
+
+[mcp_servers.mcp-image.env]
+GEMINI_API_KEY = "your_gemini_api_key_here"
+IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
 ```
 
 #### For Cursor
@@ -63,6 +71,21 @@ Add to your Cursor settings:
 }
 ```
 
+#### For Claude Code
+
+Run in your project directory to enable for that project:
+
+```bash
+cd /path/to/your/project
+claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
+```
+
+Or add globally for all projects:
+
+```bash
+claude mcp add mcp-image --scope user --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
+```
+
 ⚠️ **Security Note**: Never commit your API key to version control. Keep it secure and use environment-specific configuration.
 
 📁 **Path Requirements**: 
@@ -74,13 +97,21 @@ Add to your Cursor settings:
 
 Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and send your prompts directly to the image generator. Useful when you need full control over the exact prompt wording.
 
-**Claude Code:**
-```bash
-claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env SKIP_PROMPT_ENHANCEMENT=true -- npx -y mcp-image
+**Codex:**
+```toml
+[mcp_servers.mcp-image.env]
+GEMINI_API_KEY = "your_gemini_api_key_here"
+SKIP_PROMPT_ENHANCEMENT = "true"
+IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
 ```
 
 **Cursor:**
 Add `"SKIP_PROMPT_ENHANCEMENT": "true"` to the env section in your config.
+
+**Claude Code:**
+```bash
+claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env SKIP_PROMPT_ENHANCEMENT=true --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
+```
 
 ## 📖 Usage Examples
 
