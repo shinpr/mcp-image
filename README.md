@@ -6,7 +6,7 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 
 ## ✨ Features
 
-- **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image (Nano Banana 🍌)
+- **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image (Nano Banana)
 - **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.0 Flash for superior image quality
   - Adds photographic and artistic details
   - Enriches lighting, composition, and atmosphere descriptions
@@ -121,11 +121,12 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `prompt` | string | ✅ | Text description or editing instruction |
-| `inputImagePath` | string | ❌ | Absolute path to input image for editing |
-| `fileName` | string | ❌ | Custom filename for output (auto-generated if not specified) |
-| `blendImages` | boolean | ❌ | Enable multi-image blending |
-| `maintainCharacterConsistency` | boolean | ❌ | Maintain character appearance across generations |
-| `useWorldKnowledge` | boolean | ❌ | Use real-world knowledge for context |
+| `inputImagePath` | string | - | Absolute path to input image for editing |
+| `fileName` | string | - | Custom filename for output (auto-generated if not specified) |
+| `aspectRatio` | string | - | Aspect ratio for the generated image. Supported values: `1:1` (square, default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
+| `blendImages` | boolean | - | Enable multi-image blending |
+| `maintainCharacterConsistency` | boolean | - | Maintain character appearance across generations |
+| `useWorldKnowledge` | boolean | - | Use real-world knowledge for context |
 
 #### Response
 
