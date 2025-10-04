@@ -1,10 +1,12 @@
-# MCP Image Generator
+# 🍌 MCP Image Generator
 
-A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 2.5 Flash Image API. Seamlessly integrate advanced image generation capabilities into Claude Code, Cursor, and other MCP-compatible AI tools.
+> Powered by Gemini 2.5 Flash Image - Nano Banana 🍌
+
+A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 2.5 Flash Image (Nano Banana 🍌). Seamlessly integrate advanced image generation capabilities into Claude Code, Cursor, and other MCP-compatible AI tools.
 
 ## ✨ Features
 
-- **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image Preview
+- **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image (Nano Banana 🍌)
 - **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.0 Flash for superior image quality
   - Adds photographic and artistic details
   - Enriches lighting, composition, and atmosphere descriptions
@@ -112,7 +114,7 @@ The system automatically enhances this to include rich details about lighting, m
 
 The MCP server exposes a single tool for all image operations. Internally, it uses a two-stage process:
 1. **Prompt Optimization**: Gemini 2.0 Flash analyzes and enriches your prompt
-2. **Image Generation**: Gemini 2.5 Flash Image Preview creates the final image
+2. **Image Generation**: Gemini 2.5 Flash Image creates the final image
 
 #### Parameters
 
@@ -136,7 +138,7 @@ The MCP server exposes a single tool for all image operations. Internally, it us
     "mimeType": "image/png"
   },
   "metadata": {
-    "model": "gemini-2.5-flash-image-preview",
+    "model": "gemini-2.5-flash-image",
     "processingTime": 5000,
     "timestamp": "2024-01-01T12:00:00.000Z"
   }
@@ -173,7 +175,7 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 
 - This MCP server uses the paid Gemini API for both prompt optimization and image generation
   - Gemini 2.0 Flash for intelligent prompt enhancement (minimal token usage)
-  - Gemini 2.5 Flash Image Preview for actual image generation
+  - Gemini 2.5 Flash Image for actual image generation
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
 - The prompt optimization step adds minimal cost while significantly improving output quality
