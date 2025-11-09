@@ -1,7 +1,7 @@
 {
   "name": "mcp-image",
   "mcpName": "io.github.shinpr/mcp-image",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "MCP server for AI image generation",
   "main": "dist/index.js",
   "bin": {
@@ -9,9 +9,18 @@
   },
   "keywords": [
     "mcp",
-    "image-generation",
-    "ai",
+    "mcp-server",
     "model-context-protocol",
+    "image-generation",
+    "generative-ai",
+    "image-editing",
+    "prompt-enhancement",
+    "gemini",
+    "google-ai",
+    "nano-banana",
+    "claude-code",
+    "cursor",
+    "codex",
     "typescript"
   ],
   "author": "Shinsuke Kagawa",

@@ -8,13 +8,13 @@
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.3.0",
+  "version": "0.4.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.3.0",
+      "version": "0.4.0",
       "transport": {
         "type": "stdio"
       },
@@ -61,9 +61,16 @@
     }
   ],
   "tags": [
+    "mcp",
+    "mcp-server",
     "image-generation",
-    "ai",
-    "nano-banana"
+    "generative-ai",
+    "image-editing",
+    "prompt-enhancement",
+    "gemini",
+    "nano-banana",
+    "google-ai",
+    "ai-tools"
   ],
   "homepage": "https://github.com/shinpr/mcp-image",
   "documentation": "https://github.com/shinpr/mcp-image#readme"
