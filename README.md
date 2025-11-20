@@ -1,12 +1,12 @@
 # 🍌 MCP Image Generator
 
-> Powered by Gemini 2.5 Flash Image - Nano Banana 🍌
+> Powered by Gemini 3 Pro Image - Nano Banana Pro 🍌
 
-A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 2.5 Flash Image (Nano Banana 🍌). Seamlessly integrate advanced image generation capabilities into Codex, Cursor, Claude Code, and other MCP-compatible AI tools.
+A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 3 Pro Image (Nano Banana Pro 🍌). Seamlessly integrate advanced image generation capabilities into Codex, Cursor, Claude Code, and other MCP-compatible AI tools.
 
 ## ✨ Features
 
-- **AI-Powered Image Generation**: Create images from text prompts using Gemini 2.5 Flash Image (Nano Banana)
+- **AI-Powered Image Generation**: Create images from text prompts using Gemini 3 Pro Image (Nano Banana Pro)
 - **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.0 Flash for superior image quality
   - Adds photographic and artistic details
   - Enriches lighting, composition, and atmosphere descriptions
@@ -14,7 +14,12 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 - **Image Editing**: Transform existing images with natural language instructions
   - Context-aware editing that preserves original style
   - Maintains visual consistency with source image
-- **Advanced Options**: 
+- **High-Resolution Output**: Support for 2K and 4K image generation
+  - Standard quality for fast generation
+  - 2K resolution for enhanced detail
+  - 4K resolution for professional-grade images with superior text rendering
+- **Flexible Aspect Ratios**: Multiple aspect ratio options (1:1, 16:9, 9:16, 21:9, and more)
+- **Advanced Options**:
   - Multi-image blending for composite scenes
   - Character consistency across generations
   - World knowledge integration for accurate context
@@ -134,9 +139,22 @@ The system automatically enhances this to include rich details about lighting, m
 
 ### Advanced Features
 
+**Character Consistency:**
 ```
 "Generate a portrait of a medieval knight, maintaining character consistency for future variations"
 (with maintainCharacterConsistency: true)
+```
+
+**High-Resolution 4K Generation:**
+```
+"Generate a professional product photo of a smartphone with clear text on the screen"
+(with imageSize: "4K")
+```
+
+**Custom Aspect Ratio:**
+```
+"Generate a cinematic landscape of a desert at golden hour"
+(with aspectRatio: "21:9")
 ```
 
 ## 🔧 API Reference
@@ -145,7 +163,7 @@ The system automatically enhances this to include rich details about lighting, m
 
 The MCP server exposes a single tool for all image operations. Internally, it uses a two-stage process:
 1. **Prompt Optimization**: Gemini 2.0 Flash analyzes and enriches your prompt
-2. **Image Generation**: Gemini 2.5 Flash Image creates the final image
+2. **Image Generation**: Gemini 3 Pro Image creates the final image
 
 #### Parameters
 
@@ -155,9 +173,10 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 | `inputImagePath` | string | - | Absolute path to input image for editing |
 | `fileName` | string | - | Custom filename for output (auto-generated if not specified) |
 | `aspectRatio` | string | - | Aspect ratio for the generated image. Supported values: `1:1` (square, default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9` |
-| `blendImages` | boolean | - | Enable multi-image blending |
-| `maintainCharacterConsistency` | boolean | - | Maintain character appearance across generations |
-| `useWorldKnowledge` | boolean | - | Use real-world knowledge for context |
+| `imageSize` | string | - | Image resolution for high-quality output. Specify `2K` or `4K` for higher resolution images with better text rendering and fine details. Leave unspecified for standard quality. Supported values: `2K`, `4K` |
+| `blendImages` | boolean | - | Enable multi-image blending for combining multiple visual elements naturally |
+| `maintainCharacterConsistency` | boolean | - | Maintain character appearance consistency across different poses and scenes |
+| `useWorldKnowledge` | boolean | - | Use real-world knowledge for accurate context (recommended for historical figures, landmarks, or factual scenarios) |
 
 #### Response
 
@@ -199,15 +218,17 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 
 - Image generation: 30-60 seconds typical (includes prompt optimization)
 - Image editing: 15-45 seconds typical (includes context analysis)
+- High-resolution generation (2K/4K): May take longer but provides superior quality
 - Simple prompts work great - the AI automatically adds professional details
 - Complex prompts are preserved and further enhanced
 - Consider enabling `useWorldKnowledge` for historical or factual subjects
+- Use `imageSize: "4K"` when text clarity and fine details are critical
 
 ## 💰 Usage Notes
 
 - This MCP server uses the paid Gemini API for both prompt optimization and image generation
   - Gemini 2.0 Flash for intelligent prompt enhancement (minimal token usage)
-  - Gemini 2.5 Flash Image for actual image generation
+  - Gemini 3 Pro Image for actual image generation
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
 - The prompt optimization step adds minimal cost while significantly improving output quality
