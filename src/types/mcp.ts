@@ -8,7 +8,7 @@
  */
 
 /**
- * Supported aspect ratios for Gemini 2.5 Flash Image
+ * Supported aspect ratios for Gemini image generation
  */
 export type AspectRatio =
   | '1:1' // Square (default)
@@ -21,6 +21,11 @@ export type AspectRatio =
   | '9:16' // Vertical (social media)
   | '16:9' // Horizontal (cinematic)
   | '21:9' // Ultra-wide
+
+/**
+ * Supported image sizes for high-resolution output
+ */
+export type ImageSize = '2K' | '4K'
 
 /**
  * Parameters for image generation using Gemini API
@@ -44,6 +49,8 @@ export interface GenerateImageParams {
   useWorldKnowledge?: boolean
   /** Aspect ratio for generated image (default: "1:1") */
   aspectRatio?: AspectRatio
+  /** Image resolution for high-quality output (e.g., "2K", "4K"). Leave unspecified for standard quality */
+  imageSize?: ImageSize
 }
 
 /**

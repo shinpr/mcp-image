@@ -11,7 +11,7 @@ vi.mock('../../api/geminiClient', () => {
           data: {
             imageData: Buffer.from('mock-image-data', 'utf-8'),
             metadata: {
-              model: 'gemini-2.5-flash-image-preview',
+              model: 'gemini-3-pro-image-preview-preview',
               prompt: 'test prompt',
               mimeType: 'image/png',
               timestamp: new Date(),
@@ -55,7 +55,7 @@ vi.mock('../../business/imageGenerator', () => {
           data: {
             imageData: Buffer.from('mock-image-data', 'utf-8'),
             metadata: {
-              model: 'gemini-2.5-flash-image-preview',
+              model: 'gemini-3-pro-image-preview-preview',
               prompt: 'test prompt',
               mimeType: 'image/png',
               timestamp: new Date(),
@@ -86,7 +86,7 @@ vi.mock('../../business/responseBuilder', () => {
                   mimeType: 'image/png',
                 },
                 metadata: {
-                  model: 'gemini-2.5-flash-image-preview',
+                  model: 'gemini-3-pro-image-preview-preview',
                   prompt: 'test prompt',
                   mimeType: 'image/png',
                   timestamp: new Date().toISOString(),
@@ -240,7 +240,7 @@ describe('MCP Server', () => {
     expect(responseData.resource.name).toBe('test-image.png')
     expect(responseData.resource.mimeType).toBe('image/png')
     expect(responseData).toHaveProperty('metadata')
-    expect(responseData.metadata.model).toBe('gemini-2.5-flash-image-preview')
+    expect(responseData.metadata.model).toBe('gemini-3-pro-image-preview-preview')
   })
 
   it('should save to file when fileName is specified', async () => {
@@ -268,7 +268,7 @@ describe('MCP Server', () => {
     expect(responseData.resource.name).toBe('test-image.png')
     expect(responseData.resource.mimeType).toBe('image/png')
     expect(responseData).toHaveProperty('metadata')
-    expect(responseData.metadata.model).toBe('gemini-2.5-flash-image-preview')
+    expect(responseData.metadata.model).toBe('gemini-3-pro-image-preview-preview')
   })
 
   it('should handle invalid tool request', async () => {

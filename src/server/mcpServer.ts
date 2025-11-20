@@ -124,6 +124,12 @@ export class MCPServerImpl {
                 description: 'Aspect ratio for the generated image',
                 enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
               },
+              imageSize: {
+                type: 'string' as const,
+                description:
+                  'Image resolution for high-quality output. Specify "2K" or "4K" when you need higher resolution images with better text rendering and fine details. Leave unspecified for standard quality.',
+                enum: ['2K', '4K'],
+              },
             },
             required: ['prompt'],
           },
@@ -257,6 +263,7 @@ export class MCPServerImpl {
         prompt: structuredPrompt,
         ...(inputImageData && { inputImage: inputImageData }),
         ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
+        ...(params.imageSize && { imageSize: params.imageSize }),
       })
 
       if (!generationResult.success) {
