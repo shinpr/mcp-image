@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "io.github.shinpr/mcp-image",
-  "description": "AI image generation MCP server using Nano Banana with intelligent prompt enhancement",
+  "description": "AI image generation MCP server using Nano Banana Pro with intelligent prompt enhancement",
   "vendor": "Shinsuke Kagawa",
   "license": "MIT",
   "repository": {
@@ -52,10 +52,7 @@
           "supported": false
         },
         "resources": {
-          "supported": true,
-          "list": [
-            "file"
-          ]
+          "supported": true
         }
       }
     }
@@ -69,6 +66,7 @@
     "prompt-enhancement",
     "gemini",
     "nano-banana",
+    "nano-banana-pro",
     "google-ai",
     "ai-tools"
   ],
