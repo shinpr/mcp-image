@@ -170,7 +170,7 @@ The MCP server exposes a single tool for all image operations. Internally, it us
     "mimeType": "image/png"
   },
   "metadata": {
-    "model": "gemini-2.5-flash-image",
+    "model": "gemini-3-pro-image-preview",
     "processingTime": 5000,
     "timestamp": "2024-01-01T12:00:00.000Z"
   }

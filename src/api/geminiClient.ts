@@ -143,6 +143,7 @@ export interface GeminiApiParams {
   prompt: string
   inputImage?: string
   aspectRatio?: string
+  imageSize?: string
 }
 
 /**
@@ -166,7 +167,7 @@ export interface GeminiClient {
  * Implementation of Gemini API client
  */
 class GeminiClientImpl implements GeminiClient {
-  private readonly modelName = 'gemini-2.5-flash-image'
+  private readonly modelName = 'gemini-3-pro-image-preview'
 
   constructor(private readonly genai: GeminiClientInstance) {}
 
@@ -205,14 +206,23 @@ class GeminiClientImpl implements GeminiClient {
       }
 
       // Construct config object for generateContent
-      const config = params.aspectRatio
-        ? {
-            imageConfig: { aspectRatio: params.aspectRatio },
-            responseModalities: ['IMAGE'],
-          }
-        : {
-            responseModalities: ['IMAGE'],
-          }
+      const imageConfig: Record<string, string> = {}
+      if (params.aspectRatio) {
+        imageConfig['aspectRatio'] = params.aspectRatio
+      }
+      if (params.imageSize) {
+        imageConfig['imageSize'] = params.imageSize
+      }
+
+      const config =
+        Object.keys(imageConfig).length > 0
+          ? {
+              imageConfig,
+              responseModalities: ['IMAGE'],
+            }
+          : {
+              responseModalities: ['IMAGE'],
+            }
 
       // Generate content using Gemini API (@google/genai v1.17.0+)
       const rawResponse = await this.genai.models.generateContent({
