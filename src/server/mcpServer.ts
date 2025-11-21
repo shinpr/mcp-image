@@ -119,6 +119,11 @@ export class MCPServerImpl {
                 description:
                   'Use real-world knowledge for accurate context. Enable for historical figures, landmarks, or factual scenarios',
               },
+              useGoogleSearch: {
+                type: 'boolean' as const,
+                description:
+                  "Enable Google Search grounding to access real-time web information for factually accurate image generation. Use when prompt requires current or time-sensitive data that may have changed since the model's knowledge cutoff. Leave disabled for creative, fictional, historical, or timeless content.",
+              },
               aspectRatio: {
                 type: 'string' as const,
                 description: 'Aspect ratio for the generated image',
@@ -230,6 +235,9 @@ export class MCPServerImpl {
         if (params.useWorldKnowledge !== undefined) {
           features.useWorldKnowledge = params.useWorldKnowledge
         }
+        if (params.useGoogleSearch !== undefined) {
+          features.useGoogleSearch = params.useGoogleSearch
+        }
 
         const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
           params.prompt,
@@ -264,6 +272,7 @@ export class MCPServerImpl {
         ...(inputImageData && { inputImage: inputImageData }),
         ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
         ...(params.imageSize && { imageSize: params.imageSize }),
+        ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
       })
 
       if (!generationResult.success) {

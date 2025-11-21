@@ -870,4 +870,237 @@ describe('geminiClient', () => {
       })
     })
   })
+
+  describe('GeminiClient.generateImage with useGoogleSearch', () => {
+    it('should call API with tools parameter when useGoogleSearch is true', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-grounded-image-data',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate current 2025 weather map of Tokyo',
+        useGoogleSearch: true,
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-3-pro-image-preview',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Generate current 2025 weather map of Tokyo',
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
+        tools: [{ googleSearch: {} }],
+      })
+    })
+
+    it('should not include tools parameter when useGoogleSearch is false', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-standard-image',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate creative fantasy landscape',
+        useGoogleSearch: false,
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-3-pro-image-preview',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Generate creative fantasy landscape',
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
+      })
+
+      // Verify tools parameter is not included
+      const callArgs = (mockGeminiClientInstance.models.generateContent as any).mock.calls[0][0]
+      expect(callArgs.tools).toBeUndefined()
+    })
+
+    it('should not include tools parameter when useGoogleSearch is undefined', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-default-image',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate image without grounding',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-3-pro-image-preview',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Generate image without grounding',
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['IMAGE'],
+        },
+      })
+
+      // Verify tools parameter is not included
+      const callArgs = (mockGeminiClientInstance.models.generateContent as any).mock.calls[0][0]
+      expect(callArgs.tools).toBeUndefined()
+    })
+
+    it('should combine useGoogleSearch with aspectRatio and imageSize', async () => {
+      // Arrange
+      const mockResponse = {
+        response: {
+          candidates: [
+            {
+              content: {
+                parts: [
+                  {
+                    inlineData: {
+                      data: 'base64-grounded-4k-image',
+                      mimeType: 'image/png',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }
+
+      mockGeminiClientInstance.models.generateContent = vi.fn().mockResolvedValue(mockResponse)
+
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({
+        prompt: 'Generate 2025 Japan foodtech industry chaos map',
+        useGoogleSearch: true,
+        aspectRatio: '16:9',
+        imageSize: '4K',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith({
+        model: 'gemini-3-pro-image-preview',
+        contents: [
+          {
+            parts: [
+              {
+                text: 'Generate 2025 Japan foodtech industry chaos map',
+              },
+            ],
+          },
+        ],
+        config: {
+          imageConfig: {
+            aspectRatio: '16:9',
+            imageSize: '4K',
+          },
+          responseModalities: ['IMAGE'],
+        },
+        tools: [{ googleSearch: {} }],
+      })
+    })
+  })
 })

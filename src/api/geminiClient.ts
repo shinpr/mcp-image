@@ -144,6 +144,7 @@ export interface GeminiApiParams {
   inputImage?: string
   aspectRatio?: string
   imageSize?: string
+  useGoogleSearch?: boolean
 }
 
 /**
@@ -224,11 +225,15 @@ class GeminiClientImpl implements GeminiClient {
               responseModalities: ['IMAGE'],
             }
 
+      // Construct tools array for Google Search grounding
+      const tools = params.useGoogleSearch ? [{ googleSearch: {} }] : undefined
+
       // Generate content using Gemini API (@google/genai v1.17.0+)
       const rawResponse = await this.genai.models.generateContent({
         model: this.modelName,
         contents: requestContent,
         config,
+        ...(tools && { tools }),
       })
 
       // Validate response structure with type guard

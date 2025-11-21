@@ -47,6 +47,8 @@ export interface GenerateImageParams {
   maintainCharacterConsistency?: boolean
   /** Use world knowledge integration for more accurate context (default: false) */
   useWorldKnowledge?: boolean
+  /** Enable Google Search grounding for real-time web information (default: false) */
+  useGoogleSearch?: boolean
   /** Aspect ratio for generated image (default: "1:1") */
   aspectRatio?: AspectRatio
   /** Image resolution for high-quality output (e.g., "2K", "4K"). Leave unspecified for standard quality */

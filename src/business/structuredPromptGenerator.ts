@@ -49,6 +49,7 @@ export interface FeatureFlags {
   maintainCharacterConsistency?: boolean
   blendImages?: boolean
   useWorldKnowledge?: boolean
+  useGoogleSearch?: boolean
 }
 
 /**
