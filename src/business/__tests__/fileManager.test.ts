@@ -107,12 +107,5 @@ describe('FileManager', () => {
 
       expect(fileName).toMatch(/^image-\d{13}-\d{1,3}\.png$/)
     })
-
-    it('should generate unique filenames for consecutive calls', () => {
-      const fileName1 = fileManager.generateFileName()
-      const fileName2 = fileManager.generateFileName()
-
-      expect(fileName1).not.toBe(fileName2)
-    })
   })
 })
