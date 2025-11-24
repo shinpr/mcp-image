@@ -177,6 +177,7 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 | `blendImages` | boolean | - | Enable multi-image blending for combining multiple visual elements naturally |
 | `maintainCharacterConsistency` | boolean | - | Maintain character appearance consistency across different poses and scenes |
 | `useWorldKnowledge` | boolean | - | Use real-world knowledge for accurate context (recommended for historical figures, landmarks, or factual scenarios) |
+| `useGoogleSearch` | boolean | - | Enable Google Search grounding to access real-time web information for factually accurate image generation. Use when prompt requires current or time-sensitive data that may have changed since the model's knowledge cutoff. Leave disabled for creative, fictional, historical, or timeless content. |
 
 #### Response
 
