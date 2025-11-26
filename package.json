@@ -1,7 +1,7 @@
 {
   "name": "mcp-image",
   "mcpName": "io.github.shinpr/mcp-image",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "MCP server for AI image generation",
   "main": "dist/index.js",
   "bin": {
