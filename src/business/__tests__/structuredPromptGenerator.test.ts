@@ -104,5 +104,37 @@ describe('StructuredPromptGenerator', () => {
         expect(result.data.selectedPractices).toContain('Camera Control Terminology')
       }
     })
+
+    it('should include purpose context when purpose is provided', async () => {
+      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const userPrompt = 'Delicious pasta dish'
+      const purpose = 'high-end Italian restaurant menu'
+
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(
+        Ok('Professional food photography of artfully plated pasta')
+      )
+
+      const result = await generator.generateStructuredPrompt(userPrompt, {}, undefined, purpose)
+
+      expect(result.success).toBe(true)
+      const call = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0]
+      expect(call[0]).toContain('INTENDED USE:')
+      expect(call[0]).toContain(purpose)
+    })
+
+    it('should not include purpose context when purpose is not provided', async () => {
+      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const userPrompt = 'A simple cat'
+
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(
+        Ok('A fluffy cat with soft lighting')
+      )
+
+      const result = await generator.generateStructuredPrompt(userPrompt)
+
+      expect(result.success).toBe(true)
+      const call = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0]
+      expect(call[0]).not.toContain('INTENDED USE:')
+    })
   })
 })
