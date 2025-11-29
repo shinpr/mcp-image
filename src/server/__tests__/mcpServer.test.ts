@@ -206,7 +206,7 @@ describe('MCP Server', () => {
     expect(schema.properties?.prompt).toEqual({
       type: 'string',
       description:
-        'The prompt for image generation (English recommended for optimal structured prompt enhancement). For text in images, 25 characters or less is recommended for optimal results.',
+        'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
     })
     expect(schema.properties).toHaveProperty('fileName')
     expect(schema.properties?.fileName).toEqual({
