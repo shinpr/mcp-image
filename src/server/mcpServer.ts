@@ -92,7 +92,7 @@ export class MCPServerImpl {
               prompt: {
                 type: 'string' as const,
                 description:
-                  'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
+                  'The prompt for image generation (English recommended for optimal structured prompt enhancement). For text in images, 25 characters or less is recommended for optimal results.',
               },
               fileName: {
                 type: 'string' as const,
@@ -134,6 +134,11 @@ export class MCPServerImpl {
                 description:
                   'Image resolution for high-quality output. Specify "2K" or "4K" when you need higher resolution images with better text rendering and fine details. Leave unspecified for standard quality.',
                 enum: ['2K', '4K'],
+              },
+              purpose: {
+                type: 'string' as const,
+                description:
+                  'Intended use for the image (e.g., cookbook cover, social media post, presentation slide). Helps tailor visual style, quality level, and details to match the purpose.',
               },
             },
             required: ['prompt'],
@@ -242,7 +247,8 @@ export class MCPServerImpl {
         const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
           params.prompt,
           features,
-          inputImageData // Pass image data for context-aware prompt generation
+          inputImageData, // Pass image data for context-aware prompt generation
+          params.purpose // Pass intended use for purpose-aware prompt generation
         )
 
         if (promptResult.success) {

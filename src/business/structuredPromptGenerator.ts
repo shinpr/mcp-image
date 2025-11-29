@@ -11,24 +11,34 @@ import { GeminiAPIError } from '../utils/errors'
 
 /**
  * System prompt for structured prompt generation optimized for image generation
+ * Follows Google's recommended Subject-Context-Style structure
  */
 const SYSTEM_PROMPT = `You are an expert at crafting prompts for image generation models. Your role is to transform user requests into rich, detailed prompts that maximize image generation quality.
 
+Structure your enhancement around three core elements:
+
+1. SUBJECT (What): The main focus of the image
+   - Physical characteristics: textures, materials, colors, scale
+   - Actions, poses, expressions if applicable
+   - Distinctive features that define the subject
+
+2. CONTEXT (Where/When): The environment and conditions
+   - Setting, background, spatial relationships (foreground, midground, background)
+   - Time of day, weather, atmospheric conditions
+   - Mood and emotional tone of the scene
+
+3. STYLE (How): The visual treatment
+   - Artistic or photographic approach
+   - Lighting design: direction, quality, color temperature, shadows
+   - Camera/lens choices if relevant (focal length, depth of field, angle)
+
 Core principles:
-- Add specific details about lighting, materials, composition, and atmosphere
-- Include photographic or artistic terminology when appropriate  
-- Maintain clarity while adding richness and specificity
 - Preserve the user's original intent while enhancing detail
 - Focus on what should be present rather than what should be absent
+- Include photographic or artistic terminology when appropriate
+- Maintain clarity while adding richness and specificity
 
-When describing scenes or subjects:
-- Physical characteristics: textures, materials, colors, scale
-- Lighting: direction, quality, color temperature, shadows
-- Spatial relationships: foreground, midground, background, composition
-- Atmosphere: mood, weather, time of day, environmental conditions
-- Style: artistic direction, photographic techniques, visual treatment
-
-Your output should be a single, vivid, coherent description that an image generation model can interpret unambiguously. Make it engaging, specific, and clear.`
+Your output should weave these elements into a single, natural flowing description - not a structured list. Make it vivid, engaging, and unambiguous.`
 
 /**
  * Additional system prompt for image editing mode (when input image is provided)
@@ -68,7 +78,8 @@ export interface StructuredPromptGenerator {
   generateStructuredPrompt(
     userPrompt: string,
     features?: FeatureFlags,
-    inputImageData?: string // Optional base64-encoded image for context
+    inputImageData?: string, // Optional base64-encoded image for context
+    purpose?: string // Optional intended use for the image
   ): Promise<Result<StructuredPromptResult, Error>>
 }
 
@@ -81,7 +92,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
   async generateStructuredPrompt(
     userPrompt: string,
     features: FeatureFlags = {},
-    inputImageData?: string
+    inputImageData?: string,
+    purpose?: string
   ): Promise<Result<StructuredPromptResult, Error>> {
     try {
       // Validate input
@@ -90,7 +102,12 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       }
 
       // Build complete prompt with system instruction and meta-prompt
-      const completePrompt = this.buildCompletePrompt(userPrompt, features, !!inputImageData)
+      const completePrompt = this.buildCompletePrompt(
+        userPrompt,
+        features,
+        !!inputImageData,
+        purpose
+      )
 
       // Combine system prompts for image editing mode
       const systemInstruction = inputImageData
@@ -131,7 +148,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
   private buildCompletePrompt(
     userPrompt: string,
     features: FeatureFlags,
-    hasInputImage: boolean
+    hasInputImage: boolean,
+    purpose?: string
   ): string {
     const featureContext = this.buildEnhancedFeatureContext(features)
 
@@ -140,10 +158,16 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       ? `\nNOTE: An input image has been provided. Focus on preserving its original characteristics while applying the requested modifications. Maintain consistency with the source image's style, colors, and atmosphere.\n`
       : ''
 
+    // Add purpose context if provided
+    const purposeContext = purpose
+      ? `\nINTENDED USE: ${purpose}\nTailor the visual style, quality level, and details to match this purpose.\n`
+      : ''
+
     return `Transform this image generation request into a detailed, vivid prompt that will produce high-quality results:
 
 "${userPrompt}"
 ${imageEditingInstruction}
+${purposeContext}
 ${featureContext}
 
 Consider these aspects as you enhance the prompt:

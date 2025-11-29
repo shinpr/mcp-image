@@ -53,6 +53,8 @@ export interface GenerateImageParams {
   aspectRatio?: AspectRatio
   /** Image resolution for high-quality output (e.g., "2K", "4K"). Leave unspecified for standard quality */
   imageSize?: ImageSize
+  /** Intended use for the image (e.g., cookbook cover, social media post). Helps tailor visual style and quality */
+  purpose?: string
 }
 
 /**
