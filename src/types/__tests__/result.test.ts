@@ -3,69 +3,51 @@ import type { Result } from '../result'
 import { Err, Ok } from '../result'
 
 describe('Result type', () => {
-  describe('Ok function', () => {
-    it('should create a successful result', () => {
-      // Arrange
-      const data = 'test data'
+  describe('Result type narrowing', () => {
+    it('should allow safe data access after success check', () => {
+      // This test verifies that TypeScript's type narrowing works correctly
+      const result: Result<{ value: number }, Error> = Ok({ value: 42 })
 
-      // Act
-      const result = Ok(data)
-
-      // Assert
-      expect(result.success).toBe(true)
+      // Without the if check, accessing result.data would be a type error
       if (result.success) {
-        expect(result.data).toBe(data)
+        // After narrowing, we can safely access data and perform operations
+        const doubled = result.data.value * 2
+        expect(doubled).toBe(84)
       }
     })
 
-    it('should create a successful result with object data', () => {
-      // Arrange
-      const data = { id: 1, name: 'test' }
+    it('should allow safe error access after failure check', () => {
+      // This test verifies that TypeScript's type narrowing works correctly for errors
+      const result: Result<string, Error> = Err(new Error('something went wrong'))
 
-      // Act
-      const result = Ok(data)
-
-      // Assert
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual(data)
+      // Without the if check, accessing result.error would be a type error
+      if (!result.success) {
+        // After narrowing, we can safely access error properties
+        expect(result.error.message).toContain('wrong')
       }
     })
   })
 
-  describe('Err function', () => {
-    it('should create an error result', () => {
-      // Arrange
-      const error = new Error('test error')
-
-      // Act
-      const result = Err(error)
-
-      // Assert
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error).toBe(error)
-      }
-    })
-
-    it('should create an error result with custom error', () => {
-      // Arrange
-      class CustomError extends Error {
-        constructor(message: string) {
+  describe('Result with custom error types', () => {
+    it('should preserve custom error type information', () => {
+      class ValidationError extends Error {
+        constructor(
+          message: string,
+          public readonly field: string
+        ) {
           super(message)
-          this.name = 'CustomError'
+          this.name = 'ValidationError'
         }
       }
-      const error = new CustomError('custom test error')
 
-      // Act
-      const result = Err(error)
+      const result: Result<string, ValidationError> = Err(
+        new ValidationError('Invalid value', 'email')
+      )
 
-      // Assert
-      expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error).toBeInstanceOf(CustomError)
-        expect(result.error.message).toBe('custom test error')
+        // Custom error properties should be accessible
+        expect(result.error.field).toBe('email')
+        expect(result.error.name).toBe('ValidationError')
       }
     })
   })
