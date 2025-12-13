@@ -111,22 +111,22 @@ describe('Logger', () => {
   })
 
   describe('sensitive data filtering', () => {
-    const sensitiveFields = [
-      'API_KEY',
-      'apiKey',
-      'api_key',
-      'SECRET',
-      'secret',
-      'PASSWORD',
-      'password',
-      'TOKEN',
-      'token',
-      'CREDENTIAL',
-      'credential',
-    ]
+    it('should redact all sensitive field patterns', () => {
+      const sensitiveFields = [
+        'API_KEY',
+        'apiKey',
+        'api_key',
+        'SECRET',
+        'secret',
+        'PASSWORD',
+        'password',
+        'TOKEN',
+        'token',
+        'CREDENTIAL',
+        'credential',
+      ]
 
-    for (const field of sensitiveFields) {
-      it(`should redact sensitive field: ${field}`, () => {
+      for (const field of sensitiveFields) {
         // Arrange
         const metadata = {
           [field]: 'sensitive-value',
@@ -142,8 +142,10 @@ describe('Logger', () => {
           expect.not.stringContaining('sensitive-value')
         )
         expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('normal-value'))
-      })
-    }
+
+        vi.clearAllMocks()
+      }
+    })
 
     it('should handle nested sensitive data', () => {
       // Arrange
