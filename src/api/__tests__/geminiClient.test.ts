@@ -24,6 +24,8 @@ describe('geminiClient', () => {
     geminiApiKey: 'test-api-key-12345',
     imageOutputDir: './output',
     apiTimeout: 30000,
+    skipPromptEnhancement: false,
+    useProModel: false, // Default: use Flash model
   }
 
   beforeEach(() => {
@@ -98,7 +100,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-flash-image-preview')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
         expect(result.data.metadata.mimeType).toBe('image/png')
       }
@@ -146,7 +148,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-flash-image-preview')
         expect(result.data.metadata.prompt).toBe('Enhance this image')
         expect(result.data.metadata.mimeType).toBe('image/jpeg')
       }
@@ -463,7 +465,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-flash-image-preview')
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Generate character with blending')
       }
@@ -509,7 +511,7 @@ describe('geminiClient', () => {
       if (result.success) {
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Generate factually accurate historical scene')
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-flash-image-preview')
       }
     })
 
@@ -552,7 +554,7 @@ describe('geminiClient', () => {
       if (result.success) {
         // Features not specified - standard metadata only
         expect(result.data.metadata.prompt).toBe('Generate simple landscape')
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-flash-image-preview')
       }
     })
 
@@ -602,7 +604,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.inputImageProvided).toBe(true)
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Blend this character with fantasy elements')
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-flash-image-preview')
       }
     })
   })
