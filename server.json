@@ -8,13 +8,13 @@
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.5.2",
+  "version": "0.6.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.5.2",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       },
@@ -36,6 +36,13 @@
         {
           "name": "SKIP_PROMPT_ENHANCEMENT",
           "description": "Set to 'true' to disable automatic prompt optimization and use direct prompts",
+          "isRequired": false,
+          "format": "boolean",
+          "isSecret": false
+        },
+        {
+          "name": "USE_PRO_MODEL",
+          "description": "Set to 'true' to use Gemini 3 Pro Image model instead of Flash (default: false = Flash model)",
           "isRequired": false,
           "format": "boolean",
           "isSecret": false
