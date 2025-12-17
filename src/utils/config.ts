@@ -15,6 +15,7 @@ export interface Config {
   imageOutputDir: string
   apiTimeout: number
   skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
+  useProModel: boolean // Use Pro model instead of Flash (default: false = Flash)
 }
 
 /**
@@ -83,6 +84,7 @@ export function getConfig(): Result<Config, ConfigError> {
     imageOutputDir: process.env['IMAGE_OUTPUT_DIR'] || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: process.env['SKIP_PROMPT_ENHANCEMENT'] === 'true',
+    useProModel: process.env['USE_PRO_MODEL'] === 'true',
   }
 
   return validateConfig(config)

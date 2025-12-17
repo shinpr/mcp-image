@@ -168,9 +168,16 @@ export interface GeminiClient {
  * Implementation of Gemini API client
  */
 class GeminiClientImpl implements GeminiClient {
-  private readonly modelName = 'gemini-3-pro-image-preview'
+  private readonly modelName: string
 
-  constructor(private readonly genai: GeminiClientInstance) {}
+  constructor(
+    private readonly genai: GeminiClientInstance,
+    config: Config
+  ) {
+    this.modelName = config.useProModel
+      ? 'gemini-3-pro-image-preview'
+      : 'gemini-3-flash-image-preview'
+  }
 
   async generateImage(
     params: GeminiApiParams
@@ -503,7 +510,7 @@ export function createGeminiClient(config: Config): Result<GeminiClient, GeminiA
     const genai = new GoogleGenAI({
       apiKey: config.geminiApiKey,
     }) as unknown as GeminiClientInstance
-    return Ok(new GeminiClientImpl(genai))
+    return Ok(new GeminiClientImpl(genai, config))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Err(

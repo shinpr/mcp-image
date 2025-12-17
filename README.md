@@ -1,12 +1,15 @@
 # 🍌 MCP Image Generator
 
-> Powered by Gemini 3 Pro Image - Nano Banana Pro 🍌
+> Powered by Gemini 3 Image - Nano Banana 🍌
 
-A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 3 Pro Image (Nano Banana Pro 🍌). Seamlessly integrate advanced image generation capabilities into Codex, Cursor, Claude Code, and other MCP-compatible AI tools.
+A powerful MCP (Model Context Protocol) server that enables AI assistants to generate and edit images using Google's Gemini 3 Image models (Nano Banana 🍌). Seamlessly integrate advanced image generation capabilities into Codex, Cursor, Claude Code, and other MCP-compatible AI tools.
+
+- **Nano Banana** (Gemini 3 Flash Image) - Default: Fast, cost-effective generation
+- **Nano Banana Pro** (Gemini 3 Pro Image) - Higher quality for complex tasks
 
 ## ✨ Features
 
-- **AI-Powered Image Generation**: Create images from text prompts using Gemini 3 Pro Image (Nano Banana Pro)
+- **AI-Powered Image Generation**: Create images from text prompts using Nano Banana 🍌 (Gemini 3 Image models)
 - **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.0 Flash for superior image quality
   - Adds photographic and artistic details
   - Enriches lighting, composition, and atmosphere descriptions
@@ -118,6 +121,26 @@ Add `"SKIP_PROMPT_ENHANCEMENT": "true"` to the env section in your config.
 claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env SKIP_PROMPT_ENHANCEMENT=true --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
 ```
 
+### Optional: Use Nano Banana Pro Model
+
+Set `USE_PRO_MODEL=true` to use Nano Banana Pro (Gemini 3 Pro Image) instead of the default Nano Banana (Gemini 3 Flash Image). Recommended for complex tasks requiring higher quality output.
+
+**Codex:**
+```toml
+[mcp_servers.mcp-image.env]
+GEMINI_API_KEY = "your_gemini_api_key_here"
+USE_PRO_MODEL = "true"
+IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
+```
+
+**Cursor:**
+Add `"USE_PRO_MODEL": "true"` to the env section in your config.
+
+**Claude Code:**
+```bash
+claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env USE_PRO_MODEL=true --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
+```
+
 ## 📖 Usage Examples
 
 Once configured, your AI assistant can generate images using natural language:
@@ -163,7 +186,7 @@ The system automatically enhances this to include rich details about lighting, m
 
 The MCP server exposes a single tool for all image operations. Internally, it uses a two-stage process:
 1. **Prompt Optimization**: Gemini 2.0 Flash analyzes and enriches your prompt
-2. **Image Generation**: Gemini 3 Pro Image creates the final image
+2. **Image Generation**: Nano Banana (Gemini 3 Flash Image) or Nano Banana Pro (Gemini 3 Pro Image) creates the final image
 
 #### Parameters
 
@@ -191,7 +214,7 @@ The MCP server exposes a single tool for all image operations. Internally, it us
     "mimeType": "image/png"
   },
   "metadata": {
-    "model": "gemini-3-pro-image-preview",
+    "model": "gemini-3-flash-image-preview",
     "processingTime": 5000,
     "timestamp": "2024-01-01T12:00:00.000Z"
   }
@@ -230,7 +253,8 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 
 - This MCP server uses the paid Gemini API for both prompt optimization and image generation
   - Gemini 2.0 Flash for intelligent prompt enhancement (minimal token usage)
-  - Gemini 3 Pro Image for actual image generation
+  - Nano Banana (Gemini 3 Flash Image) for fast, cost-effective generation (default)
+  - Nano Banana Pro (Gemini 3 Pro Image) for higher quality output (set `USE_PRO_MODEL=true`)
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
 - The prompt optimization step adds minimal cost while significantly improving output quality
