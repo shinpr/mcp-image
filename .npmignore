@@ -17,6 +17,7 @@ output/
 # Config files
 .gitignore
 .madgerc
+.rmdrc.cjs
 .tsprunerc
 biome.json
 tsconfig.json

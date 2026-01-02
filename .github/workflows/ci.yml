@@ -43,3 +43,6 @@ jobs:
 
     - name: Run tests
       run: npm test
+
+    - name: Check production dependencies
+      run: npx report-missing-dependencies
