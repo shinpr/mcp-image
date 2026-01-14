@@ -8,13 +8,13 @@
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.5.4",
+  "version": "0.5.5",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.5.4",
+      "version": "0.5.5",
       "transport": {
         "type": "stdio"
       },
