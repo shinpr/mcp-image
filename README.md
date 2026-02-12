@@ -26,6 +26,51 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 - **Multiple Output Formats**: PNG, JPEG, WebP support
 - **File Output**: Images are saved as files for easy access and integration
 
+## 🎨 Agent Skill: Image Generation Prompt Best Practices
+
+This project also provides a standalone **Agent Skill** that teaches AI assistants how to craft effective image generation prompts — no MCP server or API key required.
+
+### What it does
+
+The skill provides structured knowledge for enhancing image generation prompts using the **Subject-Context-Style** framework. When installed, your AI assistant automatically applies these best practices when generating images, regardless of the underlying model (Gemini, DALL-E, Flux, Stable Diffusion, etc.).
+
+Covers:
+
+- **Prompt structure** — Subject, Context, and Style enrichment
+- **Enhancement patterns** — Lighting, textures, camera terminology, atmospheric details, text in images
+- **Feature patterns** — Character consistency, compositional integration, real-world accuracy, purpose-driven tailoring
+- **Image editing** — Preserving original characteristics while applying modifications
+
+### Install
+
+```bash
+npx mcp-image skills install --path <target-directory>
+```
+
+The skill will be placed at `<path>/image-generation/SKILL.md`. Specify the skills directory for your AI tool:
+
+```bash
+# Cursor
+npx mcp-image skills install --path ~/.cursor/skills
+
+# Codex
+npx mcp-image skills install --path ~/.codex/skills
+
+# Claude Code
+npx mcp-image skills install --path ~/.claude/skills
+```
+
+### When to use the Skill vs the MCP server
+
+| | MCP Server | Agent Skill |
+|---|---|---|
+| **Use when** | Your AI tool does not have built-in image generation | Your AI tool already generates images natively |
+| **Requires** | Gemini API key | Nothing |
+| **What it does** | Generates images via API | Teaches the AI to write better prompts |
+| **Works with** | MCP-compatible tools | Any tool supporting the [Agent Skills](https://agentskills.io) standard |
+
+---
+
 ## 🔧 Prerequisites
 
 - **Node.js** 20 or higher

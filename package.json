@@ -1,7 +1,7 @@
 {
   "name": "mcp-image",
   "mcpName": "io.github.shinpr/mcp-image",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "description": "MCP server for AI image generation",
   "main": "dist/index.js",
   "bin": {
@@ -21,7 +21,9 @@
     "claude-code",
     "cursor",
     "codex",
-    "typescript"
+    "typescript",
+    "agent-skills",
+    "skills"
   ],
   "author": "Shinsuke Kagawa",
   "license": "MIT",
@@ -34,7 +36,9 @@
     "!dist/**/*.test.js",
     "!dist/**/*.test.d.ts",
     "!dist/__tests__",
-    "!dist/tests"
+    "!dist/tests",
+    "bin",
+    "skills"
   ],
   "scripts": {
     "build": "tsc && tsc-alias",

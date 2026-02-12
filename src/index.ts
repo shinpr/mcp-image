@@ -1,49 +1,30 @@
 #!/usr/bin/env node
 
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 /**
- * MCP Image Generator entry point
- * MCP server startup process
+ * MCP Image Generator - Entry Point Router
+ *
+ * Routes to:
+ * - skills install  → bin/install-skills.js
+ * - (default)       → MCP server startup
  */
-import { MCPServerImpl } from './server/mcpServer'
-import { Logger } from './utils/logger'
 
-const logger = new Logger()
+import { resolve } from 'node:path'
 
-/**
- * Application startup
- */
-async function main(): Promise<void> {
-  try {
-    logger.info('mcp-startup', 'Starting MCP Image Generator initialization', {
-      nodeVersion: process.version,
-      platform: process.platform,
-      env: process.env['NODE_ENV'] || 'development',
-    })
+const args = process.argv.slice(2)
 
-    const mcpServerImpl = new MCPServerImpl()
-
-    const server = mcpServerImpl.initialize()
-
-    const transport = new StdioServerTransport()
-
-    await server.connect(transport)
-
-    logger.info('mcp-startup', 'Image Generator MCP Server started successfully')
-  } catch (error) {
-    logger.error('mcp-startup', 'Failed to start MCP server', error as Error, {
-      errorType: (error as Error)?.constructor?.name,
-      stack: (error as Error)?.stack,
-    })
+if (args[0] === 'skills') {
+  if (args[1] === 'install') {
+    const { run } = require(resolve(__dirname, '..', 'bin', 'install-skills.js'))
+    run(args.slice(2))
+    process.exit(0)
+  } else {
+    console.error('Unknown skills subcommand. Usage: npx mcp-image skills install --path <path>')
+    console.error('Run "npx mcp-image skills install --help" for more information.')
     process.exit(1)
   }
+} else {
+  require('./server-main')
 }
-
-// Run main function
-main().catch((error) => {
-  logger.error('mcp-startup', 'Fatal error during startup', error as Error)
-  process.exit(1)
-})
 
 export { createMCPServer, MCPServerImpl } from './server/mcpServer'
 export type { GenerateImageParams, MCPServerConfig } from './types/mcp'
