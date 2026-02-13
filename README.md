@@ -26,20 +26,22 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 - **Multiple Output Formats**: PNG, JPEG, WebP support
 - **File Output**: Images are saved as files for easy access and integration
 
-## 🎨 Agent Skill: Image Generation Prompt Best Practices
+## 🎨 Agent Skill: Image Generation Prompt Guide
 
-This project also provides a standalone **Agent Skill** that teaches AI assistants how to craft effective image generation prompts — no MCP server or API key required.
+This project also provides a standalone **Agent Skill** that teaches AI assistants to write better image generation prompts — no MCP server or API key required.
 
 ### What it does
 
-The skill provides structured knowledge for enhancing image generation prompts using the **Subject-Context-Style** framework. When installed, your AI assistant automatically applies these best practices when generating images, regardless of the underlying model (Gemini, DALL-E, Flux, Stable Diffusion, etc.).
+> **Note:** This skill does not generate images itself — it teaches your AI assistant to write better prompts. Your AI tool must already have built-in image generation capabilities (e.g., Cursor's image generation feature).
+
+A reference guide that AI assistants use to improve image generation prompts based on the **Subject-Context-Style** framework. Works with any image model (Gemini, DALL-E, Flux, Stable Diffusion, etc.).
 
 Covers:
 
-- **Prompt structure** — Subject, Context, and Style enrichment
-- **Enhancement patterns** — Lighting, textures, camera terminology, atmospheric details, text in images
-- **Feature patterns** — Character consistency, compositional integration, real-world accuracy, purpose-driven tailoring
-- **Image editing** — Preserving original characteristics while applying modifications
+- **Prompt structure** — How to build prompts around Subject, Context, and Style
+- **Visual details** — Lighting, textures, camera angles, atmosphere, text in images
+- **Advanced features** — Character consistency, multi-element composition, factual accuracy, purpose-specific output
+- **Image editing** — How to describe edits while keeping the original look intact
 
 ### Install
 
