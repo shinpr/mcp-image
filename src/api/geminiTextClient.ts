@@ -1,5 +1,5 @@
 /**
- * Gemini Text Client for text generation using Gemini 2.0 Flash
+ * Gemini Text Client for text generation
  * Pure API client for interacting with Google AI Studio
  * Handles text generation without any prompt optimization logic
  */
@@ -21,8 +21,6 @@ export interface GenerationConfig {
   inputImage?: string // Optional base64-encoded image for multimodal context
   topP?: number
   topK?: number
-  frequencyPenalty?: number
-  presencePenalty?: number
 }
 
 /**
@@ -30,7 +28,7 @@ export interface GenerationConfig {
  */
 export interface GeminiTextClient {
   /**
-   * Generate text using Gemini 2.0 Flash API
+   * Generate text using Gemini API
    * @param prompt The prompt to send to the API
    * @param config Optional configuration for generation
    * @returns Result containing generated text or error
@@ -41,7 +39,7 @@ export interface GeminiTextClient {
   ): Promise<Result<string, GeminiAPIError | NetworkError>>
 
   /**
-   * Validate connection to Gemini 2.0 Flash API
+   * Validate connection to Gemini API
    * @returns Result indicating if connection is successful
    */
   validateConnection(): Promise<Result<boolean, GeminiAPIError | NetworkError>>
@@ -57,7 +55,7 @@ const DEFAULT_GENERATION_CONFIG = {
 } as const
 
 /**
- * Interface for Gemini AI client instance (@google/genai v1.42.0+)
+ * Interface for Gemini AI client instance
  */
 interface GeminiAIInstance {
   models: {
@@ -75,8 +73,6 @@ interface GeminiAIInstance {
         maxOutputTokens?: number
         topP?: number
         topK?: number
-        frequencyPenalty?: number
-        presencePenalty?: number
         thinkingConfig?: {
           thinkingBudget: number
         }
@@ -134,7 +130,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
   }
 
   /**
-   * Call Gemini 2.0-flash API to generate text
+   * Call Gemini API to generate text
    */
   private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
@@ -173,7 +169,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
         contents = prompt
       }
 
-      // Use the updated API structure for @google/genai v1.42.0+
+      // Call Gemini API
       const apiCall = this.genai.models.generateContent({
         model: this.modelName,
         contents,

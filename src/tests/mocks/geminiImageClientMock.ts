@@ -1,6 +1,6 @@
 /**
  * Enhanced mock implementation for GeminiImageClient testing
- * Simulates Gemini 2.5 Flash Image generation responses
+ * Simulates Gemini Image generation responses
  * Supports advanced testing scenarios for structured prompt generation
  */
 
@@ -95,7 +95,7 @@ class GeminiImageClientMock implements GeminiClient {
       case 'network_error':
         return Err(
           new NetworkError(
-            'Failed to connect to Gemini 2.5 Flash Image API',
+            'Failed to connect to Gemini Image API',
             'Check your internet connection and try again'
           )
         )
@@ -121,7 +121,7 @@ class GeminiImageClientMock implements GeminiClient {
       case 'rate_limit':
         return Err(
           new GeminiAPIError(
-            'Rate limit exceeded for Gemini 2.5 Flash Image API',
+            'Rate limit exceeded for Gemini Image API',
             'Wait before making more requests or upgrade your plan',
             429
           )
@@ -153,7 +153,7 @@ class GeminiImageClientMock implements GeminiClient {
 
     // Generate comprehensive metadata
     const metadata: GeminiGenerationMetadata = {
-      model: 'gemini-3-pro-image-preview-preview',
+      model: 'gemini-3-pro-image-preview',
       prompt: params.prompt,
       mimeType: 'image/png',
       timestamp: new Date(),
@@ -318,7 +318,7 @@ export function createStructuredPromptImageMock(options?: {
     },
     customResponse: {
       metadata: {
-        model: 'gemini-3-pro-image-preview-preview',
+        model: 'gemini-3-pro-image-preview',
         prompt: 'Enhanced structured prompt',
         mimeType: 'image/png',
         timestamp: new Date(),

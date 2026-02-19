@@ -1,6 +1,6 @@
 /**
  * Mock implementation for GeminiTextClient testing
- * Simulates Gemini 2.0 Flash prompt generation responses
+ * Simulates Gemini Flash prompt generation responses
  * Supports different response scenarios for comprehensive testing
  */
 
@@ -34,7 +34,7 @@ export interface OptimizedPrompt {
 }
 
 /**
- * Interface for Gemini Text Client (2.0 Flash)
+ * Interface for Gemini Text Client
  */
 export interface GeminiTextClient {
   generateStructuredPrompt(
@@ -99,7 +99,7 @@ class GeminiTextClientMock implements GeminiTextClient {
       case 'network_error':
         return Err(
           new NetworkError(
-            'Failed to connect to Gemini 2.0 Flash API',
+            'Failed to connect to Gemini Flash API',
             'Check your internet connection and try again'
           )
         )
@@ -125,7 +125,7 @@ class GeminiTextClientMock implements GeminiTextClient {
       case 'rate_limit':
         return Err(
           new GeminiAPIError(
-            'Rate limit exceeded for Gemini 2.0 Flash API',
+            'Rate limit exceeded for Gemini Flash API',
             'Wait 60 seconds before making another request',
             429
           )
