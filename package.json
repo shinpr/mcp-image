@@ -1,7 +1,7 @@
 {
   "name": "mcp-image",
   "mcpName": "io.github.shinpr/mcp-image",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "MCP server for AI image generation",
   "main": "dist/index.js",
   "bin": {
@@ -62,7 +62,7 @@
     "test:safe": "npm test && npm run cleanup:processes"
   },
   "dependencies": {
-    "@google/genai": "^1.30.0",
+    "@google/genai": "^1.42.0",
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {

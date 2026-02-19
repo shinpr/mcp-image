@@ -29,9 +29,9 @@ The environment and conditions.
 
 The visual treatment.
 
-- Artistic or photographic approach
+- Artistic or photographic approach: reference specific artists, movements, or styles
 - Lighting design: direction, quality, color temperature, shadows
-- Camera/lens choices if relevant (focal length, depth of field, angle)
+- Camera/lens choices: specify focal length, aperture, and shooting angle when photographic
 
 ## Core Principles
 

@@ -28,9 +28,9 @@ Structure your enhancement around three core elements:
    - Mood and emotional tone of the scene
 
 3. STYLE (How): The visual treatment
-   - Artistic or photographic approach
+   - Artistic or photographic approach: reference specific artists, movements, or styles
    - Lighting design: direction, quality, color temperature, shadows
-   - Camera/lens choices if relevant (focal length, depth of field, angle)
+   - Camera/lens choices: specify focal length, aperture, and shooting angle when photographic
 
 Core principles:
 - Preserve the user's original intent while enhancing detail
@@ -117,7 +117,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       // Generate structured prompt using Gemini 2.0 Flash via pure API call
       const config = {
         temperature: 0.7,
-        maxTokens: 2000,
+        maxTokens: 1000,
         systemInstruction,
         ...(inputImageData && { inputImage: inputImageData }), // Only include if available
       }

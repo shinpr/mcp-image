@@ -7,7 +7,7 @@ A powerful MCP (Model Context Protocol) server that enables AI assistants to gen
 ## ✨ Features
 
 - **AI-Powered Image Generation**: Create images from text prompts using Gemini 3 Pro Image (Nano Banana Pro)
-- **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.0 Flash for superior image quality
+- **Intelligent Prompt Enhancement**: Automatically optimizes your prompts using Gemini 2.5 Flash for superior image quality
   - Adds photographic and artistic details
   - Enriches lighting, composition, and atmosphere descriptions
   - Preserves your intent while maximizing generation quality
@@ -209,7 +209,7 @@ The system automatically enhances this to include rich details about lighting, m
 ### `generate_image` Tool
 
 The MCP server exposes a single tool for all image operations. Internally, it uses a two-stage process:
-1. **Prompt Optimization**: Gemini 2.0 Flash analyzes and enriches your prompt
+1. **Prompt Optimization**: Gemini 2.5 Flash analyzes and enriches your prompt
 2. **Image Generation**: Gemini 3 Pro Image creates the final image
 
 #### Parameters
@@ -276,7 +276,7 @@ The MCP server exposes a single tool for all image operations. Internally, it us
 ## 💰 Usage Notes
 
 - This MCP server uses the paid Gemini API for both prompt optimization and image generation
-  - Gemini 2.0 Flash for intelligent prompt enhancement (minimal token usage)
+  - Gemini 2.5 Flash for intelligent prompt enhancement (minimal token usage)
   - Gemini 3 Pro Image for actual image generation
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
