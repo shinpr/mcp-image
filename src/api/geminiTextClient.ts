@@ -19,6 +19,10 @@ export interface GenerationConfig {
   timeout?: number
   systemInstruction?: string
   inputImage?: string // Optional base64-encoded image for multimodal context
+  topP?: number
+  topK?: number
+  frequencyPenalty?: number
+  presencePenalty?: number
 }
 
 /**
@@ -53,17 +57,29 @@ const DEFAULT_GENERATION_CONFIG = {
 } as const
 
 /**
- * Interface for Gemini AI client instance (@google/genai v1.17.0+)
+ * Interface for Gemini AI client instance (@google/genai v1.42.0+)
  */
 interface GeminiAIInstance {
   models: {
     generateContent(params: {
       model: string
-      contents: string | Array<{ role?: string; parts: Array<{ text?: string }> }>
-      systemInstruction?: string
-      generationConfig?: {
+      contents:
+        | string
+        | Array<{
+            role?: string
+            parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }>
+          }>
+      config?: {
+        systemInstruction?: string
         temperature?: number
         maxOutputTokens?: number
+        topP?: number
+        topK?: number
+        frequencyPenalty?: number
+        presencePenalty?: number
+        thinkingConfig?: {
+          thinkingBudget: number
+        }
       }
     }): Promise<{
       text: string
@@ -83,7 +99,7 @@ interface GeminiAIInstance {
  * Implementation of Gemini Text Client - pure API client
  */
 class GeminiTextClientImpl implements GeminiTextClient {
-  private readonly modelName = 'gemini-2.0-flash'
+  private readonly modelName = 'gemini-2.5-flash'
   private readonly genai: GeminiAIInstance
 
   constructor(config: Config) {
@@ -157,14 +173,21 @@ class GeminiTextClientImpl implements GeminiTextClient {
         contents = prompt
       }
 
-      // Use the updated API structure for @google/genai v1.17.0+
+      // Use the updated API structure for @google/genai v1.42.0+
       const apiCall = this.genai.models.generateContent({
         model: this.modelName,
         contents,
-        ...(config.systemInstruction && { systemInstruction: config.systemInstruction }),
-        generationConfig: {
+        config: {
+          ...(config.systemInstruction !== undefined && {
+            systemInstruction: config.systemInstruction,
+          }),
           temperature: config.temperature || 0.7,
           maxOutputTokens: config.maxTokens || 8192,
+          topP: config.topP ?? 0.95,
+          topK: config.topK ?? 40,
+          thinkingConfig: {
+            thinkingBudget: 0,
+          },
         },
       })
 
