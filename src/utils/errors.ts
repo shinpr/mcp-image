@@ -160,7 +160,7 @@ export class GeminiAPIError extends BaseError {
       return 'Wait before retrying or upgrade API quota limits'
     }
     if (message.includes('model') || message.includes('access') || message.includes('permission')) {
-      return 'Ensure you have access to gemini-3-pro-image-preview-preview model'
+      return 'Ensure you have access to gemini-3-pro-image-preview model'
     }
     if (message.includes('timeout') || message.includes('503') || message.includes('502')) {
       return 'The service is temporarily unavailable. Please retry after a few moments'

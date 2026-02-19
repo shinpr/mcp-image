@@ -1,5 +1,5 @@
 /**
- * Unit tests for GeminiTextClient - Gemini 2.0 Flash integration
+ * Unit tests for GeminiTextClient
  * Tests public API behaviors only, with external dependencies mocked
  */
 
@@ -37,7 +37,7 @@ mockGenerateContent.mockImplementation((params: { contents: string }) => {
     throw new Error('Service temporarily unavailable')
   }
 
-  // Default successful response matching the API v1.17.0+ structure
+  // Default successful response
   return Promise.resolve({
     text: 'Enhanced: test prompt with professional lighting, 85mm lens, dramatic composition',
     response: {

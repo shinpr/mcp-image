@@ -227,7 +227,7 @@ export class MCPServerImpl {
         inputImageData = imageBuffer.toString('base64')
       }
 
-      // Generate structured prompt using Gemini 2.0 Flash (unless skipped)
+      // Generate structured prompt (unless skipped)
       let structuredPrompt = params.prompt
       if (!configResult.data.skipPromptEnhancement && this.structuredPromptGenerator) {
         const features: FeatureFlags = {}
@@ -268,7 +268,7 @@ export class MCPServerImpl {
         this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
       }
 
-      // Generate image using Gemini 2.5 Flash Image Preview
+      // Generate image using Gemini API
       if (!this.geminiClient) {
         throw new Error('Gemini client not initialized')
       }

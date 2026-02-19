@@ -1,6 +1,6 @@
 /**
  * Structured Prompt Generator
- * Uses Gemini 2.0 Flash to generate optimized prompts for image generation
+ * Uses Gemini Flash to generate optimized prompts for image generation
  * Applies 7 best practices and 3 feature perspectives through intelligent selection
  */
 
@@ -84,7 +84,7 @@ export interface StructuredPromptGenerator {
 }
 
 /**
- * Implementation of StructuredPromptGenerator using Gemini 2.0 Flash
+ * Implementation of StructuredPromptGenerator using Gemini Flash
  */
 export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator {
   constructor(private readonly geminiTextClient: GeminiTextClient) {}
@@ -114,7 +114,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         ? SYSTEM_PROMPT + IMAGE_EDITING_CONTEXT
         : SYSTEM_PROMPT
 
-      // Generate structured prompt using Gemini 2.0 Flash via pure API call
+      // Generate structured prompt via pure API call
       const config = {
         temperature: 0.7,
         maxTokens: 1000,
