@@ -5,7 +5,7 @@
 
 import { existsSync } from 'node:fs'
 import { extname } from 'node:path'
-import type { AspectRatio, GenerateImageParams } from '../types/mcp'
+import type { AspectRatio, GenerateImageParams, ImageQuality } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { InputValidationError } from '../utils/errors'
@@ -17,16 +17,22 @@ const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
 const SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp']
 const SUPPORTED_ASPECT_RATIOS: readonly AspectRatio[] = [
   '1:1',
+  '1:4',
+  '1:8',
   '2:3',
   '3:2',
   '3:4',
+  '4:1',
   '4:3',
   '4:5',
   '5:4',
+  '8:1',
   '9:16',
   '16:9',
   '21:9',
 ] as const
+
+const SUPPORTED_QUALITY_VALUES: readonly ImageQuality[] = ['fast', 'balanced', 'quality'] as const
 
 /**
  * Converts bytes to MB with proper formatting
@@ -222,6 +228,16 @@ export function validateGenerateImageParams(
       new InputValidationError(
         `Invalid aspect ratio: ${params.aspectRatio}. Supported values: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`,
         `Please use one of the supported aspect ratios: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`
+      )
+    )
+  }
+
+  // Validate quality parameter
+  if (params.quality !== undefined && !SUPPORTED_QUALITY_VALUES.includes(params.quality)) {
+    return Err(
+      new InputValidationError(
+        `Invalid quality value: "${params.quality}". Supported values: ${SUPPORTED_QUALITY_VALUES.join(', ')}`,
+        `Please use one of the supported quality values: ${SUPPORTED_QUALITY_VALUES.join(', ')}`
       )
     )
   }
