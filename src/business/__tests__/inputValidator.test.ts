@@ -209,16 +209,20 @@ describe('inputValidator', () => {
   })
 
   describe('validateGenerateImageParams with aspectRatio', () => {
-    it('should accept all 10 supported aspect ratios', () => {
+    it('should accept all 14 supported aspect ratios', () => {
       // Arrange
       const supportedRatios: AspectRatio[] = [
         '1:1',
+        '1:4',
+        '1:8',
         '2:3',
         '3:2',
         '3:4',
+        '4:1',
         '4:3',
         '4:5',
         '5:4',
+        '8:1',
         '9:16',
         '16:9',
         '21:9',
@@ -234,11 +238,11 @@ describe('inputValidator', () => {
       }
     })
 
-    it('should reject invalid aspect ratio "4:1"', () => {
+    it('should reject invalid aspect ratio "7:3"', () => {
       // Arrange
       const invalidParams: GenerateImageParams = {
         prompt: 'test',
-        aspectRatio: '4:1' as AspectRatio, // Type assertion for test
+        aspectRatio: '7:3' as AspectRatio, // Type assertion for test
       }
 
       // Act
@@ -248,6 +252,18 @@ describe('inputValidator', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.message).toContain('Invalid aspect ratio')
+      }
+    })
+
+    it('should accept new aspect ratios (1:4, 1:8, 4:1, 8:1)', () => {
+      // Arrange & Act & Assert
+      const newRatios: AspectRatio[] = ['1:4', '1:8', '4:1', '8:1']
+      for (const ratio of newRatios) {
+        const result = validateGenerateImageParams({
+          prompt: 'test',
+          aspectRatio: ratio,
+        })
+        expect(result.success).toBe(true)
       }
     })
 
@@ -279,6 +295,47 @@ describe('inputValidator', () => {
       if (!result.success) {
         expect(result.error.message).toContain('1:1')
         expect(result.error.message).toContain('21:9')
+      }
+    })
+  })
+
+  describe('validateGenerateImageParams with quality', () => {
+    it('should accept all valid quality values', () => {
+      // Arrange
+      const validQualities = ['fast', 'balanced', 'quality'] as const
+
+      // Act & Assert
+      for (const quality of validQualities) {
+        const result = validateGenerateImageParams({
+          prompt: 'test',
+          quality,
+        })
+        expect(result.success).toBe(true)
+      }
+    })
+
+    it('should accept undefined quality (optional)', () => {
+      // Arrange & Act
+      const result = validateGenerateImageParams({ prompt: 'test' })
+
+      // Assert
+      expect(result.success).toBe(true)
+    })
+
+    it('should reject invalid quality value', () => {
+      // Arrange
+      const result = validateGenerateImageParams({
+        prompt: 'test',
+        quality: 'ultra' as any,
+      })
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.message).toContain('Invalid quality')
+        expect(result.error.message).toContain('fast')
+        expect(result.error.message).toContain('balanced')
+        expect(result.error.message).toContain('quality')
       }
     })
   })

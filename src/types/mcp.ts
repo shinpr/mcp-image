@@ -12,12 +12,16 @@
  */
 export type AspectRatio =
   | '1:1' // Square (default)
+  | '1:4' // Tall vertical
+  | '1:8' // Ultra-tall vertical
   | '2:3' // Portrait
   | '3:2' // Landscape
   | '3:4' // Portrait
+  | '4:1' // Ultra-wide horizontal
   | '4:3' // Landscape
   | '4:5' // Portrait
   | '5:4' // Landscape
+  | '8:1' // Extreme horizontal
   | '9:16' // Vertical (social media)
   | '16:9' // Horizontal (cinematic)
   | '21:9' // Ultra-wide
@@ -25,7 +29,34 @@ export type AspectRatio =
 /**
  * Supported image sizes for high-resolution output
  */
-export type ImageSize = '2K' | '4K'
+export type ImageSize = '1K' | '2K' | '4K'
+
+/**
+ * Quality presets for image generation
+ * - 'fast': Nano Banana 2, fastest generation (default)
+ * - 'balanced': Nano Banana 2 with enhanced thinking, better quality
+ * - 'quality': Nano Banana Pro, highest quality output
+ */
+export type ImageQuality = 'fast' | 'balanced' | 'quality'
+
+/**
+ * Supported quality preset values
+ */
+export const IMAGE_QUALITY_VALUES: readonly ImageQuality[] = [
+  'fast',
+  'balanced',
+  'quality',
+] as const
+
+/**
+ * Gemini image generation model identifiers
+ */
+export const GEMINI_MODELS = {
+  /** Nano Banana 2 - fast generation with Flash speed */
+  FLASH: 'gemini-3.1-flash-image-preview',
+  /** Nano Banana Pro - highest quality output */
+  PRO: 'gemini-3-pro-image-preview',
+} as const
 
 /**
  * Parameters for image generation using Gemini API
@@ -55,6 +86,8 @@ export interface GenerateImageParams {
   imageSize?: ImageSize
   /** Intended use for the image (e.g., cookbook cover, social media post). Helps tailor visual style and quality */
   purpose?: string
+  /** Quality preset for image generation (default: "fast"). Controls model selection and thinking configuration */
+  quality?: ImageQuality
 }
 
 /**

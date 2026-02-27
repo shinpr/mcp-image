@@ -1,20 +1,20 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.shinpr/mcp-image",
-  "description": "AI image generation MCP server using Nano Banana Pro with intelligent prompt enhancement",
+  "description": "AI image generation MCP server powered by Nano Banana 2 and Nano Banana Pro (Google Gemini) with intelligent prompt enhancement and three quality presets",
   "vendor": "Shinsuke Kagawa",
   "license": "MIT",
   "repository": {
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.7.0",
+  "version": "0.8.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "transport": {
         "type": "stdio"
       },
@@ -29,6 +29,13 @@
         {
           "name": "IMAGE_OUTPUT_DIR",
           "description": "Absolute path to directory where generated images will be saved (defaults to ./output)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "IMAGE_QUALITY",
+          "description": "Default quality preset: 'fast' (Nano Banana 2, default), 'balanced' (Nano Banana 2 + thinking), 'quality' (Nano Banana Pro)",
           "isRequired": false,
           "format": "string",
           "isSecret": false
@@ -66,6 +73,7 @@
     "prompt-enhancement",
     "gemini",
     "nano-banana",
+    "nano-banana-2",
     "nano-banana-pro",
     "google-ai",
     "ai-tools",

@@ -5,6 +5,8 @@
  */
 
 import { GoogleGenAI } from '@google/genai'
+import { GEMINI_MODELS } from '../types/mcp'
+import type { ImageQuality } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import type { Config } from '../utils/config'
@@ -49,7 +51,11 @@ interface GeminiClientInstance {
           aspectRatio?: string
         }
         responseModalities?: string[]
+        thinkingConfig?: {
+          thinkingLevel?: string
+        }
       }
+      tools?: unknown[]
     }): Promise<unknown> // Response is unknown, we'll validate with type guards
   }
 }
@@ -145,6 +151,7 @@ export interface GeminiApiParams {
   aspectRatio?: string
   imageSize?: string
   useGoogleSearch?: boolean
+  quality?: ImageQuality
 }
 
 /**
@@ -168,9 +175,10 @@ export interface GeminiClient {
  * Implementation of Gemini API client
  */
 class GeminiClientImpl implements GeminiClient {
-  private readonly modelName = 'gemini-3-pro-image-preview'
-
-  constructor(private readonly genai: GeminiClientInstance) {}
+  constructor(
+    private readonly genai: GeminiClientInstance,
+    private readonly defaultQuality: ImageQuality = 'fast'
+  ) {}
 
   async generateImage(
     params: GeminiApiParams
@@ -206,6 +214,12 @@ class GeminiClientImpl implements GeminiClient {
         })
       }
 
+      // Determine effective quality
+      const effectiveQuality = params.quality ?? this.defaultQuality
+
+      // Select model based on quality preset
+      const modelName = effectiveQuality === 'quality' ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH
+
       // Construct config object for generateContent
       const imageConfig: Record<string, string> = {}
       if (params.aspectRatio) {
@@ -215,22 +229,22 @@ class GeminiClientImpl implements GeminiClient {
         imageConfig['imageSize'] = params.imageSize
       }
 
-      const config =
-        Object.keys(imageConfig).length > 0
-          ? {
-              imageConfig,
-              responseModalities: ['IMAGE'],
-            }
-          : {
-              responseModalities: ['IMAGE'],
-            }
+      // Build config with optional thinkingConfig
+      const thinkingConfig =
+        effectiveQuality === 'balanced' ? { thinkingConfig: { thinkingLevel: 'high' } } : {}
+
+      const config = {
+        ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
+        responseModalities: ['IMAGE'],
+        ...thinkingConfig,
+      }
 
       // Construct tools array for Google Search grounding
       const tools = params.useGoogleSearch ? [{ googleSearch: {} }] : undefined
 
       // Generate content using Gemini API
       const rawResponse = await this.genai.models.generateContent({
-        model: this.modelName,
+        model: modelName,
         contents: requestContent,
         config,
         ...(tools && { tools }),
@@ -394,7 +408,7 @@ class GeminiClientImpl implements GeminiClient {
 
       // Create metadata
       const metadata: GeminiGenerationMetadata = {
-        model: this.modelName,
+        model: modelName,
         prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
@@ -503,7 +517,7 @@ export function createGeminiClient(config: Config): Result<GeminiClient, GeminiA
     const genai = new GoogleGenAI({
       apiKey: config.geminiApiKey,
     }) as unknown as GeminiClientInstance
-    return Ok(new GeminiClientImpl(genai))
+    return Ok(new GeminiClientImpl(genai, config.imageQuality))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Err(

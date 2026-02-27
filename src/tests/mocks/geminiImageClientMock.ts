@@ -10,6 +10,7 @@ import type {
   GeminiGenerationMetadata,
   GeneratedImageResult,
 } from '../../api/geminiClient'
+import { GEMINI_MODELS } from '../../types/mcp'
 import type { Result } from '../../types/result'
 import { Err, Ok } from '../../types/result'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
@@ -153,25 +154,11 @@ class GeminiImageClientMock implements GeminiClient {
 
     // Generate comprehensive metadata
     const metadata: GeminiGenerationMetadata = {
-      model: 'gemini-3-pro-image-preview',
+      model: GEMINI_MODELS.FLASH,
       prompt: params.prompt,
       mimeType: 'image/png',
       timestamp: new Date(),
       inputImageProvided: !!params.inputImage,
-      contextMethod: params.inputImage ? 'image_editing' : 'text_to_image',
-    }
-
-    // Add features information if any features are specified
-    if (
-      params.blendImages !== undefined ||
-      params.maintainCharacterConsistency !== undefined ||
-      params.useWorldKnowledge !== undefined
-    ) {
-      metadata.features = {
-        blendImages: params.blendImages || false,
-        maintainCharacterConsistency: params.maintainCharacterConsistency || false,
-        useWorldKnowledge: params.useWorldKnowledge || false,
-      }
     }
 
     const result: GeneratedImageResult = {
@@ -318,13 +305,12 @@ export function createStructuredPromptImageMock(options?: {
     },
     customResponse: {
       metadata: {
-        model: 'gemini-3-pro-image-preview',
+        model: GEMINI_MODELS.FLASH,
         prompt: 'Enhanced structured prompt',
         mimeType: 'image/png',
         timestamp: new Date(),
         inputImageProvided: false,
-        contextMethod: 'structured_prompt_to_image',
-      } as GeminiGenerationMetadata,
+      },
     },
   })
 

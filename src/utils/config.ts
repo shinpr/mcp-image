@@ -3,6 +3,8 @@
  * Handles environment variables and configuration validation
  */
 
+import { IMAGE_QUALITY_VALUES } from '../types/mcp'
+import type { ImageQuality } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { ConfigError } from './errors'
@@ -15,6 +17,7 @@ export interface Config {
   imageOutputDir: string
   apiTimeout: number
   skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
+  imageQuality: ImageQuality
 }
 
 /**
@@ -70,6 +73,16 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
+  // Validate imageQuality
+  if (!IMAGE_QUALITY_VALUES.includes(config.imageQuality)) {
+    return Err(
+      new ConfigError(
+        `Invalid IMAGE_QUALITY value: "${config.imageQuality}". Valid options: ${IMAGE_QUALITY_VALUES.join(', ')}`,
+        `Set IMAGE_QUALITY to one of: ${IMAGE_QUALITY_VALUES.join(', ')}`
+      )
+    )
+  }
+
   return Ok(config)
 }
 
@@ -83,6 +96,7 @@ export function getConfig(): Result<Config, ConfigError> {
     imageOutputDir: process.env['IMAGE_OUTPUT_DIR'] || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: process.env['SKIP_PROMPT_ENHANCEMENT'] === 'true',
+    imageQuality: (process.env['IMAGE_QUALITY'] || 'fast') as ImageQuality,
   }
 
   return validateConfig(config)
