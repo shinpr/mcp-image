@@ -40,6 +40,25 @@ export type ImageSize = '512px' | '1K' | '2K' | '4K'
 export type ImageQuality = 'fast' | 'balanced' | 'quality'
 
 /**
+ * Supported quality preset values
+ */
+export const IMAGE_QUALITY_VALUES: readonly ImageQuality[] = [
+  'fast',
+  'balanced',
+  'quality',
+] as const
+
+/**
+ * Gemini image generation model identifiers
+ */
+export const GEMINI_MODELS = {
+  /** Nano Banana 2 - fast generation with Flash speed */
+  FLASH: 'gemini-3.1-flash-image-preview',
+  /** Nano Banana Pro - highest quality output */
+  PRO: 'gemini-3-pro-image-preview',
+} as const
+
+/**
  * Parameters for image generation using Gemini API
  */
 export interface GenerateImageParams {

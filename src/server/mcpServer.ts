@@ -127,7 +127,22 @@ export class MCPServerImpl {
               aspectRatio: {
                 type: 'string' as const,
                 description: 'Aspect ratio for the generated image',
-                enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9', '1:4', '1:8', '4:1', '8:1'],
+                enum: [
+                  '1:1',
+                  '1:4',
+                  '1:8',
+                  '2:3',
+                  '3:2',
+                  '3:4',
+                  '4:1',
+                  '4:3',
+                  '4:5',
+                  '5:4',
+                  '8:1',
+                  '9:16',
+                  '16:9',
+                  '21:9',
+                ],
               },
               imageSize: {
                 type: 'string' as const,
@@ -285,7 +300,7 @@ export class MCPServerImpl {
         ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
         ...(params.imageSize && { imageSize: params.imageSize }),
         ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
-        ...(params.quality && { quality: params.quality }),
+        ...(params.quality !== undefined && { quality: params.quality }),
       })
 
       if (!generationResult.success) {

@@ -379,7 +379,11 @@ describe('MCPServer tool schema - quality', () => {
     // Assert
     expect(generateImageTool?.inputSchema.properties).toHaveProperty('quality')
     expect(generateImageTool?.inputSchema.properties?.quality.type).toBe('string')
-    expect(generateImageTool?.inputSchema.properties?.quality.enum).toEqual(['fast', 'balanced', 'quality'])
+    expect(generateImageTool?.inputSchema.properties?.quality.enum).toEqual([
+      'fast',
+      'balanced',
+      'quality',
+    ])
   })
 
   it('should mark quality as optional in schema', () => {

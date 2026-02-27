@@ -5,7 +5,8 @@
 
 import { existsSync } from 'node:fs'
 import { extname } from 'node:path'
-import type { AspectRatio, GenerateImageParams, ImageQuality } from '../types/mcp'
+import { IMAGE_QUALITY_VALUES } from '../types/mcp'
+import type { AspectRatio, GenerateImageParams } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { InputValidationError } from '../utils/errors'
@@ -32,7 +33,7 @@ const SUPPORTED_ASPECT_RATIOS: readonly AspectRatio[] = [
   '21:9',
 ] as const
 
-const SUPPORTED_QUALITY_VALUES: readonly ImageQuality[] = ['fast', 'balanced', 'quality'] as const
+const SUPPORTED_QUALITY_VALUES = IMAGE_QUALITY_VALUES
 
 /**
  * Converts bytes to MB with proper formatting

@@ -3,6 +3,8 @@
  * Provides specific error types with structured error codes and suggestions
  */
 
+import { GEMINI_MODELS } from '../types/mcp'
+
 /**
  * Structured error format for consistent error reporting
  */
@@ -160,7 +162,7 @@ export class GeminiAPIError extends BaseError {
       return 'Wait before retrying or upgrade API quota limits'
     }
     if (message.includes('model') || message.includes('access') || message.includes('permission')) {
-      return 'Ensure you have access to the Gemini image generation models (gemini-3.1-flash-image-preview or gemini-3-pro-image-preview)'
+      return `Ensure you have access to the Gemini image generation models (${GEMINI_MODELS.FLASH} or ${GEMINI_MODELS.PRO})`
     }
     if (message.includes('timeout') || message.includes('503') || message.includes('502')) {
       return 'The service is temporarily unavailable. Please retry after a few moments'

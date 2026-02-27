@@ -7,6 +7,7 @@
 import { GoogleGenAI } from '@google/genai'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
+import { GEMINI_MODELS } from '../types/mcp'
 import type { ImageQuality } from '../types/mcp'
 import type { Config } from '../utils/config'
 import { GeminiAPIError, NetworkError } from '../utils/errors'
@@ -54,6 +55,7 @@ interface GeminiClientInstance {
           thinkingLevel?: string
         }
       }
+      tools?: unknown[]
     }): Promise<unknown> // Response is unknown, we'll validate with type guards
   }
 }
@@ -216,10 +218,7 @@ class GeminiClientImpl implements GeminiClient {
       const effectiveQuality = params.quality ?? this.defaultQuality
 
       // Select model based on quality preset
-      const modelName =
-        effectiveQuality === 'quality'
-          ? 'gemini-3-pro-image-preview'
-          : 'gemini-3.1-flash-image-preview'
+      const modelName = effectiveQuality === 'quality' ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH
 
       // Construct config object for generateContent
       const imageConfig: Record<string, string> = {}
