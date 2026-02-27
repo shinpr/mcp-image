@@ -147,8 +147,8 @@ export class MCPServerImpl {
               imageSize: {
                 type: 'string' as const,
                 description:
-                  'Image resolution for high-quality output. Specify "512px", "1K", "2K", or "4K" when you need specific resolution. Leave unspecified for standard quality.',
-                enum: ['512px', '1K', '2K', '4K'],
+                  'Image resolution for high-quality output. Specify "1K", "2K", or "4K" when you need specific resolution. Leave unspecified for standard quality.',
+                enum: ['1K', '2K', '4K'],
               },
               purpose: {
                 type: 'string' as const,

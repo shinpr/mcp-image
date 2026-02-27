@@ -412,8 +412,7 @@ describe('MCPServer tool schema - imageSize', () => {
     const imageSizeEnum = generateImageTool?.inputSchema.properties?.imageSize.enum
 
     // Assert
-    expect(imageSizeEnum).toHaveLength(4)
-    expect(imageSizeEnum).toContain('512px')
+    expect(imageSizeEnum).toHaveLength(3)
     expect(imageSizeEnum).toContain('1K')
     expect(imageSizeEnum).toContain('2K')
     expect(imageSizeEnum).toContain('4K')

@@ -29,7 +29,7 @@ export type AspectRatio =
 /**
  * Supported image sizes for high-resolution output
  */
-export type ImageSize = '512px' | '1K' | '2K' | '4K'
+export type ImageSize = '1K' | '2K' | '4K'
 
 /**
  * Quality presets for image generation
