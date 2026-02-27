@@ -11,7 +11,7 @@ vi.mock('../../api/geminiClient', () => {
           data: {
             imageData: Buffer.from('mock-image-data', 'utf-8'),
             metadata: {
-              model: 'gemini-3-pro-image-preview',
+              model: 'gemini-3.1-flash-image-preview',
               prompt: 'test prompt',
               mimeType: 'image/png',
               timestamp: new Date(),
@@ -55,7 +55,7 @@ vi.mock('../../business/imageGenerator', () => {
           data: {
             imageData: Buffer.from('mock-image-data', 'utf-8'),
             metadata: {
-              model: 'gemini-3-pro-image-preview',
+              model: 'gemini-3.1-flash-image-preview',
               prompt: 'test prompt',
               mimeType: 'image/png',
               timestamp: new Date(),
@@ -86,7 +86,7 @@ vi.mock('../../business/responseBuilder', () => {
                   mimeType: 'image/png',
                 },
                 metadata: {
-                  model: 'gemini-3-pro-image-preview',
+                  model: 'gemini-3.1-flash-image-preview',
                   prompt: 'test prompt',
                   mimeType: 'image/png',
                   timestamp: new Date().toISOString(),
@@ -240,7 +240,7 @@ describe('MCP Server', () => {
     expect(responseData.resource.name).toBe('test-image.png')
     expect(responseData.resource.mimeType).toBe('image/png')
     expect(responseData).toHaveProperty('metadata')
-    expect(responseData.metadata.model).toBe('gemini-3-pro-image-preview')
+    expect(responseData.metadata.model).toBe('gemini-3.1-flash-image-preview')
   })
 
   it('should save to file when fileName is specified', async () => {
@@ -268,7 +268,7 @@ describe('MCP Server', () => {
     expect(responseData.resource.name).toBe('test-image.png')
     expect(responseData.resource.mimeType).toBe('image/png')
     expect(responseData).toHaveProperty('metadata')
-    expect(responseData.metadata.model).toBe('gemini-3-pro-image-preview')
+    expect(responseData.metadata.model).toBe('gemini-3.1-flash-image-preview')
   })
 
   it('should handle invalid tool request', async () => {
@@ -363,5 +363,55 @@ describe('MCPServer tool schema - aspectRatio', () => {
     // Assert
     expect(generateImageTool?.inputSchema.required).toContain('prompt')
     expect(generateImageTool?.inputSchema.required).not.toContain('aspectRatio')
+  })
+})
+
+// Test suite for quality parameter in generate_image tool schema
+describe('MCPServer tool schema - quality', () => {
+  it('should include quality parameter in generate_image schema', () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    const toolsList = mcpServer.getToolsList()
+    const generateImageTool = toolsList.tools.find((t) => t.name === 'generate_image')
+
+    // Assert
+    expect(generateImageTool?.inputSchema.properties).toHaveProperty('quality')
+    expect(generateImageTool?.inputSchema.properties?.quality.type).toBe('string')
+    expect(generateImageTool?.inputSchema.properties?.quality.enum).toEqual(['fast', 'balanced', 'quality'])
+  })
+
+  it('should mark quality as optional in schema', () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    const toolsList = mcpServer.getToolsList()
+    const generateImageTool = toolsList.tools.find((t) => t.name === 'generate_image')
+
+    // Assert
+    expect(generateImageTool?.inputSchema.required).toContain('prompt')
+    expect(generateImageTool?.inputSchema.required).not.toContain('quality')
+  })
+})
+
+// Test suite for imageSize parameter in generate_image tool schema
+describe('MCPServer tool schema - imageSize', () => {
+  it('should define enum with 4 image sizes in schema', () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    const toolsList = mcpServer.getToolsList()
+    const generateImageTool = toolsList.tools.find((t) => t.name === 'generate_image')
+    const imageSizeEnum = generateImageTool?.inputSchema.properties?.imageSize.enum
+
+    // Assert
+    expect(imageSizeEnum).toHaveLength(4)
+    expect(imageSizeEnum).toContain('512px')
+    expect(imageSizeEnum).toContain('1K')
+    expect(imageSizeEnum).toContain('2K')
+    expect(imageSizeEnum).toContain('4K')
   })
 })

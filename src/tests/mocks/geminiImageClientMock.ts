@@ -153,7 +153,7 @@ class GeminiImageClientMock implements GeminiClient {
 
     // Generate comprehensive metadata
     const metadata: GeminiGenerationMetadata = {
-      model: 'gemini-3-pro-image-preview',
+      model: 'gemini-3.1-flash-image-preview',
       prompt: params.prompt,
       mimeType: 'image/png',
       timestamp: new Date(),
@@ -318,7 +318,7 @@ export function createStructuredPromptImageMock(options?: {
     },
     customResponse: {
       metadata: {
-        model: 'gemini-3-pro-image-preview',
+        model: 'gemini-3.1-flash-image-preview',
         prompt: 'Enhanced structured prompt',
         mimeType: 'image/png',
         timestamp: new Date(),
