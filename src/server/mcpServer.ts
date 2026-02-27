@@ -158,7 +158,7 @@ export class MCPServerImpl {
               quality: {
                 type: 'string' as const,
                 description:
-                  'Quality preset controlling speed/fidelity tradeoff. "fast" (default): best for drafts and rapid iteration. "balanced": better detail and coherence, moderate latency. "quality": highest fidelity, use for final deliverables where quality matters most.',
+                  'Quality preset controlling speed/fidelity tradeoff. Only specify when the user explicitly requests a specific quality level; omit to use the server\'s configured default. "fast": best for drafts and rapid iteration. "balanced": better detail and coherence, moderate latency. "quality": highest fidelity, use for final deliverables where quality matters most.',
                 enum: ['fast', 'balanced', 'quality'],
               },
             },

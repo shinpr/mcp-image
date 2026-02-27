@@ -211,8 +211,7 @@ describe('MCP Server', () => {
     expect(schema.properties).toHaveProperty('fileName')
     expect(schema.properties?.fileName).toEqual({
       type: 'string',
-      description:
-        'Custom file name for the output image. Auto-generated if not specified.',
+      description: 'Custom file name for the output image. Auto-generated if not specified.',
     })
     expect(schema.required).toContain('prompt')
   })
