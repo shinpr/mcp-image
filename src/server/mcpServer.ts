@@ -97,7 +97,7 @@ export class MCPServerImpl {
               fileName: {
                 type: 'string' as const,
                 description:
-                  'Optional file name for the generated image (if not specified, generates an auto-named file in IMAGE_OUTPUT_DIR)',
+                  'Custom file name for the output image. Auto-generated if not specified.',
               },
               inputImagePath: {
                 type: 'string' as const,
@@ -153,12 +153,12 @@ export class MCPServerImpl {
               purpose: {
                 type: 'string' as const,
                 description:
-                  'Intended use for the image (e.g., cookbook cover, social media post, presentation slide). Helps tailor visual style, quality level, and details to match the purpose.',
+                  'Intended use for the image (e.g., cookbook cover, social media post, presentation slide). Influences lighting, composition, and detail level to match the context.',
               },
               quality: {
                 type: 'string' as const,
                 description:
-                  'Image generation quality preset. "fast" (default): Nano Banana 2 for quick generation. "balanced": Nano Banana 2 with enhanced thinking for better quality. "quality": Nano Banana Pro for highest fidelity output.',
+                  'Quality preset controlling speed/fidelity tradeoff. "fast" (default): best for drafts and rapid iteration. "balanced": better detail and coherence, moderate latency. "quality": highest fidelity, use for final deliverables where quality matters most.',
                 enum: ['fast', 'balanced', 'quality'],
               },
             },
