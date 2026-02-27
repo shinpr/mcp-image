@@ -24,6 +24,8 @@ describe('geminiClient', () => {
     geminiApiKey: 'test-api-key-12345',
     imageOutputDir: './output',
     apiTimeout: 30000,
+    skipPromptEnhancement: false,
+    imageQuality: 'fast',
   }
 
   beforeEach(() => {
@@ -98,7 +100,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
         expect(result.data.metadata.mimeType).toBe('image/png')
       }
@@ -146,7 +148,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
         expect(result.data.metadata.prompt).toBe('Enhance this image')
         expect(result.data.metadata.mimeType).toBe('image/jpeg')
       }
@@ -463,7 +465,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Generate character with blending')
       }
@@ -509,7 +511,7 @@ describe('geminiClient', () => {
       if (result.success) {
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Generate factually accurate historical scene')
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
       }
     })
 
@@ -552,7 +554,7 @@ describe('geminiClient', () => {
       if (result.success) {
         // Features not specified - standard metadata only
         expect(result.data.metadata.prompt).toBe('Generate simple landscape')
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
       }
     })
 
@@ -602,7 +604,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.inputImageProvided).toBe(true)
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Blend this character with fantasy elements')
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
       }
     })
   })
@@ -909,6 +911,182 @@ describe('geminiClient', () => {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.prompt).toBe('Generate 2025 Japan foodtech industry chaos map')
       }
+    })
+  })
+
+  describe('GeminiClient.generateImage with quality presets', () => {
+    const mockSuccessResponse = {
+      response: {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: {
+                    data: 'base64-image-data',
+                    mimeType: 'image/png',
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    }
+
+    it('should use gemini-3.1-flash-image-preview for fast preset (default)', async () => {
+      // Arrange
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSuccessResponse)
+
+      const clientResult = createGeminiClient(testConfig) // testConfig has imageQuality: 'fast'
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({ prompt: 'test fast preset' })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+      }
+      // Verify generateContent called with correct model and no thinkingConfig
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-3.1-flash-image-preview',
+          config: expect.not.objectContaining({
+            thinkingConfig: expect.anything(),
+          }),
+        })
+      )
+    })
+
+    it('should use gemini-3.1-flash-image-preview with thinkingConfig for balanced preset', async () => {
+      // Arrange
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSuccessResponse)
+
+      const balancedConfig: Config = { ...testConfig, imageQuality: 'balanced' }
+      const clientResult = createGeminiClient(balancedConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({ prompt: 'test balanced preset' })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+      }
+      // Verify generateContent called with thinkingConfig
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-3.1-flash-image-preview',
+          config: expect.objectContaining({
+            thinkingConfig: { thinkingLevel: 'high' },
+          }),
+        })
+      )
+    })
+
+    it('should use gemini-3-pro-image-preview for quality preset', async () => {
+      // Arrange
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSuccessResponse)
+
+      const qualityConfig: Config = { ...testConfig, imageQuality: 'quality' }
+      const clientResult = createGeminiClient(qualityConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act
+      const result = await client.generateImage({ prompt: 'test quality preset' })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+      }
+      // Verify generateContent called with correct model and no thinkingConfig
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-3-pro-image-preview',
+          config: expect.not.objectContaining({
+            thinkingConfig: expect.anything(),
+          }),
+        })
+      )
+    })
+
+    it('should allow per-request quality override', async () => {
+      // Arrange
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSuccessResponse)
+
+      // Create client with default 'fast'
+      const clientResult = createGeminiClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act - override to 'quality' per-request
+      const result = await client.generateImage({
+        prompt: 'test per-request override',
+        quality: 'quality',
+      })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+      }
+      // Verify generateContent called with quality model
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-3-pro-image-preview',
+        })
+      )
+    })
+
+    it('should fall back to constructor default quality when params.quality is undefined', async () => {
+      // Arrange
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSuccessResponse)
+
+      // Create client with 'balanced' default
+      const balancedConfig: Config = { ...testConfig, imageQuality: 'balanced' }
+      const clientResult = createGeminiClient(balancedConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+      const client = clientResult.data
+
+      // Act - no quality param specified
+      const result = await client.generateImage({ prompt: 'test default fallback' })
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+      }
+      // Verify thinkingConfig is present (balanced preset)
+      expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'gemini-3.1-flash-image-preview',
+          config: expect.objectContaining({
+            thinkingConfig: { thinkingLevel: 'high' },
+          }),
+        })
+      )
     })
   })
 })
