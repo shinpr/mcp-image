@@ -332,7 +332,7 @@ describe('MCPServer tool schema - aspectRatio', () => {
     expect(generateImageTool?.inputSchema.properties?.aspectRatio.type).toBe('string')
   })
 
-  it('should define enum with 10 supported aspect ratios in schema', () => {
+  it('should define enum with 14 supported aspect ratios in schema', () => {
     // Arrange
     const mcpServer = createMCPServer()
 
@@ -342,10 +342,14 @@ describe('MCPServer tool schema - aspectRatio', () => {
     const aspectRatioEnum = generateImageTool?.inputSchema.properties?.aspectRatio.enum
 
     // Assert
-    expect(aspectRatioEnum).toHaveLength(10)
+    expect(aspectRatioEnum).toHaveLength(14)
     expect(aspectRatioEnum).toContain('1:1')
     expect(aspectRatioEnum).toContain('16:9')
     expect(aspectRatioEnum).toContain('21:9')
+    expect(aspectRatioEnum).toContain('1:4')
+    expect(aspectRatioEnum).toContain('1:8')
+    expect(aspectRatioEnum).toContain('4:1')
+    expect(aspectRatioEnum).toContain('8:1')
   })
 
   it('should mark aspectRatio as optional in schema', () => {

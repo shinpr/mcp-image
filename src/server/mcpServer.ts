@@ -127,18 +127,24 @@ export class MCPServerImpl {
               aspectRatio: {
                 type: 'string' as const,
                 description: 'Aspect ratio for the generated image',
-                enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'],
+                enum: ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9', '1:4', '1:8', '4:1', '8:1'],
               },
               imageSize: {
                 type: 'string' as const,
                 description:
-                  'Image resolution for high-quality output. Specify "2K" or "4K" when you need higher resolution images with better text rendering and fine details. Leave unspecified for standard quality.',
-                enum: ['2K', '4K'],
+                  'Image resolution for high-quality output. Specify "512px", "1K", "2K", or "4K" when you need specific resolution. Leave unspecified for standard quality.',
+                enum: ['512px', '1K', '2K', '4K'],
               },
               purpose: {
                 type: 'string' as const,
                 description:
                   'Intended use for the image (e.g., cookbook cover, social media post, presentation slide). Helps tailor visual style, quality level, and details to match the purpose.',
+              },
+              quality: {
+                type: 'string' as const,
+                description:
+                  'Image generation quality preset. "fast" (default): Nano Banana 2 for quick generation. "balanced": Nano Banana 2 with enhanced thinking for better quality. "quality": Nano Banana Pro for highest fidelity output.',
+                enum: ['fast', 'balanced', 'quality'],
               },
             },
             required: ['prompt'],
@@ -279,6 +285,7 @@ export class MCPServerImpl {
         ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
         ...(params.imageSize && { imageSize: params.imageSize }),
         ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
+        ...(params.quality && { quality: params.quality }),
       })
 
       if (!generationResult.success) {
