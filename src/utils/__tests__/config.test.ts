@@ -25,6 +25,8 @@ describe('config', () => {
         geminiApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
       }
 
       // Act
@@ -45,6 +47,8 @@ describe('config', () => {
         geminiApiKey: 'short',
         imageOutputDir: './output',
         apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
       }
 
       // Act
@@ -64,6 +68,8 @@ describe('config', () => {
         geminiApiKey: 'valid-api-key-12345',
         imageOutputDir: './output',
         apiTimeout: -1000, // Invalid negative timeout
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
       }
 
       // Act
@@ -84,6 +90,8 @@ describe('config', () => {
         geminiApiKey: 'valid-api-key-12345',
         imageOutputDir: './output',
         apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
       }
 
       // Act
