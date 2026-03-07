@@ -6,18 +6,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Config } from '../../utils/config'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
+import type { GeminiTextClient } from '../geminiTextClient'
 import { createGeminiTextClient } from '../geminiTextClient'
-import type { GeminiTextClient, GenerationConfig } from '../geminiTextClient'
 
 // Mock GoogleGenAI external dependency
 const mockGenerateContent = vi.fn()
 
 vi.mock('@google/genai', () => ({
-  GoogleGenAI: vi.fn().mockImplementation(() => ({
-    models: {
+  GoogleGenAI: class {
+    models = {
       generateContent: mockGenerateContent,
-    },
-  })),
+    }
+  },
 }))
 
 mockGenerateContent.mockImplementation((params: { contents: string }) => {

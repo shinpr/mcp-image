@@ -5,8 +5,8 @@
  */
 
 import { GoogleGenAI } from '@google/genai'
-import { GEMINI_MODELS } from '../types/mcp'
 import type { ImageQuality } from '../types/mcp'
+import { GEMINI_MODELS } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import type { Config } from '../utils/config'

@@ -11,7 +11,7 @@ import {
   InputValidationError,
   NetworkError,
 } from '../../utils/errors'
-import { type ResponseBuilder, createResponseBuilder } from '../responseBuilder'
+import { createResponseBuilder, type ResponseBuilder } from '../responseBuilder'
 
 describe('ResponseBuilder', () => {
   let responseBuilder: ResponseBuilder

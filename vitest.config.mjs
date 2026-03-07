@@ -13,13 +13,7 @@ export default defineConfig({
     testTimeout: 10000,        // 10 second timeout
     hookTimeout: 10000,        // Hook processing timeout 10 seconds
     teardownTimeout: 5000,     // Teardown timeout 5 seconds
-    pool: 'threads',           // Explicit process pool specification
-    poolOptions: {
-      threads: {
-        singleThread: false,   // Allow parallel execution
-        isolate: true,         // Isolate between tests
-      }
-    },
+    isolate: true,             // Isolate between tests (prevent flaky parallel tests)
     coverage: {
       enabled: false,  // Disable coverage by default
       provider: 'v8',

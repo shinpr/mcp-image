@@ -5,8 +5,8 @@
 
 import { existsSync } from 'node:fs'
 import { extname } from 'node:path'
-import { IMAGE_QUALITY_VALUES } from '../types/mcp'
 import type { AspectRatio, GenerateImageParams } from '../types/mcp'
+import { IMAGE_QUALITY_VALUES } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { InputValidationError } from '../utils/errors'
@@ -114,7 +114,7 @@ export function validateBase64Image(
         )
       )
     }
-  } catch (error) {
+  } catch (_error) {
     return Err(
       new InputValidationError(
         'Failed to decode base64 image',

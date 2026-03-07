@@ -4,23 +4,21 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { McpToolResponse } from '../../types/mcp'
 import {
   FileOperationError,
   GeminiAPIError,
   InputValidationError,
   NetworkError,
-  type Result,
 } from '../../utils/errors'
 import { ErrorHandler } from '../errorHandler'
 
 // Mock the logger
 vi.mock('../../utils/logger', () => ({
-  Logger: vi.fn().mockImplementation(() => ({
-    error: vi.fn(),
-    warn: vi.fn(),
-    info: vi.fn(),
-  })),
+  Logger: class {
+    error = vi.fn()
+    warn = vi.fn()
+    info = vi.fn()
+  },
 }))
 
 describe('ErrorHandler', () => {

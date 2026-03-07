@@ -1,13 +1,7 @@
-import type { GenerativeModel } from '@google/genai'
-import { type MockedFunction, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Config } from '../../utils/config'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
 import { createGeminiClient } from '../geminiClient'
-
-// Mock @google/genai
-vi.mock('@google/genai', () => ({
-  GoogleGenAI: vi.fn(),
-}))
 
 // Mock the Gemini client instance structure
 const mockGeminiClientInstance = {
@@ -16,8 +10,17 @@ const mockGeminiClientInstance = {
   },
 }
 
-const { GoogleGenAI } = await import('@google/genai')
-const mockGoogleGenAI = vi.mocked(GoogleGenAI) as MockedFunction<typeof GoogleGenAI>
+const mockGoogleGenAI = vi.fn()
+
+// Mock @google/genai
+vi.mock('@google/genai', () => ({
+  GoogleGenAI: class {
+    models = mockGeminiClientInstance.models
+    constructor(...args: any[]) {
+      mockGoogleGenAI(...args)
+    }
+  },
+}))
 
 describe('geminiClient', () => {
   const testConfig: Config = {
@@ -30,7 +33,6 @@ describe('geminiClient', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    mockGoogleGenAI.mockReturnValue(mockGeminiClientInstance as any)
   })
 
   describe('createGeminiClient', () => {
@@ -45,7 +47,7 @@ describe('geminiClient', () => {
 
     it('should return error when API key is invalid', () => {
       // Arrange
-      mockGoogleGenAI.mockImplementation(() => {
+      mockGoogleGenAI.mockImplementationOnce(() => {
         throw new Error('Invalid API key')
       })
 

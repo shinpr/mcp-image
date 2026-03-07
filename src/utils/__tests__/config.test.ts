@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Result } from '../../types/result'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { getConfig, validateConfig } from '../config'
 import { ConfigError } from '../errors'
 
