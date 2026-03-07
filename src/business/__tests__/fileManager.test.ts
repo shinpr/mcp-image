@@ -8,7 +8,7 @@ import * as path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 // Remove unused import - using .success property directly
 import { FileOperationError } from '../../utils/errors'
-import { type FileManager, createFileManager } from '../fileManager'
+import { createFileManager, type FileManager } from '../fileManager'
 
 describe('FileManager', () => {
   let fileManager: FileManager

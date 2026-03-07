@@ -3,8 +3,8 @@
  * Handles environment variables and configuration validation
  */
 
-import { IMAGE_QUALITY_VALUES } from '../types/mcp'
 import type { ImageQuality } from '../types/mcp'
+import { IMAGE_QUALITY_VALUES } from '../types/mcp'
 import type { Result } from '../types/result'
 import { Err, Ok } from '../types/result'
 import { ConfigError } from './errors'

@@ -111,7 +111,7 @@ export class SecurityManager {
    */
   sanitizeFilename(filename: string): string {
     // Remove null bytes and path separators
-    let sanitized = filename.replace(/[\0\/\\]/g, '')
+    let sanitized = filename.replace(/[\0/\\]/g, '')
 
     // Remove control characters (ASCII 0-31 and 127) by filtering each character
     sanitized = sanitized

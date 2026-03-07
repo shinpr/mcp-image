@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Logger } from '../logger'
 
 // Mock console methods - Logger uses console.error for all MCP-compliant output
-const mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
-const mockConsoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+const _mockConsoleLog = vi.spyOn(console, 'log').mockImplementation(() => {})
+const _mockConsoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 const mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
 describe('Logger', () => {

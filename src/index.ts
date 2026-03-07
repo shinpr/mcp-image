@@ -26,6 +26,6 @@ if (args[0] === 'skills') {
   require('./server-main')
 }
 
+export type { GeneratedImageResult } from './api/geminiClient'
 export { createMCPServer, MCPServerImpl } from './server/mcpServer'
 export type { GenerateImageParams, MCPServerConfig } from './types/mcp'
-export type { GeneratedImageResult } from './api/geminiClient'

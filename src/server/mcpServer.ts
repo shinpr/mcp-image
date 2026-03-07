@@ -12,23 +12,20 @@ import {
   ListToolsRequestSchema,
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
-
-// Types
-import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
-
+// API clients
+import { createGeminiClient, type GeminiClient } from '../api/geminiClient'
+import { createGeminiTextClient, type GeminiTextClient } from '../api/geminiTextClient'
 // Business logic
-import { type FileManager, createFileManager } from '../business/fileManager'
+import { createFileManager, type FileManager } from '../business/fileManager'
 import { validateGenerateImageParams } from '../business/inputValidator'
-import { type ResponseBuilder, createResponseBuilder } from '../business/responseBuilder'
+import { createResponseBuilder, type ResponseBuilder } from '../business/responseBuilder'
 import {
+  createStructuredPromptGenerator,
   type FeatureFlags,
   type StructuredPromptGenerator,
-  createStructuredPromptGenerator,
 } from '../business/structuredPromptGenerator'
-
-// API clients
-import { type GeminiClient, createGeminiClient } from '../api/geminiClient'
-import { type GeminiTextClient, createGeminiTextClient } from '../api/geminiTextClient'
+// Types
+import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
 
 // Utilities
 import { getConfig } from '../utils/config'

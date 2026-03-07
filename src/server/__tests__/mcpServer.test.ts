@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MCPServerImpl, createMCPServer } from '../mcpServer'
+import { createMCPServer, MCPServerImpl } from '../mcpServer'
 
 // Mock the Gemini client for unit tests
 vi.mock('../../api/geminiClient', () => {
