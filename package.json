@@ -3,6 +3,7 @@
   "mcpName": "io.github.shinpr/mcp-image",
   "version": "0.8.0",
   "description": "MCP server for AI image generation",
+  "type": "module",
   "main": "dist/index.js",
   "bin": {
     "mcp-image": "./dist/index.js"

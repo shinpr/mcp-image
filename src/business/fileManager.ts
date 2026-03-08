@@ -5,9 +5,9 @@
 
 import { promises as fs, mkdirSync } from 'node:fs'
 import * as path from 'node:path'
-import type { Result } from '../types/result'
-import { Err, Ok } from '../types/result'
-import { FileOperationError } from '../utils/errors'
+import type { Result } from '../types/result.js'
+import { Err, Ok } from '../types/result.js'
+import { FileOperationError } from '../utils/errors.js'
 
 // Constants for file naming and error messages
 const FILE_NAME_PREFIX = 'image' as const

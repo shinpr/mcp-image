@@ -1,8 +1,11 @@
 #!/usr/bin/env node
-'use strict'
 
-const { cpSync, existsSync, mkdirSync } = require('node:fs')
-const { dirname, resolve } = require('node:path')
+import { cpSync, existsSync, mkdirSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
 
 const SKILLS_SOURCE = resolve(__dirname, '..', 'skills', 'image-generation')
 const SKILL_DIR_NAME = 'image-generation'
@@ -77,7 +80,7 @@ function install(targetPath) {
   console.log(`Installed skills to: ${targetPath}`)
 }
 
-function run(args) {
+export function run(args) {
   if (args.length === 0) {
     printHelp()
     process.exit(0)
@@ -110,5 +113,3 @@ function run(args) {
   console.log('Installed files:')
   console.log('  - image-generation/SKILL.md')
 }
-
-module.exports = { run }

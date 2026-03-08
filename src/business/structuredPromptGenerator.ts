@@ -4,10 +4,10 @@
  * Applies 7 best practices and 3 feature perspectives through intelligent selection
  */
 
-import type { GeminiTextClient } from '../api/geminiTextClient'
-import type { Result } from '../types/result'
-import { Err, Ok } from '../types/result'
-import { GeminiAPIError } from '../utils/errors'
+import type { GeminiTextClient } from '../api/geminiTextClient.js'
+import type { Result } from '../types/result.js'
+import { Err, Ok } from '../types/result.js'
+import { GeminiAPIError } from '../utils/errors.js'
 
 /**
  * System prompt for structured prompt generation optimized for image generation

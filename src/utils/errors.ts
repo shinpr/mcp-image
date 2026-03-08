@@ -3,7 +3,7 @@
  * Provides specific error types with structured error codes and suggestions
  */
 
-import { GEMINI_MODELS } from '../types/mcp'
+import { GEMINI_MODELS } from '../types/mcp.js'
 
 /**
  * Structured error format for consistent error reporting

@@ -5,12 +5,12 @@
  */
 
 import { GoogleGenAI } from '@google/genai'
-import type { ImageQuality } from '../types/mcp'
-import { GEMINI_MODELS } from '../types/mcp'
-import type { Result } from '../types/result'
-import { Err, Ok } from '../types/result'
-import type { Config } from '../utils/config'
-import { GeminiAPIError, NetworkError } from '../utils/errors'
+import type { ImageQuality } from '../types/mcp.js'
+import { GEMINI_MODELS } from '../types/mcp.js'
+import type { Result } from '../types/result.js'
+import { Err, Ok } from '../types/result.js'
+import type { Config } from '../utils/config.js'
+import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 
 /**
  * Simplified Gemini API response types

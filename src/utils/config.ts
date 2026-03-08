@@ -3,11 +3,11 @@
  * Handles environment variables and configuration validation
  */
 
-import type { ImageQuality } from '../types/mcp'
-import { IMAGE_QUALITY_VALUES } from '../types/mcp'
-import type { Result } from '../types/result'
-import { Err, Ok } from '../types/result'
-import { ConfigError } from './errors'
+import type { ImageQuality } from '../types/mcp.js'
+import { IMAGE_QUALITY_VALUES } from '../types/mcp.js'
+import type { Result } from '../types/result.js'
+import { Err, Ok } from '../types/result.js'
+import { ConfigError } from './errors.js'
 
 /**
  * Configuration interface
