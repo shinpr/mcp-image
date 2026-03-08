@@ -3,7 +3,7 @@
  * Provides centralized error handling and Result type wrapping
  */
 
-import type { McpToolResponse } from '../types/mcp'
+import type { McpToolResponse } from '../types/mcp.js'
 import {
   ConfigError,
   FileOperationError,
@@ -11,8 +11,8 @@ import {
   InputValidationError,
   NetworkError,
   type Result,
-} from '../utils/errors'
-import { Logger } from '../utils/logger'
+} from '../utils/errors.js'
+import { Logger } from '../utils/logger.js'
 
 // Create logger instance for error handling
 const logger = new Logger()

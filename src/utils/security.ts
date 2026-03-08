@@ -4,8 +4,8 @@
  */
 
 import * as path from 'node:path'
-import { Err, Ok, type Result } from '../types/result'
-import { SecurityError } from './errors'
+import { Err, Ok, type Result } from '../types/result.js'
+import { SecurityError } from './errors.js'
 
 /**
  * Security manager for handling file path validation and sanitization

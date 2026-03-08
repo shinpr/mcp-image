@@ -3,8 +3,8 @@
  */
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { MCPServerImpl } from './server/mcpServer'
-import { Logger } from './utils/logger'
+import { MCPServerImpl } from './server/mcpServer.js'
+import { Logger } from './utils/logger.js'
 
 const logger = new Logger()
 

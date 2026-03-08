@@ -13,25 +13,25 @@ import {
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
 // API clients
-import { createGeminiClient, type GeminiClient } from '../api/geminiClient'
-import { createGeminiTextClient, type GeminiTextClient } from '../api/geminiTextClient'
+import { createGeminiClient, type GeminiClient } from '../api/geminiClient.js'
+import { createGeminiTextClient, type GeminiTextClient } from '../api/geminiTextClient.js'
 // Business logic
-import { createFileManager, type FileManager } from '../business/fileManager'
-import { validateGenerateImageParams } from '../business/inputValidator'
-import { createResponseBuilder, type ResponseBuilder } from '../business/responseBuilder'
+import { createFileManager, type FileManager } from '../business/fileManager.js'
+import { validateGenerateImageParams } from '../business/inputValidator.js'
+import { createResponseBuilder, type ResponseBuilder } from '../business/responseBuilder.js'
 import {
   createStructuredPromptGenerator,
   type FeatureFlags,
   type StructuredPromptGenerator,
-} from '../business/structuredPromptGenerator'
+} from '../business/structuredPromptGenerator.js'
 // Types
-import type { GenerateImageParams, MCPServerConfig } from '../types/mcp'
+import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 
 // Utilities
-import { getConfig } from '../utils/config'
-import { Logger } from '../utils/logger'
-import { SecurityManager } from '../utils/security'
-import { ErrorHandler } from './errorHandler'
+import { getConfig } from '../utils/config.js'
+import { Logger } from '../utils/logger.js'
+import { SecurityManager } from '../utils/security.js'
+import { ErrorHandler } from './errorHandler.js'
 
 /**
  * Default MCP server configuration

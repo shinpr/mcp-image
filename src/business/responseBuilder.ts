@@ -4,8 +4,8 @@
  */
 
 import * as path from 'node:path'
-import type { GeneratedImageResult } from '../api/geminiClient'
-import type { McpToolResponse, StructuredContent } from '../types/mcp'
+import type { GeneratedImageResult } from '../api/geminiClient.js'
+import type { McpToolResponse, StructuredContent } from '../types/mcp.js'
 import {
   type BaseError,
   ConfigError,
@@ -14,7 +14,7 @@ import {
   InputValidationError,
   NetworkError,
   SecurityError,
-} from '../utils/errors'
+} from '../utils/errors.js'
 
 // Constants for MIME types and error handling
 const MIME_TYPES = {
