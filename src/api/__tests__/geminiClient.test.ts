@@ -783,6 +783,13 @@ describe('geminiClient', () => {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.prompt).toBe('Generate current 2025 weather map of Tokyo')
       }
+
+      // Verify tools parameter includes both web and image search
+      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
+        .mock.calls[0][0]
+      expect(callArgs.tools).toEqual([
+        { googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } },
+      ])
     })
 
     it('should generate image successfully with useGoogleSearch disabled', async () => {
@@ -826,6 +833,11 @@ describe('geminiClient', () => {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.prompt).toBe('Generate creative fantasy landscape')
       }
+
+      // Verify tools parameter is not included when disabled
+      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
+        .mock.calls[0][0]
+      expect(callArgs.tools).toBeUndefined()
     })
 
     it('should generate image successfully without useGoogleSearch parameter', async () => {
@@ -868,6 +880,11 @@ describe('geminiClient', () => {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.prompt).toBe('Generate image without grounding')
       }
+
+      // Verify tools parameter is not included when omitted
+      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
+        .mock.calls[0][0]
+      expect(callArgs.tools).toBeUndefined()
     })
 
     it('should generate image with combined parameters', async () => {
@@ -913,6 +930,13 @@ describe('geminiClient', () => {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.prompt).toBe('Generate 2025 Japan foodtech industry chaos map')
       }
+
+      // Verify tools parameter includes both web and image search with combined params
+      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
+        .mock.calls[0][0]
+      expect(callArgs.tools).toEqual([
+        { googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } },
+      ])
     })
   })
 

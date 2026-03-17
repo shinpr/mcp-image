@@ -239,8 +239,10 @@ class GeminiClientImpl implements GeminiClient {
         ...thinkingConfig,
       }
 
-      // Construct tools array for Google Search grounding
-      const tools = params.useGoogleSearch ? [{ googleSearch: {} }] : undefined
+      // Construct tools array for Google Search grounding (web + image search)
+      const tools = params.useGoogleSearch
+        ? [{ googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } }]
+        : undefined
 
       // Generate content using Gemini API
       const rawResponse = await this.genai.models.generateContent({
