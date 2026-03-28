@@ -305,7 +305,9 @@ export class MCPServerImpl {
       }
 
       // Save image file
-      const fileName = params.fileName || this.fileManager.generateFileName()
+      const rawFileName = params.fileName || this.fileManager.generateFileName()
+      const ext = path.extname(rawFileName) || ('.' + (generationResult.data.metadata.mimeType || 'image/png').split('/')[1])
+      const fileName = path.extname(rawFileName) ? rawFileName : rawFileName + ext
       const outputPath = path.join(configResult.data.imageOutputDir, fileName)
 
       const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
