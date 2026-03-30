@@ -324,7 +324,7 @@ class GeminiClientImpl implements GeminiClient {
       }
 
       const candidate = responseData.candidates[0]
-      if (!candidate || !candidate.content || !candidate.content.parts) {
+      if (!candidate?.content?.parts) {
         return Err(
           new GeminiAPIError('No valid content in response', {
             stage: 'candidate_extraction',
