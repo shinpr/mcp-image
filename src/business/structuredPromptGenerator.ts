@@ -33,7 +33,7 @@ Structure your enhancement around three core elements:
    - Camera/lens choices: specify focal length, aperture, and shooting angle when photographic
 
 Core principles:
-- Preserve the user's original intent while enhancing detail
+- Add visual details only in areas the user left unspecified; keep all user-specified elements unchanged
 - Focus on what should be present rather than what should be absent
 - Include photographic or artistic terminology when appropriate
 - Maintain clarity while adding richness and specificity
@@ -174,7 +174,7 @@ Consider these aspects as you enhance the prompt:
 - Visual details: textures, lighting, colors, materials, composition
 - Spatial relationships and scale between elements
 - Artistic or photographic style that fits the subject
-- Emotional tone and atmosphere
+- Emotional tone paired with visual indicators (e.g., serene → soft diffused light, muted palette; ominous → low contrast, heavy shadows)
 - Technical specifications if relevant (lens type, camera angle, etc.)
 
 Create a natural, flowing description that brings the scene to life. Focus on what should be present rather than what should be absent.
@@ -200,7 +200,7 @@ Now transform the user's request with similar attention to detail and creative e
 
     if (features.blendImages) {
       requirements.push(
-        'MUST describe seamless integration: Multiple visual elements need to blend naturally. Use spatial relationship terms like "seamlessly blending", "harmoniously composed", "naturally integrated". Clearly describe foreground (X% of frame), midground, and background elements with their relative scales and how they interact within the composition.'
+        'MUST describe spatial and visual integration: Multiple visual elements need concrete spatial relationships. Define how elements interact: overlap, reflection, shared lighting, color echo between foreground and background. Clearly describe foreground (X% of frame), midground, and background elements with their relative scales and how they physically interact within the composition.'
       )
     }
 
@@ -250,9 +250,9 @@ Now transform the user's request with similar attention to detail and creative e
     // Check for multi-element blending
     if (
       features.blendImages ||
-      promptLower.includes('seamlessly') ||
-      promptLower.includes('harmoniously') ||
-      promptLower.includes('naturally integrated') ||
+      promptLower.includes('overlap') ||
+      promptLower.includes('shared lighting') ||
+      promptLower.includes('color echo') ||
       promptLower.includes('foreground') ||
       promptLower.includes('midground') ||
       promptLower.includes('background')
