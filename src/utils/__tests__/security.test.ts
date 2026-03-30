@@ -3,8 +3,10 @@
  * Covers file path sanitization, validation, and security checks
  */
 
+import * as fs from 'node:fs'
+import * as os from 'node:os'
 import * as path from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SecurityError } from '../errors'
 import { SecurityManager } from '../security'
 
@@ -260,6 +262,102 @@ describe('SecurityManager', () => {
 
       // Assert
       expect(result.success).toBe(true)
+    })
+  })
+
+  describe('input file path sanitization', () => {
+    let tempDir: string
+    let tempFile: string
+
+    beforeEach(() => {
+      tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sec-test-'))
+      tempFile = path.join(tempDir, 'test-image.png')
+      fs.writeFileSync(tempFile, 'fake-image')
+    })
+
+    afterEach(() => {
+      fs.rmSync(tempDir, { recursive: true, force: true })
+    })
+
+    it('should accept a valid absolute path to an existing file', () => {
+      const result = securityManager.sanitizeInputFilePath(tempFile)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        // Verify the returned path points to a readable file (behaviour-based)
+        expect(fs.existsSync(result.data)).toBe(true)
+        expect(fs.readFileSync(result.data, 'utf-8')).toBe('fake-image')
+      }
+    })
+
+    it('should reject path with null byte', () => {
+      const result = securityManager.sanitizeInputFilePath('/tmp/image.png\0.exe')
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(SecurityError)
+        expect(result.error.message).toContain('Null byte detected')
+      }
+    })
+
+    it('should reject path traversal with ../', () => {
+      const result = securityManager.sanitizeInputFilePath('/tmp/../etc/passwd')
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(SecurityError)
+        expect(result.error.message).toContain('Path traversal attempt')
+      }
+    })
+
+    it('should reject path traversal with ..\\', () => {
+      const result = securityManager.sanitizeInputFilePath('/tmp/..\\etc\\passwd')
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(SecurityError)
+        expect(result.error.message).toContain('Path traversal attempt')
+      }
+    })
+
+    it('should reject path to non-existent file', () => {
+      const result = securityManager.sanitizeInputFilePath('/tmp/nonexistent-file-12345.png')
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(SecurityError)
+        expect(result.error.message).toBe('File path cannot be resolved')
+      }
+    })
+
+    it('should resolve symlinks to real path', () => {
+      const symlinkPath = path.join(tempDir, 'symlink.png')
+      fs.symlinkSync(tempFile, symlinkPath)
+
+      const result = securityManager.sanitizeInputFilePath(symlinkPath)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        // Resolved path should differ from the symlink path (symlink was resolved)
+        expect(result.data).not.toBe(symlinkPath)
+        // Resolved path should point to the original file content
+        expect(fs.readFileSync(result.data, 'utf-8')).toBe('fake-image')
+      }
+    })
+  })
+
+  describe('generateSecureTempPath', () => {
+    it('should generate path with cryptographic random suffix', () => {
+      const result = securityManager.generateSecureTempPath('test', '.png')
+
+      expect(result).toMatch(/^\/tmp\/test-\d+-[0-9a-f]{12}\.png$/)
+    })
+
+    it('should generate unique paths on successive calls', () => {
+      const path1 = securityManager.generateSecureTempPath('test', '.png')
+      const path2 = securityManager.generateSecureTempPath('test', '.png')
+
+      expect(path1).not.toBe(path2)
     })
   })
 

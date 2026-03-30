@@ -241,7 +241,15 @@ export class MCPServerImpl {
       // Handle input image if provided
       let inputImageData: string | undefined
       if (params.inputImagePath) {
-        const imageBuffer = await fs.readFile(params.inputImagePath)
+        const sanitizedInputPath = this.securityManager.sanitizeInputFilePath(params.inputImagePath)
+        if (!sanitizedInputPath.success) {
+          throw sanitizedInputPath.error
+        }
+        const extensionCheck = this.securityManager.validateImageFile(sanitizedInputPath.data)
+        if (!extensionCheck.success) {
+          throw extensionCheck.error
+        }
+        const imageBuffer = await fs.readFile(sanitizedInputPath.data)
         inputImageData = imageBuffer.toString('base64')
       }
 
@@ -305,7 +313,10 @@ export class MCPServerImpl {
       }
 
       // Save image file
-      const fileName = params.fileName || this.fileManager.generateFileName()
+      const rawFileName = params.fileName || this.fileManager.generateFileName()
+      const fileName = params.fileName
+        ? this.securityManager.sanitizeFilename(rawFileName)
+        : rawFileName
       const outputPath = path.join(configResult.data.imageOutputDir, fileName)
 
       const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
