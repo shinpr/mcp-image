@@ -90,7 +90,7 @@ npx mcp-image skills install --path ~/.claude/skills
 
 ## Prerequisites
 
-- **Node.js** 20 or higher
+- **Node.js** 22 or higher
 - **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey)
 - An MCP-compatible AI tool: **Cursor**, **Claude Code**, **Codex**, or others
 - Basic terminal/command line knowledge
