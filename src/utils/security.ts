@@ -3,6 +3,8 @@
  * Provides protection against path traversal, null byte injection, and other security threats
  */
 
+import { randomBytes } from 'node:crypto'
+import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { Err, Ok, type Result } from '../types/result.js'
 import { SecurityError } from './errors.js'
@@ -49,6 +51,33 @@ export class SecurityManager {
   }
 
   /**
+   * Sanitize input file path without directory restriction.
+   * Prevents path traversal, null byte injection, and symlink-based attacks
+   * while allowing reads from any legitimate absolute path.
+   * @param inputPath File path to sanitize
+   * @returns Result containing sanitized absolute path or security error
+   */
+  sanitizeInputFilePath(inputPath: string): Result<string, SecurityError> {
+    if (inputPath.includes('\0')) {
+      return Err(new SecurityError('Null byte detected in file path'))
+    }
+
+    if (inputPath.includes('..')) {
+      return Err(new SecurityError('Path traversal attempt detected'))
+    }
+
+    const resolvedPath = path.resolve(inputPath)
+
+    // Resolve symlinks to prevent symlink-based traversal
+    try {
+      const realPath = fs.realpathSync(resolvedPath)
+      return Ok(realPath)
+    } catch {
+      return Err(new SecurityError('File path cannot be resolved'))
+    }
+  }
+
+  /**
    * Validate image file extension
    * @param filePath File path to validate
    * @returns Result indicating validation success or security error
@@ -88,7 +117,7 @@ export class SecurityManager {
    */
   generateSecureTempPath(baseName: string, extension: string): string {
     const timestamp = Date.now()
-    const randomSuffix = Math.random().toString(36).substring(2, 8)
+    const randomSuffix = randomBytes(6).toString('hex')
     const secureFilename = `${baseName}-${timestamp}-${randomSuffix}${extension}`
 
     return path.join('/tmp', secureFilename)

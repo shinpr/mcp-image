@@ -105,7 +105,7 @@ describe('FileManager', () => {
     it('should generate timestamp-based filename with correct format', () => {
       const fileName = fileManager.generateFileName()
 
-      expect(fileName).toMatch(/^image-\d{13}-\d{1,3}\.png$/)
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.png$/)
     })
   })
 })

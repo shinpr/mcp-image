@@ -3,6 +3,7 @@
  * Provides functionality for saving images and managing directories
  */
 
+import { randomBytes } from 'node:crypto'
 import { promises as fs, mkdirSync } from 'node:fs'
 import * as path from 'node:path'
 import type { Result } from '../types/result.js'
@@ -12,7 +13,7 @@ import { FileOperationError } from '../utils/errors.js'
 // Constants for file naming and error messages
 const FILE_NAME_PREFIX = 'image' as const
 const DEFAULT_EXTENSION = '.png' as const
-const RANDOM_RANGE = 1000 as const
+const RANDOM_BYTES_LENGTH = 4 as const
 
 const ERROR_MESSAGES = {
   SAVE_FAILED: 'Failed to save image file',
@@ -59,7 +60,7 @@ function ensureDirectoryExists(dirPath: string): Result<void, FileOperationError
  */
 function generateFileName(): string {
   const timestamp = Date.now()
-  const random = Math.floor(Math.random() * RANDOM_RANGE)
+  const random = randomBytes(RANDOM_BYTES_LENGTH).toString('hex')
   return `${FILE_NAME_PREFIX}-${timestamp}-${random}${DEFAULT_EXTENSION}`
 }
 
