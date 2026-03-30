@@ -79,7 +79,7 @@
     "vitest": "^4.0.18"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "lint-staged": {
     "src/**/*.{ts,tsx}": [
