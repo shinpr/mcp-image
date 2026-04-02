@@ -30,6 +30,7 @@ import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 // Utilities
 import { getConfig } from '../utils/config.js'
 import { Logger } from '../utils/logger.js'
+import { ensureExtension } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
 import { ErrorHandler } from './errorHandler.js'
 
@@ -313,10 +314,11 @@ export class MCPServerImpl {
       }
 
       // Save image file
-      const rawFileName = params.fileName || this.fileManager.generateFileName()
-      const fileName = params.fileName
-        ? this.securityManager.sanitizeFilename(rawFileName)
-        : rawFileName
+      const mimeType = generationResult.data.metadata.mimeType
+      const rawFileName = params.fileName
+        ? this.securityManager.sanitizeFilename(params.fileName)
+        : this.fileManager.generateFileName(mimeType)
+      const fileName = params.fileName ? ensureExtension(rawFileName, mimeType) : rawFileName
       const outputPath = path.join(configResult.data.imageOutputDir, fileName)
 
       const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)

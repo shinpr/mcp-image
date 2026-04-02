@@ -39,7 +39,11 @@ vi.mock('../../business/fileManager', () => {
           success: true,
           data: undefined,
         }),
-        generateFileName: vi.fn().mockReturnValue('test-image.png'),
+        generateFileName: vi.fn().mockImplementation((mimeType?: string) => {
+          if (mimeType === 'image/jpeg') return 'test-image.jpg'
+          if (mimeType === 'image/webp') return 'test-image.webp'
+          return 'test-image.png'
+        }),
       }
     }),
   }
@@ -158,6 +162,7 @@ describe('MCP Server', () => {
   let originalApiKey: string | undefined
 
   beforeEach(() => {
+    vi.clearAllMocks()
     // Set up environment for testing
     originalApiKey = process.env.GEMINI_API_KEY
     process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
@@ -289,6 +294,81 @@ describe('MCP Server', () => {
     expect(responseData.error.code).toBe('INTERNAL_ERROR')
     expect(responseData.error.message).toContain('Unknown tool: invalid_tool')
     expect(responseData.error.suggestion).toBe('Contact system administrator')
+  })
+
+  it('should pass mimeType to generateFileName for auto-generated filenames', async () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+    })
+
+    // Assert: generateFileName should be called with the mimeType from API metadata
+    const { createFileManager } = await import('../../business/fileManager')
+    const fileManagerInstance = (createFileManager as ReturnType<typeof vi.fn>).mock.results[0]
+      .value
+    expect(fileManagerInstance.generateFileName).toHaveBeenCalledWith('image/png')
+  })
+
+  it('should append extension to user-provided filename without extension via ensureExtension', async () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: 'my-photo',
+    })
+
+    // Assert: saveImage should be called with a path ending in .png (ensureExtension adds it)
+    const { createFileManager } = await import('../../business/fileManager')
+    const fileManagerInstance = (createFileManager as ReturnType<typeof vi.fn>).mock.results[0]
+      .value
+    const saveImageCall = fileManagerInstance.saveImage.mock.calls[0]
+    const savedPath = saveImageCall[1] as string
+    expect(savedPath).toMatch(/my-photo\.png$/)
+  })
+
+  it('should preserve user-provided filename with existing extension', async () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act
+    await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: 'my-photo.jpg',
+    })
+
+    // Assert: saveImage should be called with path preserving the .jpg extension
+    const { createFileManager } = await import('../../business/fileManager')
+    const fileManagerInstance = (createFileManager as ReturnType<typeof vi.fn>).mock.results[0]
+      .value
+    const saveImageCall = fileManagerInstance.saveImage.mock.calls[0]
+    const savedPath = saveImageCall[1] as string
+    expect(savedPath).toMatch(/my-photo\.jpg$/)
+  })
+
+  it('should sanitize filename before applying ensureExtension', async () => {
+    // Arrange
+    const mcpServer = createMCPServer()
+
+    // Act: filename with control chars and no extension
+    await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: '...my-photo\x00',
+    })
+
+    // Assert: sanitizeFilename runs first (strips leading dots, null bytes),
+    // then ensureExtension adds .png
+    const { createFileManager } = await import('../../business/fileManager')
+    const fileManagerInstance = (createFileManager as ReturnType<typeof vi.fn>).mock.results[0]
+      .value
+    const saveImageCall = fileManagerInstance.saveImage.mock.calls[0]
+    const savedPath = saveImageCall[1] as string
+    // After sanitize: 'my-photo', after ensureExtension: 'my-photo.png'
+    expect(savedPath).toMatch(/my-photo\.png$/)
   })
 
   it('should validate prompt parameter', async () => {
