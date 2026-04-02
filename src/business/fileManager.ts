@@ -9,11 +9,12 @@ import * as path from 'node:path'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { FileOperationError } from '../utils/errors.js'
+import { getExtensionFromMimeType } from '../utils/mimeUtils.js'
 
 // Constants for file naming and error messages
 const FILE_NAME_PREFIX = 'image' as const
-const DEFAULT_EXTENSION = '.png' as const
 const RANDOM_BYTES_LENGTH = 4 as const
+const DEFAULT_MIME_TYPE = 'image/png' as const
 
 const ERROR_MESSAGES = {
   SAVE_FAILED: 'Failed to save image file',
@@ -32,7 +33,7 @@ export interface FileManager {
     format?: string
   ): Promise<Result<string, FileOperationError>>
   ensureDirectoryExists(dirPath: string): Result<void, FileOperationError>
-  generateFileName(): string
+  generateFileName(mimeType?: string): string
 }
 
 /**
@@ -56,12 +57,14 @@ function ensureDirectoryExists(dirPath: string): Result<void, FileOperationError
 
 /**
  * Generates a unique filename based on timestamp and random component
- * @returns Generated filename in the format: gemini-image-{timestamp}.png
+ * @param mimeType Optional MIME type to determine file extension (defaults to image/png)
+ * @returns Generated filename in the format: image-{timestamp}-{hex}.{ext}
  */
-function generateFileName(): string {
+function generateFileName(mimeType?: string): string {
   const timestamp = Date.now()
   const random = randomBytes(RANDOM_BYTES_LENGTH).toString('hex')
-  return `${FILE_NAME_PREFIX}-${timestamp}-${random}${DEFAULT_EXTENSION}`
+  const extension = getExtensionFromMimeType(mimeType ?? DEFAULT_MIME_TYPE)
+  return `${FILE_NAME_PREFIX}-${timestamp}-${random}${extension}`
 }
 
 /**
