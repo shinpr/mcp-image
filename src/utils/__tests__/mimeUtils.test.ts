@@ -10,6 +10,7 @@ import {
   getExtensionFromMimeType,
   getMimeTypeFromExtension,
   hasImageExtension,
+  normalizeMimeType,
   SUPPORTED_EXTENSIONS,
   SUPPORTED_MIME_TYPES,
 } from '../mimeUtils'
@@ -97,6 +98,18 @@ describe('mimeUtils', () => {
       const logOutput = consoleErrorSpy.mock.calls[0]?.[0] as string
       expect(logOutput).toContain('warn')
       expect(logOutput).toContain('image/tiff')
+    })
+
+    it('should return .png with warning log for empty string', () => {
+      // Arrange
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      // Act
+      const result = getExtensionFromMimeType('')
+
+      // Assert
+      expect(result).toBe('.png')
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
   })
 
@@ -231,6 +244,32 @@ describe('mimeUtils', () => {
 
       // Assert
       expect(result).toBe('artwork.webp')
+    })
+  })
+
+  describe('normalizeMimeType', () => {
+    it('should return supported MIME type as-is', () => {
+      expect(normalizeMimeType('image/jpeg')).toBe('image/jpeg')
+      expect(normalizeMimeType('image/png')).toBe('image/png')
+      expect(normalizeMimeType('image/webp')).toBe('image/webp')
+    })
+
+    it('should return image/png for unknown MIME type', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const result = normalizeMimeType('image/tiff')
+
+      expect(result).toBe('image/png')
+      expect(consoleErrorSpy).toHaveBeenCalled()
+    })
+
+    it('should return image/png for empty string', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+      const result = normalizeMimeType('')
+
+      expect(result).toBe('image/png')
+      expect(consoleErrorSpy).toHaveBeenCalled()
     })
   })
 })

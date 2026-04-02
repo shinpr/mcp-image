@@ -90,15 +90,6 @@ export function hasImageExtension(fileName: string): boolean {
 }
 
 /**
- * Ensure a filename has an appropriate file extension based on MIME type.
- * - If the filename already has an extension (any extension), it is preserved as-is.
- * - If the filename has no extension, one is appended based on the MIME type.
- *
- * @param fileName - The filename, with or without extension
- * @param mimeType - The MIME type to derive the extension from
- * @returns The filename with an appropriate extension
- */
-/**
  * Normalize a MIME type against the supported allowlist.
  * Returns the MIME type as-is if supported, otherwise falls back to image/png with a warning.
  *
@@ -113,6 +104,15 @@ export function normalizeMimeType(mimeType: string): string {
   return DEFAULT_MIME_TYPE
 }
 
+/**
+ * Ensure a filename has an appropriate file extension based on MIME type.
+ * - If the filename already has an extension (any extension), it is preserved as-is.
+ * - If the filename has no extension, one is appended based on the MIME type.
+ *
+ * @param fileName - The filename, with or without extension
+ * @param mimeType - The MIME type to derive the extension from
+ * @returns The filename with an appropriate extension
+ */
 export function ensureExtension(fileName: string, mimeType: string): string {
   const ext = path.extname(fileName)
   if (ext) {
