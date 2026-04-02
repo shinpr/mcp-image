@@ -11,6 +11,10 @@ import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
+import { Logger } from '../utils/logger.js'
+import { SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
+
+const logger = new Logger()
 
 /**
  * Simplified Gemini API response types
@@ -406,7 +410,14 @@ class GeminiClientImpl implements GeminiClient {
 
       // Convert base64 image data to Buffer
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
-      const mimeType = imagePart.inlineData.mimeType || 'image/png'
+      const rawMimeType = imagePart.inlineData.mimeType || 'image/png'
+      const mimeType = SUPPORTED_MIME_TYPES.includes(rawMimeType) ? rawMimeType : 'image/png'
+      if (rawMimeType !== mimeType) {
+        logger.warn(
+          'gemini-client',
+          `Unknown MIME type from API: ${rawMimeType}, falling back to image/png`
+        )
+      }
 
       // Create metadata
       const metadata: GeminiGenerationMetadata = {

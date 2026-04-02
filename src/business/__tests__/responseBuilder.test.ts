@@ -139,7 +139,7 @@ describe('ResponseBuilder', () => {
       expect(contentData.resource.mimeType).toBe('image/jpeg')
     })
 
-    it('should use unknown metadata MIME type as-is (trust API response)', () => {
+    it('should fall back to default MIME type for unsupported metadata MIME type', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
@@ -153,7 +153,7 @@ describe('ResponseBuilder', () => {
 
       const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.tiff')
       const contentData = JSON.parse(response.content[0].text)
-      expect(contentData.resource.mimeType).toBe('image/tiff')
+      expect(contentData.resource.mimeType).toBe('image/png')
     })
   })
 

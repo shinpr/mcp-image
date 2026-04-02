@@ -15,7 +15,7 @@ import {
   NetworkError,
   SecurityError,
 } from '../utils/errors.js'
-import { getMimeTypeFromExtension } from '../utils/mimeUtils.js'
+import { getMimeTypeFromExtension, SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
 
 const UNKNOWN_ERROR_CODE = 'UNKNOWN_ERROR'
 const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the problem persists'
@@ -38,7 +38,7 @@ export interface ResponseBuilder {
  * @returns MIME type string
  */
 function resolveMimeType(metadataMimeType: string | undefined, filePath: string): string {
-  if (metadataMimeType) {
+  if (metadataMimeType && SUPPORTED_MIME_TYPES.includes(metadataMimeType)) {
     return metadataMimeType
   }
   const ext = path.extname(filePath).toLowerCase()
