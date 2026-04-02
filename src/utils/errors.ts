@@ -4,6 +4,7 @@
  */
 
 import { GEMINI_MODELS } from '../types/mcp.js'
+import { SUPPORTED_EXTENSIONS } from './mimeUtils.js'
 
 /**
  * Structured error format for consistent error reporting
@@ -273,7 +274,7 @@ export class SecurityError extends BaseError {
       message.includes('filetype') ||
       message.includes('format')
     ) {
-      return 'Use supported file extensions: .png, .jpg, .jpeg, .webp'
+      return `Use supported file extensions: ${SUPPORTED_EXTENSIONS.join(', ')}`
     }
     if (message.includes('size') || message.includes('large') || message.includes('limit')) {
       return 'Ensure file size is within allowed limits (max 10MB)'

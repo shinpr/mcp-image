@@ -15,21 +15,8 @@ import {
   NetworkError,
   SecurityError,
 } from '../utils/errors.js'
+import { getMimeTypeFromExtension } from '../utils/mimeUtils.js'
 
-// Constants for MIME types and error handling
-const MIME_TYPES = {
-  PNG: 'image/png',
-  JPEG: 'image/jpeg',
-  WEBP: 'image/webp',
-} as const
-
-const FILE_EXTENSIONS = {
-  PNG: ['.png'],
-  JPEG: ['.jpg', '.jpeg'],
-  WEBP: ['.webp'],
-} as const
-
-const DEFAULT_MIME_TYPE = MIME_TYPES.PNG
 const UNKNOWN_ERROR_CODE = 'UNKNOWN_ERROR'
 const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the problem persists'
 
@@ -48,18 +35,7 @@ export interface ResponseBuilder {
  */
 function getMimeTypeFromPath(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase()
-
-  if (FILE_EXTENSIONS.PNG.includes(ext as '.png')) {
-    return MIME_TYPES.PNG
-  }
-  if (FILE_EXTENSIONS.JPEG.includes(ext as '.jpg' | '.jpeg')) {
-    return MIME_TYPES.JPEG
-  }
-  if (FILE_EXTENSIONS.WEBP.includes(ext as '.webp')) {
-    return MIME_TYPES.WEBP
-  }
-
-  return DEFAULT_MIME_TYPE
+  return getMimeTypeFromExtension(ext)
 }
 
 /**

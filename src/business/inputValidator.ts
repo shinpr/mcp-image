@@ -10,12 +10,12 @@ import { IMAGE_QUALITY_VALUES } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { InputValidationError } from '../utils/errors.js'
+import { SUPPORTED_EXTENSIONS, SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
 
 // Constants for validation limits
 const PROMPT_MIN_LENGTH = 1
 const PROMPT_MAX_LENGTH = 4000
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
-const SUPPORTED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp']
 const SUPPORTED_ASPECT_RATIOS: readonly AspectRatio[] = [
   '1:1',
   '1:4',
@@ -151,12 +151,11 @@ export function validateImagePath(
 
   // Check file extension
   const ext = extname(imagePath).toLowerCase()
-  const supportedExtensions = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']
-  if (!supportedExtensions.includes(ext)) {
+  if (!SUPPORTED_EXTENSIONS.includes(ext)) {
     return Err(
       new InputValidationError(
-        `Unsupported image format: ${ext}. Supported formats: ${supportedExtensions.join(', ')}`,
-        `Please provide an image with one of these extensions: ${supportedExtensions.join(', ')}`
+        `Unsupported image format: ${ext}. Supported formats: ${SUPPORTED_EXTENSIONS.join(', ')}`,
+        `Please provide an image with one of these extensions: ${SUPPORTED_EXTENSIONS.join(', ')}`
       )
     )
   }
