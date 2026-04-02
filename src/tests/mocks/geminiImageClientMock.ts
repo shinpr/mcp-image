@@ -23,6 +23,8 @@ export interface ImageMockScenario {
   delay?: number
   customResponse?: Partial<GeneratedImageResult>
   errorMessage?: string
+  /** MIME type to use in mock responses. Defaults to 'image/png'. */
+  mimeType?: string
   features?: {
     aspectRatioPreserved?: boolean
     aspectRatioSource?: 'original' | 'last_image' | 'default'
@@ -156,7 +158,7 @@ class GeminiImageClientMock implements GeminiClient {
     const metadata: GeminiGenerationMetadata = {
       model: GEMINI_MODELS.FLASH,
       prompt: params.prompt,
-      mimeType: 'image/png',
+      mimeType: this.scenario.mimeType ?? 'image/png',
       timestamp: new Date(),
       inputImageProvided: !!params.inputImage,
     }
@@ -288,6 +290,8 @@ export function createStructuredPromptImageMock(options?: {
   qualityImprovement?: number // 0-100
   processingTime?: number // milliseconds
   practicesApplied?: string[]
+  /** MIME type to use in mock metadata. Defaults to 'image/png'. */
+  mimeType?: string
 }): GeminiClient {
   const factory = new GeminiImageClientMockFactory()
 
@@ -307,7 +311,7 @@ export function createStructuredPromptImageMock(options?: {
       metadata: {
         model: GEMINI_MODELS.FLASH,
         prompt: 'Enhanced structured prompt',
-        mimeType: 'image/png',
+        mimeType: options?.mimeType ?? 'image/png',
         timestamp: new Date(),
         inputImageProvided: false,
       },

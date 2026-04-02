@@ -54,10 +54,43 @@ describe('ResponseBuilder', () => {
       })
     })
 
-    it('should handle different file extensions for MIME type detection', () => {
-      const testImageData = Buffer.from('fake-image-data')
+    it('should use metadata MIME type image/jpeg when available', () => {
       const generationResult: GeneratedImageResult = {
-        imageData: testImageData,
+        imageData: Buffer.from('fake-image-data'),
+        metadata: {
+          model: 'gemini-3.1-flash-image-preview',
+          prompt: 'test prompt',
+          mimeType: 'image/jpeg',
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
+        },
+      }
+
+      const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.jpg')
+      const contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/jpeg')
+    })
+
+    it('should use metadata MIME type image/webp when available', () => {
+      const generationResult: GeneratedImageResult = {
+        imageData: Buffer.from('fake-image-data'),
+        metadata: {
+          model: 'gemini-3.1-flash-image-preview',
+          prompt: 'test prompt',
+          mimeType: 'image/webp',
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
+        },
+      }
+
+      const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.webp')
+      const contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/webp')
+    })
+
+    it('should use metadata MIME type image/png when available', () => {
+      const generationResult: GeneratedImageResult = {
+        imageData: Buffer.from('fake-image-data'),
         metadata: {
           model: 'gemini-3.1-flash-image-preview',
           prompt: 'test prompt',
@@ -67,23 +100,60 @@ describe('ResponseBuilder', () => {
         },
       }
 
-      // Test JPEG file
-      let response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.jpg')
-      let contentData = JSON.parse(response.content[0].text)
-      expect(contentData.resource.mimeType).toBe('image/jpeg')
-      expect(contentData.resource.uri).toBe('file:///path/to/image.jpg')
-
-      // Test WEBP file
-      response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.webp')
-      contentData = JSON.parse(response.content[0].text)
-      expect(contentData.resource.mimeType).toBe('image/webp')
-      expect(contentData.resource.uri).toBe('file:///path/to/image.webp')
-
-      // Test unknown extension (defaults to PNG)
-      response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.unknown')
-      contentData = JSON.parse(response.content[0].text)
+      const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.png')
+      const contentData = JSON.parse(response.content[0].text)
       expect(contentData.resource.mimeType).toBe('image/png')
-      expect(contentData.resource.uri).toBe('file:///path/to/image.unknown')
+    })
+
+    it('should fall back to extension-based detection when metadata MIME is undefined', () => {
+      const generationResult: GeneratedImageResult = {
+        imageData: Buffer.from('fake-image-data'),
+        metadata: {
+          model: 'gemini-3.1-flash-image-preview',
+          prompt: 'test prompt',
+          mimeType: undefined as unknown as string,
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
+        },
+      }
+
+      const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.webp')
+      const contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/webp')
+    })
+
+    it('should fall back to extension-based detection when metadata MIME is empty string', () => {
+      const generationResult: GeneratedImageResult = {
+        imageData: Buffer.from('fake-image-data'),
+        metadata: {
+          model: 'gemini-3.1-flash-image-preview',
+          prompt: 'test prompt',
+          mimeType: '',
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
+        },
+      }
+
+      const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.jpg')
+      const contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/jpeg')
+    })
+
+    it('should fall back to default MIME type for unsupported metadata MIME type', () => {
+      const generationResult: GeneratedImageResult = {
+        imageData: Buffer.from('fake-image-data'),
+        metadata: {
+          model: 'gemini-3.1-flash-image-preview',
+          prompt: 'test prompt',
+          mimeType: 'image/tiff',
+          timestamp: new Date('2025-08-28T12:00:00Z'),
+          inputImageProvided: false,
+        },
+      }
+
+      const response = responseBuilder.buildSuccessResponse(generationResult, '/path/to/image.tiff')
+      const contentData = JSON.parse(response.content[0].text)
+      expect(contentData.resource.mimeType).toBe('image/png')
     })
   })
 

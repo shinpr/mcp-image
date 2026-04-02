@@ -102,8 +102,44 @@ describe('FileManager', () => {
   })
 
   describe('generateFileName', () => {
-    it('should generate timestamp-based filename with correct format', () => {
+    it('should return .png extension when called without mimeType argument', () => {
       const fileName = fileManager.generateFileName()
+
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.png$/)
+    })
+
+    it('should return .jpg extension when mimeType is image/jpeg', () => {
+      const fileName = fileManager.generateFileName('image/jpeg')
+
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.jpg$/)
+    })
+
+    it('should return .webp extension when mimeType is image/webp', () => {
+      const fileName = fileManager.generateFileName('image/webp')
+
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.webp$/)
+    })
+
+    it('should return .png extension when mimeType is image/png', () => {
+      const fileName = fileManager.generateFileName('image/png')
+
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.png$/)
+    })
+
+    it('should return .gif extension when mimeType is image/gif', () => {
+      const fileName = fileManager.generateFileName('image/gif')
+
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.gif$/)
+    })
+
+    it('should return .bmp extension when mimeType is image/bmp', () => {
+      const fileName = fileManager.generateFileName('image/bmp')
+
+      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.bmp$/)
+    })
+
+    it('should return .png extension as fallback for unknown mimeType', () => {
+      const fileName = fileManager.generateFileName('image/unknown')
 
       expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.png$/)
     })

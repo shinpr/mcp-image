@@ -79,7 +79,8 @@ export interface StructuredPromptGenerator {
     userPrompt: string,
     features?: FeatureFlags,
     inputImageData?: string, // Optional base64-encoded image for context
-    purpose?: string // Optional intended use for the image
+    purpose?: string, // Optional intended use for the image
+    inputImageMimeType?: string // MIME type of the input image
   ): Promise<Result<StructuredPromptResult, Error>>
 }
 
@@ -93,7 +94,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
     userPrompt: string,
     features: FeatureFlags = {},
     inputImageData?: string,
-    purpose?: string
+    purpose?: string,
+    inputImageMimeType?: string
   ): Promise<Result<StructuredPromptResult, Error>> {
     try {
       // Validate input
@@ -119,7 +121,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         temperature: 0.7,
         maxTokens: 1000,
         systemInstruction,
-        ...(inputImageData && { inputImage: inputImageData }), // Only include if available
+        ...(inputImageData && { inputImage: inputImageData }),
+        ...(inputImageMimeType && { inputImageMimeType }),
       }
       const result = await this.geminiTextClient.generateText(completePrompt, config)
 

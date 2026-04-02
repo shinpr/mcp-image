@@ -8,6 +8,7 @@ import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { Err, Ok, type Result } from '../types/result.js'
 import { SecurityError } from './errors.js'
+import { SUPPORTED_EXTENSIONS } from './mimeUtils.js'
 
 /**
  * Security manager for handling file path validation and sanitization
@@ -83,11 +84,9 @@ export class SecurityManager {
    * @returns Result indicating validation success or security error
    */
   validateImageFile(filePath: string): Result<void, SecurityError> {
-    // Allowed image file extensions
-    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.webp']
     const extension = path.extname(filePath).toLowerCase()
 
-    if (!allowedExtensions.includes(extension)) {
+    if (!SUPPORTED_EXTENSIONS.includes(extension)) {
       return Err(new SecurityError(`Unsupported file extension: ${extension}`))
     }
 

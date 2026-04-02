@@ -15,21 +15,8 @@ import {
   NetworkError,
   SecurityError,
 } from '../utils/errors.js'
+import { getMimeTypeFromExtension, SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
 
-// Constants for MIME types and error handling
-const MIME_TYPES = {
-  PNG: 'image/png',
-  JPEG: 'image/jpeg',
-  WEBP: 'image/webp',
-} as const
-
-const FILE_EXTENSIONS = {
-  PNG: ['.png'],
-  JPEG: ['.jpg', '.jpeg'],
-  WEBP: ['.webp'],
-} as const
-
-const DEFAULT_MIME_TYPE = MIME_TYPES.PNG
 const UNKNOWN_ERROR_CODE = 'UNKNOWN_ERROR'
 const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the problem persists'
 
@@ -42,24 +29,20 @@ export interface ResponseBuilder {
 }
 
 /**
- * Determines MIME type based on file extension
- * @param filePath Path to the image file
+ * Determines MIME type from generation metadata with extension-based fallback.
+ * Uses the API-reported MIME type as the primary source of truth.
+ * Falls back to file extension detection when metadata MIME is unavailable.
+ *
+ * @param metadataMimeType MIME type from API generation metadata
+ * @param filePath Path to the image file (used for fallback)
  * @returns MIME type string
  */
-function getMimeTypeFromPath(filePath: string): string {
+function resolveMimeType(metadataMimeType: string | undefined, filePath: string): string {
+  if (metadataMimeType && SUPPORTED_MIME_TYPES.includes(metadataMimeType)) {
+    return metadataMimeType
+  }
   const ext = path.extname(filePath).toLowerCase()
-
-  if (FILE_EXTENSIONS.PNG.includes(ext as '.png')) {
-    return MIME_TYPES.PNG
-  }
-  if (FILE_EXTENSIONS.JPEG.includes(ext as '.jpg' | '.jpeg')) {
-    return MIME_TYPES.JPEG
-  }
-  if (FILE_EXTENSIONS.WEBP.includes(ext as '.webp')) {
-    return MIME_TYPES.WEBP
-  }
-
-  return DEFAULT_MIME_TYPE
+  return getMimeTypeFromExtension(ext)
 }
 
 /**
@@ -120,7 +103,7 @@ export function createResponseBuilder(): ResponseBuilder {
     ): McpToolResponse {
       // File-based implementation: Always return file path, never base64
       // This avoids MCP token limit issues (25,000 tokens max)
-      const mimeType = getMimeTypeFromPath(filePath)
+      const mimeType = resolveMimeType(generationResult.metadata.mimeType, filePath)
       const fileName = path.basename(filePath)
 
       const structuredContent: StructuredContent = {
