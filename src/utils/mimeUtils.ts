@@ -33,7 +33,7 @@ const EXTENSION_TO_MIME: ReadonlyMap<string, string> = new Map([
   ['.bmp', 'image/bmp'],
 ])
 
-const DEFAULT_MIME_TYPE = 'image/png'
+export const DEFAULT_MIME_TYPE = 'image/png'
 const DEFAULT_EXTENSION = '.png'
 
 /**
@@ -98,6 +98,21 @@ export function hasImageExtension(fileName: string): boolean {
  * @param mimeType - The MIME type to derive the extension from
  * @returns The filename with an appropriate extension
  */
+/**
+ * Normalize a MIME type against the supported allowlist.
+ * Returns the MIME type as-is if supported, otherwise falls back to image/png with a warning.
+ *
+ * @param mimeType - The MIME type to normalize
+ * @returns A supported MIME type string
+ */
+export function normalizeMimeType(mimeType: string): string {
+  if (MIME_TO_EXTENSION.has(mimeType)) {
+    return mimeType
+  }
+  logger.warn('mimeUtils', `Unknown MIME type, normalizing to ${DEFAULT_MIME_TYPE}`, { mimeType })
+  return DEFAULT_MIME_TYPE
+}
+
 export function ensureExtension(fileName: string, mimeType: string): string {
   const ext = path.extname(fileName)
   if (ext) {

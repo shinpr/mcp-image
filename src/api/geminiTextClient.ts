@@ -9,6 +9,7 @@ import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
+import { DEFAULT_MIME_TYPE } from '../utils/mimeUtils.js'
 
 /**
  * Options for text generation
@@ -19,6 +20,7 @@ export interface GenerationConfig {
   timeout?: number
   systemInstruction?: string
   inputImage?: string // Optional base64-encoded image for multimodal context
+  inputImageMimeType?: string // MIME type of the input image
   topP?: number
   topK?: number
 }
@@ -155,7 +157,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
               {
                 inlineData: {
                   data: config.inputImage,
-                  mimeType: 'image/jpeg', // Assuming JPEG for simplicity; can be enhanced later
+                  mimeType: config.inputImageMimeType ?? DEFAULT_MIME_TYPE,
                 },
               },
               {

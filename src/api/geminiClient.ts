@@ -11,10 +11,7 @@ import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
-import { Logger } from '../utils/logger.js'
-import { SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
-
-const logger = new Logger()
+import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
 
 /**
  * Simplified Gemini API response types
@@ -152,6 +149,7 @@ export interface GeminiGenerationMetadata {
 export interface GeminiApiParams {
   prompt: string
   inputImage?: string
+  inputImageMimeType?: string
   aspectRatio?: string
   imageSize?: string
   useGoogleSearch?: boolean
@@ -199,7 +197,7 @@ class GeminiClientImpl implements GeminiClient {
             {
               inlineData: {
                 data: params.inputImage,
-                mimeType: 'image/jpeg', // TODO: Dynamic MIME type support
+                mimeType: params.inputImageMimeType ?? DEFAULT_MIME_TYPE,
               },
             },
             {
@@ -410,14 +408,7 @@ class GeminiClientImpl implements GeminiClient {
 
       // Convert base64 image data to Buffer
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
-      const rawMimeType = imagePart.inlineData.mimeType || 'image/png'
-      const mimeType = SUPPORTED_MIME_TYPES.includes(rawMimeType) ? rawMimeType : 'image/png'
-      if (rawMimeType !== mimeType) {
-        logger.warn(
-          'gemini-client',
-          `Unknown MIME type from API: ${rawMimeType}, falling back to image/png`
-        )
-      }
+      const mimeType = normalizeMimeType(imagePart.inlineData.mimeType || DEFAULT_MIME_TYPE)
 
       // Create metadata
       const metadata: GeminiGenerationMetadata = {

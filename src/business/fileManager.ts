@@ -9,12 +9,11 @@ import * as path from 'node:path'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { FileOperationError } from '../utils/errors.js'
-import { getExtensionFromMimeType } from '../utils/mimeUtils.js'
+import { DEFAULT_MIME_TYPE, getExtensionFromMimeType } from '../utils/mimeUtils.js'
 
 // Constants for file naming and error messages
 const FILE_NAME_PREFIX = 'image' as const
 const RANDOM_BYTES_LENGTH = 4 as const
-const DEFAULT_MIME_TYPE = 'image/png' as const
 
 const ERROR_MESSAGES = {
   SAVE_FAILED: 'Failed to save image file',

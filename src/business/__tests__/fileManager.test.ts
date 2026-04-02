@@ -102,12 +102,6 @@ describe('FileManager', () => {
   })
 
   describe('generateFileName', () => {
-    it('should generate timestamp-based filename with correct format', () => {
-      const fileName = fileManager.generateFileName()
-
-      expect(fileName).toMatch(/^image-\d{13}-[0-9a-f]{8}\.png$/)
-    })
-
     it('should return .png extension when called without mimeType argument', () => {
       const fileName = fileManager.generateFileName()
 

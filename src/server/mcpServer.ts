@@ -30,7 +30,7 @@ import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 // Utilities
 import { getConfig } from '../utils/config.js'
 import { Logger } from '../utils/logger.js'
-import { ensureExtension } from '../utils/mimeUtils.js'
+import { ensureExtension, getMimeTypeFromExtension } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
 import { ErrorHandler } from './errorHandler.js'
 
@@ -241,6 +241,7 @@ export class MCPServerImpl {
 
       // Handle input image if provided
       let inputImageData: string | undefined
+      let inputImageMimeType: string | undefined
       if (params.inputImagePath) {
         const sanitizedInputPath = this.securityManager.sanitizeInputFilePath(params.inputImagePath)
         if (!sanitizedInputPath.success) {
@@ -252,6 +253,7 @@ export class MCPServerImpl {
         }
         const imageBuffer = await fs.readFile(sanitizedInputPath.data)
         inputImageData = imageBuffer.toString('base64')
+        inputImageMimeType = getMimeTypeFromExtension(path.extname(sanitizedInputPath.data))
       }
 
       // Generate structured prompt (unless skipped)
@@ -274,8 +276,9 @@ export class MCPServerImpl {
         const promptResult = await this.structuredPromptGenerator.generateStructuredPrompt(
           params.prompt,
           features,
-          inputImageData, // Pass image data for context-aware prompt generation
-          params.purpose // Pass intended use for purpose-aware prompt generation
+          inputImageData,
+          params.purpose,
+          inputImageMimeType
         )
 
         if (promptResult.success) {
@@ -303,6 +306,7 @@ export class MCPServerImpl {
       const generationResult = await this.geminiClient.generateImage({
         prompt: structuredPrompt,
         ...(inputImageData && { inputImage: inputImageData }),
+        ...(inputImageMimeType && { inputImageMimeType }),
         ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
         ...(params.imageSize && { imageSize: params.imageSize }),
         ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
