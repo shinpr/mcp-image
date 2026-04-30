@@ -270,7 +270,8 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 OpenAI provider notes:
 - `quality` maps to OpenAI image quality as `fast -> low`, `balanced -> medium`, `quality -> high`.
 - `aspectRatio` maps to the closest supported GPT Image size: square, landscape, or portrait.
-- `useGoogleSearch` is Gemini-specific for generation. In OpenAI mode it only informs prompt enhancement; it does not enable OpenAI web grounding.
+- `imageSize` is Gemini-specific and is rejected in OpenAI mode rather than silently downgraded.
+- `useGoogleSearch` is Gemini-specific and is rejected in OpenAI mode because Google Search grounding is not available through the OpenAI image provider.
 
 ## Usage Examples
 

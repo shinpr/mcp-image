@@ -197,6 +197,44 @@ describe('openaiImageClient', () => {
       )
     })
 
+    it('should reject useGoogleSearch because OpenAI image generation does not support Google Search grounding', async () => {
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate a current event image',
+        useGoogleSearch: true,
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockGenerate).not.toHaveBeenCalled()
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ImageAPIError)
+        expect(result.error.message).toContain('useGoogleSearch')
+        expect(result.error.message).toContain('OpenAI')
+      }
+    })
+
+    it('should reject imageSize because OpenAI provider cannot honor Gemini size presets', async () => {
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate a 4K product photo',
+        imageSize: '4K',
+      })
+
+      expect(result.success).toBe(false)
+      expect(mockGenerate).not.toHaveBeenCalled()
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ImageAPIError)
+        expect(result.error.message).toContain('imageSize')
+        expect(result.error.message).toContain('OpenAI')
+      }
+    })
+
     it('should return ImageAPIError when response has no base64 image data', async () => {
       mockGenerate.mockResolvedValue({
         data: [{}],

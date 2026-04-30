@@ -76,6 +76,28 @@ function isNetworkError(error: unknown): boolean {
   return false
 }
 
+function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIError> {
+  if (params.useGoogleSearch) {
+    return Err(
+      new ImageAPIError(
+        'useGoogleSearch is not supported by the OpenAI image provider',
+        'Disable useGoogleSearch or use IMAGE_PROVIDER=gemini for Google Search grounding'
+      )
+    )
+  }
+
+  if (params.imageSize) {
+    return Err(
+      new ImageAPIError(
+        'imageSize is not supported by the OpenAI image provider',
+        'Remove imageSize or use IMAGE_PROVIDER=gemini for 1K/2K/4K Gemini size presets. OpenAI mode maps aspectRatio to the closest supported GPT Image size.'
+      )
+    )
+  }
+
+  return Ok(true)
+}
+
 class OpenAIImageClientImpl implements ImageClient {
   private readonly outputFormat: OpenAIOutputFormat = 'png'
 
@@ -89,6 +111,11 @@ class OpenAIImageClientImpl implements ImageClient {
     params: ImageApiParams
   ): Promise<Result<GeneratedImageResult, ImageAPIError | NetworkError>> {
     try {
+      const optionsResult = validateOpenAIOptions(params)
+      if (!optionsResult.success) {
+        return optionsResult
+      }
+
       const quality = mapQuality(params.quality ?? this.defaultQuality)
       const size = mapSize(params)
 
