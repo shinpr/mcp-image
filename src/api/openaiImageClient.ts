@@ -11,9 +11,22 @@ import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
-type OpenAIImageSize = '1024x1024' | '1536x1024' | '1024x1536'
+type OpenAIImageSize =
+  | '1024x1024'
+  | '1536x1024'
+  | '1024x1536'
+  | '2048x2048'
+  | '2048x1152'
+  | '1152x2048'
+  | '2880x2880'
+  | '3840x2160'
+  | '2160x3840'
 type OpenAIImageQuality = 'low' | 'medium' | 'high'
 type OpenAIOutputFormat = 'png'
+// The OpenAI guide documents flexible gpt-image-2 resolutions, while SDK types still
+// enumerate the older fixed GPT image sizes. Keep the request cast local to this file.
+type OpenAIImageGenerateRequest = Parameters<OpenAI['images']['generate']>[0]
+type OpenAIImageEditRequest = Parameters<OpenAI['images']['edit']>[0]
 
 interface OpenAIImageResponse {
   data?: Array<{
@@ -39,9 +52,9 @@ function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   }
 }
 
-function mapSize(params: ImageApiParams): OpenAIImageSize {
+function getOrientation(params: ImageApiParams): 'square' | 'landscape' | 'portrait' {
   if (!params.aspectRatio) {
-    return '1024x1024'
+    return 'square'
   }
 
   const [widthRaw, heightRaw] = params.aspectRatio.split(':')
@@ -49,10 +62,45 @@ function mapSize(params: ImageApiParams): OpenAIImageSize {
   const height = Number(heightRaw)
 
   if (!Number.isFinite(width) || !Number.isFinite(height) || width === height) {
-    return '1024x1024'
+    return 'square'
   }
 
-  return width > height ? '1536x1024' : '1024x1536'
+  return width > height ? 'landscape' : 'portrait'
+}
+
+function mapSize(params: ImageApiParams): OpenAIImageSize {
+  const orientation = getOrientation(params)
+
+  if (params.imageSize === '2K') {
+    switch (orientation) {
+      case 'landscape':
+        return '2048x1152'
+      case 'portrait':
+        return '1152x2048'
+      case 'square':
+        return '2048x2048'
+    }
+  }
+
+  if (params.imageSize === '4K') {
+    switch (orientation) {
+      case 'landscape':
+        return '3840x2160'
+      case 'portrait':
+        return '2160x3840'
+      case 'square':
+        return '2880x2880'
+    }
+  }
+
+  switch (orientation) {
+    case 'landscape':
+      return '1536x1024'
+    case 'portrait':
+      return '1024x1536'
+    case 'square':
+      return '1024x1024'
+  }
 }
 
 function mimeTypeToExtension(mimeType: string): string {
@@ -76,7 +124,14 @@ function isNetworkError(error: unknown): boolean {
   return false
 }
 
-function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIError> {
+function supportsFlexibleGPTImageSizes(modelName: string): boolean {
+  return modelName === 'gpt-image-2' || modelName.startsWith('gpt-image-2-')
+}
+
+function validateOpenAIOptions(
+  params: ImageApiParams,
+  modelName: string
+): Result<true, ImageAPIError> {
   if (params.useGoogleSearch) {
     return Err(
       new ImageAPIError(
@@ -86,11 +141,11 @@ function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIErr
     )
   }
 
-  if (params.imageSize) {
+  if (params.imageSize && !supportsFlexibleGPTImageSizes(modelName)) {
     return Err(
       new ImageAPIError(
-        'imageSize is not supported by the OpenAI image provider',
-        'Remove imageSize or use IMAGE_PROVIDER=gemini for 1K/2K/4K Gemini size presets. OpenAI mode maps aspectRatio to the closest supported GPT Image size.'
+        `imageSize requires gpt-image-2 when using the OpenAI image provider; current model is ${modelName}`,
+        'Remove imageSize, set OPENAI_IMAGE_MODEL=gpt-image-2, or use IMAGE_PROVIDER=gemini for Gemini size presets.'
       )
     )
   }
@@ -111,7 +166,7 @@ class OpenAIImageClientImpl implements ImageClient {
     params: ImageApiParams
   ): Promise<Result<GeneratedImageResult, ImageAPIError | NetworkError>> {
     try {
-      const optionsResult = validateOpenAIOptions(params)
+      const optionsResult = validateOpenAIOptions(params, this.modelName)
       if (!optionsResult.success) {
         return optionsResult
       }
@@ -158,14 +213,18 @@ class OpenAIImageClientImpl implements ImageClient {
     quality: OpenAIImageQuality,
     size: OpenAIImageSize
   ): Promise<OpenAIImageResponse> {
-    return (await this.client.images.generate({
+    const request = {
       model: this.modelName,
       prompt: params.prompt,
       n: 1,
       output_format: this.outputFormat,
       quality,
       size,
-    })) as OpenAIImageResponse
+    }
+
+    return (await this.client.images.generate(
+      request as unknown as OpenAIImageGenerateRequest
+    )) as OpenAIImageResponse
   }
 
   private async editImage(
@@ -180,7 +239,7 @@ class OpenAIImageClientImpl implements ImageClient {
       { type: mimeType }
     )
 
-    return (await this.client.images.edit({
+    const request = {
       model: this.modelName,
       prompt: params.prompt,
       image: inputFile,
@@ -188,7 +247,11 @@ class OpenAIImageClientImpl implements ImageClient {
       output_format: this.outputFormat,
       quality,
       size,
-    })) as OpenAIImageResponse
+    }
+
+    return (await this.client.images.edit(
+      request as unknown as OpenAIImageEditRequest
+    )) as OpenAIImageResponse
   }
 
   private handleError(error: unknown, prompt: string): Result<never, ImageAPIError | NetworkError> {

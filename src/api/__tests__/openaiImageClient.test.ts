@@ -216,8 +216,49 @@ describe('openaiImageClient', () => {
       }
     })
 
-    it('should reject imageSize because OpenAI provider cannot honor Gemini size presets', async () => {
+    it('should map 2K imageSize with landscape aspect ratio to a GPT Image 2 size', async () => {
       const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate a 2K product photo',
+        aspectRatio: '16:9',
+        imageSize: '2K',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: '2048x1152',
+        })
+      )
+    })
+
+    it('should map 4K imageSize with portrait aspect ratio to a GPT Image 2 size', async () => {
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate a 4K portrait poster',
+        aspectRatio: '9:16',
+        imageSize: '4K',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: '2160x3840',
+        })
+      )
+    })
+
+    it('should reject imageSize for non-GPT Image 2 OpenAI models', async () => {
+      const clientResult = createOpenAIImageClient({
+        ...testConfig,
+        openaiImageModel: 'gpt-image-1.5',
+      })
       expect(clientResult.success).toBe(true)
       if (!clientResult.success) return
 
@@ -231,7 +272,7 @@ describe('openaiImageClient', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(ImageAPIError)
         expect(result.error.message).toContain('imageSize')
-        expect(result.error.message).toContain('OpenAI')
+        expect(result.error.message).toContain('gpt-image-2')
       }
     })
 
