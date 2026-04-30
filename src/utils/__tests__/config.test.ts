@@ -8,7 +8,11 @@ describe('config', () => {
   beforeEach(() => {
     // Mock process.env for each test
     process.env = { ...originalEnv }
+    process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = undefined
+    process.env.OPENAI_API_KEY = undefined
+    process.env.OPENAI_IMAGE_MODEL = undefined
+    process.env.OPENAI_TEXT_MODEL = undefined
     process.env.IMAGE_OUTPUT_DIR = undefined
     process.env.IMAGE_QUALITY = undefined
   })
@@ -22,7 +26,11 @@ describe('config', () => {
     it('should return error when GEMINI_API_KEY is missing', () => {
       // Arrange
       const config = {
+        imageProvider: 'gemini' as const,
         geminiApiKey: '',
+        openaiApiKey: '',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -44,7 +52,11 @@ describe('config', () => {
     it('should return error when GEMINI_API_KEY is too short', () => {
       // Arrange
       const config = {
+        imageProvider: 'gemini' as const,
         geminiApiKey: 'short',
+        openaiApiKey: '',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -65,7 +77,11 @@ describe('config', () => {
     it('should return error when apiTimeout is invalid', () => {
       // Arrange
       const config = {
+        imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
+        openaiApiKey: '',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
         imageOutputDir: './output',
         apiTimeout: -1000, // Invalid negative timeout
         skipPromptEnhancement: false,
@@ -90,7 +106,11 @@ describe('config', () => {
 
       for (const quality of qualities) {
         const config = {
+          imageProvider: 'gemini' as const,
           geminiApiKey: 'valid-api-key-12345',
+          openaiApiKey: '',
+          openaiImageModel: 'gpt-image-2',
+          openaiTextModel: 'gpt-5.2',
           imageOutputDir: './output',
           apiTimeout: 30000,
           skipPromptEnhancement: false,
@@ -108,7 +128,11 @@ describe('config', () => {
     it('should reject invalid imageQuality value', () => {
       // Arrange
       const config = {
+        imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
+        openaiApiKey: '',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -132,7 +156,11 @@ describe('config', () => {
     it('should return success for valid config', () => {
       // Arrange
       const config = {
+        imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
+        openaiApiKey: '',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -146,6 +174,52 @@ describe('config', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toEqual(config)
+      }
+    })
+
+    it('should accept OpenAI provider without GEMINI_API_KEY', () => {
+      // Arrange
+      const config = {
+        imageProvider: 'openai' as const,
+        geminiApiKey: '',
+        openaiApiKey: 'test-openai-api-key-12345',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
+        imageOutputDir: './output',
+        apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
+      }
+
+      // Act
+      const result = validateConfig(config)
+
+      // Assert
+      expect(result.success).toBe(true)
+    })
+
+    it('should require OPENAI_API_KEY for OpenAI provider', () => {
+      // Arrange
+      const config = {
+        imageProvider: 'openai' as const,
+        geminiApiKey: '',
+        openaiApiKey: '',
+        openaiImageModel: 'gpt-image-2',
+        openaiTextModel: 'gpt-5.2',
+        imageOutputDir: './output',
+        apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
+      }
+
+      // Act
+      const result = validateConfig(config)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ConfigError)
+        expect(result.error.message).toContain('OPENAI_API_KEY')
       }
     })
   })
@@ -179,6 +253,24 @@ describe('config', () => {
         expect(result.data.geminiApiKey).toBe('test-api-key-12345')
         expect(result.data.imageOutputDir).toBe('/custom/output')
         expect(result.data.apiTimeout).toBe(30000) // Default timeout
+      }
+    })
+
+    it('should load OpenAI provider config from environment', () => {
+      // Arrange
+      process.env.IMAGE_PROVIDER = 'openai'
+      process.env.OPENAI_API_KEY = 'test-openai-api-key-12345'
+
+      // Act
+      const result = getConfig()
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.imageProvider).toBe('openai')
+        expect(result.data.openaiApiKey).toBe('test-openai-api-key-12345')
+        expect(result.data.openaiImageModel).toBe('gpt-image-2')
+        expect(result.data.openaiTextModel).toBe('gpt-5.2')
       }
     })
 

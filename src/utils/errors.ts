@@ -177,6 +177,70 @@ export class GeminiAPIError extends BaseError {
 }
 
 /**
+ * Error for image provider API failures.
+ */
+export class ImageAPIError extends BaseError {
+  readonly code = 'IMAGE_API_ERROR'
+  private customSuggestion: string | undefined
+
+  constructor(
+    message: string,
+    suggestionOrContext?: string | Record<string, unknown>,
+    statusCodeOrContext?: number | Record<string, unknown>
+  ) {
+    let context: Record<string, unknown> | undefined
+    let statusCode: number | undefined
+    let customSuggestion: string | undefined
+
+    if (typeof suggestionOrContext === 'string') {
+      statusCode = typeof statusCodeOrContext === 'number' ? statusCodeOrContext : undefined
+      customSuggestion = suggestionOrContext
+    } else {
+      context = suggestionOrContext
+      statusCode = typeof statusCodeOrContext === 'number' ? statusCodeOrContext : undefined
+    }
+
+    super(message, context)
+    this.customSuggestion = customSuggestion
+    Object.defineProperty(this, 'statusCode', { value: statusCode, writable: false })
+  }
+
+  get suggestion(): string {
+    if (this.customSuggestion) {
+      return this.customSuggestion
+    }
+
+    if (
+      this.context &&
+      'suggestion' in this.context &&
+      typeof this.context['suggestion'] === 'string'
+    ) {
+      return this.context['suggestion']
+    }
+
+    const message = this.message.toLowerCase()
+
+    if (message.includes('authentication') || message.includes('unauthorized')) {
+      return 'Check provider API key environment variables and ensure they have proper permissions'
+    }
+    if (message.includes('rate limit') || message.includes('quota') || message.includes('429')) {
+      return 'Wait before retrying or upgrade API quota limits'
+    }
+    if (message.includes('model') || message.includes('access') || message.includes('permission')) {
+      return 'Ensure the selected image model is available to your account'
+    }
+    if (message.includes('timeout') || message.includes('503') || message.includes('502')) {
+      return 'The image provider is temporarily unavailable. Please retry after a few moments'
+    }
+    if (message.includes('payload') || message.includes('request') || message.includes('400')) {
+      return 'Check request format and parameters according to the provider API specification'
+    }
+
+    return 'Check image provider configuration and retry the request'
+  }
+}
+
+/**
  * Error for network-related failures with intelligent suggestion system
  */
 export class NetworkError extends BaseError {

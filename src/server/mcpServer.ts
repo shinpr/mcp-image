@@ -13,8 +13,12 @@ import {
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
 // API clients
-import { createGeminiClient, type GeminiClient } from '../api/geminiClient.js'
-import { createGeminiTextClient, type GeminiTextClient } from '../api/geminiTextClient.js'
+import { createGeminiClient } from '../api/geminiClient.js'
+import { createGeminiTextClient } from '../api/geminiTextClient.js'
+import type { ImageClient } from '../api/imageClient.js'
+import { createOpenAIImageClient } from '../api/openaiImageClient.js'
+import { createOpenAITextClient } from '../api/openaiTextClient.js'
+import type { TextClient } from '../api/textClient.js'
 // Business logic
 import { createFileManager, type FileManager } from '../business/fileManager.js'
 import { validateGenerateImageParams } from '../business/inputValidator.js'
@@ -54,8 +58,8 @@ export class MCPServerImpl {
   private responseBuilder: ResponseBuilder
   private securityManager: SecurityManager
   private structuredPromptGenerator: StructuredPromptGenerator | null = null
-  private geminiTextClient: GeminiTextClient | null = null
-  private geminiClient: GeminiClient | null = null
+  private textClient: TextClient | null = null
+  private imageClient: ImageClient | null = null
 
   constructor(config: Partial<MCPServerConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config }
@@ -183,40 +187,52 @@ export class MCPServerImpl {
   }
 
   /**
-   * Initialize Gemini clients lazily
+   * Initialize provider clients lazily.
    */
   private async initializeClients(): Promise<void> {
-    if (this.structuredPromptGenerator && this.geminiClient) return
-
     const configResult = getConfig()
     if (!configResult.success) {
       throw configResult.error
     }
+    const config = configResult.data
 
-    // Initialize Gemini Text Client for prompt generation
-    if (!this.geminiTextClient) {
-      const textClientResult = createGeminiTextClient(configResult.data)
+    if (this.imageClient && (config.skipPromptEnhancement || this.structuredPromptGenerator)) {
+      return
+    }
+
+    // Initialize Text Client for prompt generation when enhancement is enabled.
+    if (!config.skipPromptEnhancement && !this.textClient) {
+      const textClientResult =
+        config.imageProvider === 'openai'
+          ? createOpenAITextClient(config)
+          : createGeminiTextClient(config)
       if (!textClientResult.success) {
         throw textClientResult.error
       }
-      this.geminiTextClient = textClientResult.data
+      this.textClient = textClientResult.data
     }
 
     // Initialize Structured Prompt Generator
-    if (!this.structuredPromptGenerator) {
-      this.structuredPromptGenerator = createStructuredPromptGenerator(this.geminiTextClient)
+    if (!config.skipPromptEnhancement && this.textClient && !this.structuredPromptGenerator) {
+      this.structuredPromptGenerator = createStructuredPromptGenerator(this.textClient)
     }
 
-    // Initialize Gemini Client for image generation
-    if (!this.geminiClient) {
-      const clientResult = createGeminiClient(configResult.data)
+    // Initialize image generation client.
+    if (!this.imageClient) {
+      const clientResult =
+        config.imageProvider === 'openai'
+          ? createOpenAIImageClient(config)
+          : createGeminiClient(config)
       if (!clientResult.success) {
         throw clientResult.error
       }
-      this.geminiClient = clientResult.data
+      this.imageClient = clientResult.data
     }
 
-    this.logger.info('mcp-server', 'Gemini clients initialized')
+    this.logger.info('mcp-server', 'Image provider clients initialized', {
+      provider: config.imageProvider,
+      promptEnhancement: !config.skipPromptEnhancement,
+    })
   }
 
   /**
@@ -298,12 +314,12 @@ export class MCPServerImpl {
         this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
       }
 
-      // Generate image using Gemini API
-      if (!this.geminiClient) {
-        throw new Error('Gemini client not initialized')
+      // Generate image using selected provider.
+      if (!this.imageClient) {
+        throw new Error('Image client not initialized')
       }
 
-      const generationResult = await this.geminiClient.generateImage({
+      const generationResult = await this.imageClient.generateImage({
         prompt: structuredPrompt,
         ...(inputImageData && { inputImage: inputImageData }),
         ...(inputImageMimeType && { inputImageMimeType }),

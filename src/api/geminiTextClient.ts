@@ -10,42 +10,12 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE } from '../utils/mimeUtils.js'
+import type { GenerationConfig, TextClient } from './textClient.js'
 
 /**
  * Options for text generation
  */
-export interface GenerationConfig {
-  temperature?: number
-  maxTokens?: number
-  timeout?: number
-  systemInstruction?: string
-  inputImage?: string // Optional base64-encoded image for multimodal context
-  inputImageMimeType?: string // MIME type of the input image
-  topP?: number
-  topK?: number
-}
-
-/**
- * Interface for Gemini Text Client - pure API client
- */
-export interface GeminiTextClient {
-  /**
-   * Generate text using Gemini API
-   * @param prompt The prompt to send to the API
-   * @param config Optional configuration for generation
-   * @returns Result containing generated text or error
-   */
-  generateText(
-    prompt: string,
-    config?: GenerationConfig
-  ): Promise<Result<string, GeminiAPIError | NetworkError>>
-
-  /**
-   * Validate connection to Gemini API
-   * @returns Result indicating if connection is successful
-   */
-  validateConnection(): Promise<Result<boolean, GeminiAPIError | NetworkError>>
-}
+export type GeminiTextClient = TextClient
 
 /**
  * Default configuration for text generation

@@ -12,6 +12,12 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import type {
+  GeneratedImageResult,
+  ImageApiParams,
+  ImageClient,
+  ImageGenerationMetadata,
+} from './imageClient.js'
 
 /**
  * Simplified Gemini API response types
@@ -132,46 +138,17 @@ interface ErrorWithCode extends Error {
 /**
  * Metadata for generated images
  */
-export interface GeminiGenerationMetadata {
-  model: string
-  prompt: string
-  mimeType: string
-  timestamp: Date
-  inputImageProvided: boolean
-  // Additional metadata from flat structure responses
-  modelVersion?: string
-  responseId?: string
-}
+export type GeminiGenerationMetadata = ImageGenerationMetadata
 
 /**
  * Parameters for Gemini API image generation
  */
-export interface GeminiApiParams {
-  prompt: string
-  inputImage?: string
-  inputImageMimeType?: string
-  aspectRatio?: string
-  imageSize?: string
-  useGoogleSearch?: boolean
-  quality?: ImageQuality
-}
-
-/**
- * Result of image generation
- */
-export interface GeneratedImageResult {
-  imageData: Buffer
-  metadata: GeminiGenerationMetadata
-}
+export type GeminiApiParams = ImageApiParams
 
 /**
  * Gemini API client interface
  */
-export interface GeminiClient {
-  generateImage(
-    params: GeminiApiParams
-  ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>>
-}
+export type GeminiClient = ImageClient
 
 /**
  * Implementation of Gemini API client
