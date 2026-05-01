@@ -4,13 +4,14 @@
  */
 
 import * as path from 'node:path'
-import type { GeneratedImageResult } from '../api/geminiClient.js'
+import type { GeneratedImageResult } from '../api/imageClient.js'
 import type { McpToolResponse, StructuredContent } from '../types/mcp.js'
 import {
   type BaseError,
   ConfigError,
   FileOperationError,
   GeminiAPIError,
+  ImageAPIError,
   InputValidationError,
   NetworkError,
   SecurityError,
@@ -64,6 +65,7 @@ function convertErrorToStructured(error: BaseError | Error): {
     error instanceof InputValidationError ||
     error instanceof FileOperationError ||
     error instanceof GeminiAPIError ||
+    error instanceof ImageAPIError ||
     error instanceof NetworkError ||
     error instanceof ConfigError ||
     error instanceof SecurityError
@@ -115,6 +117,9 @@ export function createResponseBuilder(): ResponseBuilder {
         },
         metadata: {
           model: generationResult.metadata.model,
+          ...(generationResult.metadata.provider && {
+            provider: generationResult.metadata.provider,
+          }),
           processingTime: 0, // Not tracked in simplified version
           contextMethod: 'structured_prompt',
           timestamp: generationResult.metadata.timestamp.toISOString(),

@@ -18,6 +18,8 @@
     "prompt-enhancement",
     "gemini",
     "google-ai",
+    "openai",
+    "gpt-image-2",
     "nano-banana",
     "claude-code",
     "cursor",
@@ -63,7 +65,8 @@
   },
   "dependencies": {
     "@google/genai": "^1.42.0",
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "openai": "^6.35.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

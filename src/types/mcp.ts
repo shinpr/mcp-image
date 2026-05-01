@@ -40,6 +40,13 @@ export type ImageSize = '1K' | '2K' | '4K'
 export type ImageQuality = 'fast' | 'balanced' | 'quality'
 
 /**
+ * Supported image providers.
+ * - 'gemini': Google Gemini/Nano Banana models (default)
+ * - 'openai': OpenAI GPT Image models such as gpt-image-2
+ */
+export type ImageProvider = 'gemini' | 'openai'
+
+/**
  * Supported quality preset values
  */
 export const IMAGE_QUALITY_VALUES: readonly ImageQuality[] = [
@@ -47,6 +54,11 @@ export const IMAGE_QUALITY_VALUES: readonly ImageQuality[] = [
   'balanced',
   'quality',
 ] as const
+
+/**
+ * Supported image provider values.
+ */
+export const IMAGE_PROVIDER_VALUES: readonly ImageProvider[] = ['gemini', 'openai'] as const
 
 /**
  * Gemini image generation model identifiers
@@ -131,6 +143,7 @@ export interface StructuredContent {
   }
   metadata: {
     model: string
+    provider?: string
     processingTime: number
     contextMethod: string
     timestamp: string

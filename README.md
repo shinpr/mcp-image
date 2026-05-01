@@ -1,6 +1,6 @@
 # MCP Image Generator 🍌
 
-> AI image generation and editing MCP server for Cursor, Claude Code, Codex, and any MCP-compatible tool — powered by Nano Banana 2 and Nano Banana Pro (Google Gemini).
+> AI image generation and editing MCP server for Cursor, Claude Code, Codex, and any MCP-compatible tool — powered by Nano Banana 2 and Nano Banana Pro (Google Gemini), with optional OpenAI GPT Image support.
 
 [![npm version](https://badge.fury.io/js/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
@@ -27,7 +27,7 @@ You: "cat on a roof"
 
 Your AI assistant interprets your intent — the style, purpose, and context behind your request. The MCP focuses on output quality by refining the prompt to meet a structured visual clarity standard and selecting appropriate generation settings. You just describe what you want.
 
-The prompt optimizer uses a **Subject–Context–Style** framework (powered by Gemini 2.5 Flash) to fill in missing visual details — subject characteristics, environment, lighting, camera work — while preserving your original intent. It doesn't blindly add details: prompts that already meet the quality standard are left largely intact.
+The prompt optimizer uses a **Subject–Context–Style** framework (powered by Gemini 2.5 Flash by default, or OpenAI Responses when `IMAGE_PROVIDER=openai`) to fill in missing visual details — subject characteristics, environment, lighting, camera work — while preserving your original intent. It doesn't blindly add details: prompts that already meet the quality standard are left largely intact.
 
 **Example — what the optimizer does to a short prompt:**
 
@@ -37,7 +37,8 @@ The prompt optimizer uses a **Subject–Context–Style** framework (powered by 
 
 ## Features
 
-- **Built-in Prompt Optimization**: Your simple prompt is automatically enriched with photographic and artistic details — lighting, composition, atmosphere — using Gemini 2.5 Flash. No prompt engineering skills required.
+- **Built-in Prompt Optimization**: Your simple prompt is automatically enriched with photographic and artistic details — lighting, composition, atmosphere — using Gemini 2.5 Flash by default, or OpenAI Responses when `IMAGE_PROVIDER=openai`. No prompt engineering skills required.
+- **Optional OpenAI Provider**: Set `IMAGE_PROVIDER=openai` to generate and edit images with OpenAI GPT Image models such as `gpt-image-2`.
 - **Three Quality Tiers**: Choose between fast iteration, balanced quality, or maximum fidelity with Nano Banana 2 (Gemini 3.1 Flash Image) and Nano Banana Pro (Gemini 3 Pro Image). [See Quality Presets](#quality-presets).
 - **Image Editing**: Transform existing images with natural language instructions (image-to-image) while preserving original style and visual consistency.
 - **High-Resolution Output**: Up to 4K image generation for professional-grade output with superior text rendering and fine details.
@@ -91,7 +92,8 @@ npx mcp-image skills install --path ~/.claude/skills
 ## Prerequisites
 
 - **Node.js** 22 or higher
-- **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey)
+- **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey) for the default Gemini provider
+- **OpenAI API Key** - Get yours from [OpenAI](https://platform.openai.com/api-keys) when using `IMAGE_PROVIDER=openai`
 - An MCP-compatible AI tool: **Cursor**, **Claude Code**, **Codex**, or others
 - Basic terminal/command line knowledge
 
@@ -100,6 +102,16 @@ npx mcp-image skills install --path ~/.claude/skills
 ### 1. Get Your Gemini API Key
 
 Get your API key from [Google AI Studio](https://aistudio.google.com/apikey)
+
+To use OpenAI instead, get an OpenAI API key and set:
+
+```bash
+IMAGE_PROVIDER=openai
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_IMAGE_MODEL=gpt-image-2
+```
+
+OpenAI mode does not require `GEMINI_API_KEY`. Prompt enhancement also runs through OpenAI by default, using `OPENAI_TEXT_MODEL` (defaults to `gpt-5-mini`). Set `SKIP_PROMPT_ENHANCEMENT=true` if you want prompts sent directly to the image model.
 
 ### 2. MCP Configuration
 
@@ -114,6 +126,20 @@ args = ["-y", "mcp-image"]
 
 [mcp_servers.mcp-image.env]
 GEMINI_API_KEY = "your_gemini_api_key_here"
+IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
+```
+
+For OpenAI GPT Image from a local fork:
+
+```toml
+[mcp_servers.mcp-image]
+command = "node"
+args = ["/absolute/path/to/mcp-image/dist/index.js"]
+
+[mcp_servers.mcp-image.env]
+IMAGE_PROVIDER = "openai"
+OPENAI_API_KEY = "your_openai_api_key_here"
+OPENAI_IMAGE_MODEL = "gpt-image-2"
 IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
 ```
 
@@ -138,6 +164,25 @@ Add to your Cursor settings:
 }
 ```
 
+For OpenAI GPT Image from a local fork:
+
+```json
+{
+  "mcpServers": {
+    "mcp-image": {
+      "command": "node",
+      "args": ["/absolute/path/to/mcp-image/dist/index.js"],
+      "env": {
+        "IMAGE_PROVIDER": "openai",
+        "OPENAI_API_KEY": "your_openai_api_key_here",
+        "OPENAI_IMAGE_MODEL": "gpt-image-2",
+        "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
+      }
+    }
+  }
+}
+```
+
 #### For Claude Code
 
 Run in your project directory to enable for that project:
@@ -151,6 +196,19 @@ Or add globally for all projects:
 
 ```bash
 claude mcp add mcp-image --scope user --env GEMINI_API_KEY=your-api-key --env IMAGE_OUTPUT_DIR=/absolute/path/to/images -- npx -y mcp-image
+```
+
+For OpenAI GPT Image from a local fork:
+
+```bash
+npm install
+npm run build
+claude mcp add mcp-image --scope user \
+  --env IMAGE_PROVIDER=openai \
+  --env OPENAI_API_KEY=your-openai-api-key \
+  --env OPENAI_IMAGE_MODEL=gpt-image-2 \
+  --env IMAGE_OUTPUT_DIR=/absolute/path/to/images \
+  -- node /absolute/path/to/mcp-image/dist/index.js
 ```
 
 ⚠️ **Security Note**: Never commit your API key to version control. Keep it secure and use environment-specific configuration.
@@ -199,6 +257,22 @@ claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_QUALITY=b
 
 Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and send your prompts directly to the image generator. Useful when you need full control over the exact prompt wording.
 
+### Provider Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IMAGE_PROVIDER` | `gemini` | `gemini` or `openai` |
+| `GEMINI_API_KEY` | - | Required when `IMAGE_PROVIDER=gemini` |
+| `OPENAI_API_KEY` | - | Required when `IMAGE_PROVIDER=openai` |
+| `OPENAI_IMAGE_MODEL` | `gpt-image-2` | OpenAI image model to use |
+| `OPENAI_TEXT_MODEL` | `gpt-5-mini` | OpenAI text model used for prompt enhancement |
+
+OpenAI provider notes:
+- `quality` maps to OpenAI image quality as `fast -> low`, `balanced -> medium`, `quality -> high`.
+- `aspectRatio` maps to the closest supported GPT Image size: square, landscape, or portrait.
+- `imageSize` maps to valid `gpt-image-2` dimensions, including 2K/4K outputs. OpenAI 2K+ outputs are experimental and can be slower/more expensive.
+- `useGoogleSearch` is Gemini-specific and is rejected in OpenAI mode because Google Search grounding is not available through the OpenAI image provider.
+
 ## Usage Examples
 
 Once configured, just describe what you want in natural language:
@@ -243,8 +317,8 @@ Your prompt is automatically enhanced with rich details about lighting, material
 ### `generate_image` Tool
 
 The server uses a two-stage process with separate models for each stage:
-1. **Prompt Optimization** (Gemini 2.5 Flash): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
-2. **Image Generation** (Nano Banana 2 or Pro): Creates the final image. Model varies by quality preset.
+1. **Prompt Optimization** (Gemini 2.5 Flash by default, or OpenAI Responses in OpenAI mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
+2. **Image Generation** (Nano Banana 2/Pro by default, or `OPENAI_IMAGE_MODEL` in OpenAI mode): Creates the final image. Model varies by quality preset and provider configuration.
 
 #### Parameters
 
@@ -274,6 +348,7 @@ The server uses a two-stage process with separate models for each stage:
   },
   "metadata": {
     "model": "gemini-3.1-flash-image-preview",
+    "provider": "gemini",
     "processingTime": 5000,
     "timestamp": "2026-01-01T12:00:00.000Z"
   }
@@ -285,7 +360,7 @@ The server uses a two-stage process with separate models for each stage:
 ### Common Issues
 
 **"API key not found"**
-- Ensure `GEMINI_API_KEY` is set in your environment
+- Ensure `GEMINI_API_KEY` is set when using Gemini, or `OPENAI_API_KEY` is set when `IMAGE_PROVIDER=openai`
 - Verify the API key is valid and has image generation permissions
 
 **"Input image file not found"**

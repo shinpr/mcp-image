@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.shinpr/mcp-image",
-  "description": "AI image generation and editing with prompt optimization and quality presets. Powered by Nano Banana",
+  "description": "AI image generation and editing with prompt optimization and quality presets. Powered by Nano Banana or OpenAI GPT Image",
   "vendor": "Shinsuke Kagawa",
   "license": "MIT",
   "repository": {
@@ -20,11 +20,39 @@
       },
       "environmentVariables": [
         {
+          "name": "IMAGE_PROVIDER",
+          "description": "Image provider to use: 'gemini' (default) or 'openai'",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
           "name": "GEMINI_API_KEY",
-          "description": "Google Gemini API key for image generation (get from https://aistudio.google.com/apikey)",
-          "isRequired": true,
+          "description": "Google Gemini API key for image generation when IMAGE_PROVIDER=gemini (get from https://aistudio.google.com/apikey)",
+          "isRequired": false,
           "format": "string",
           "isSecret": true
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "description": "OpenAI API key for image generation when IMAGE_PROVIDER=openai",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "OPENAI_IMAGE_MODEL",
+          "description": "OpenAI image model to use when IMAGE_PROVIDER=openai (defaults to gpt-image-2)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "OPENAI_TEXT_MODEL",
+          "description": "OpenAI text model used for prompt enhancement when IMAGE_PROVIDER=openai (defaults to gpt-5-mini)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
         },
         {
           "name": "IMAGE_OUTPUT_DIR",
@@ -72,6 +100,8 @@
     "image-editing",
     "prompt-enhancement",
     "gemini",
+    "openai",
+    "gpt-image-2",
     "nano-banana",
     "nano-banana-2",
     "nano-banana-pro",

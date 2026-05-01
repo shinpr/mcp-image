@@ -26,6 +26,50 @@ vi.mock('../../api/geminiClient', () => {
   }
 })
 
+// Mock the OpenAI image client for provider routing tests
+vi.mock('../../api/openaiImageClient', () => {
+  return {
+    createOpenAIImageClient: vi.fn().mockImplementation(() => {
+      const mockClient = {
+        generateImage: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            imageData: Buffer.from('mock-openai-image-data', 'utf-8'),
+            metadata: {
+              model: 'gpt-image-2',
+              provider: 'openai',
+              prompt: 'test prompt',
+              mimeType: 'image/png',
+              timestamp: new Date(),
+              inputImageProvided: false,
+            },
+          },
+        }),
+      }
+      return { success: true, data: mockClient }
+    }),
+  }
+})
+
+// Mock the OpenAI text client for provider routing tests
+vi.mock('../../api/openaiTextClient', () => {
+  return {
+    createOpenAITextClient: vi.fn().mockImplementation(() => {
+      const mockClient = {
+        generateText: vi.fn().mockResolvedValue({
+          success: true,
+          data: 'Enhanced OpenAI prompt with professional lighting and composition',
+        }),
+        validateConnection: vi.fn().mockResolvedValue({
+          success: true,
+          data: true,
+        }),
+      }
+      return { success: true, data: mockClient }
+    }),
+  }
+})
+
 // Mock the FileManager for unit tests
 vi.mock('../../business/fileManager', () => {
   return {
@@ -160,12 +204,21 @@ vi.mock('../../business/inputValidator', async () => {
 // Basic tests for MCP server startup and tool registration
 describe('MCP Server', () => {
   let originalApiKey: string | undefined
+  let originalImageProvider: string | undefined
+  let originalOpenAIApiKey: string | undefined
+  let originalOpenAIImageModel: string | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
     // Set up environment for testing
     originalApiKey = process.env.GEMINI_API_KEY
+    originalImageProvider = process.env.IMAGE_PROVIDER
+    originalOpenAIApiKey = process.env.OPENAI_API_KEY
+    originalOpenAIImageModel = process.env.OPENAI_IMAGE_MODEL
+    process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
+    process.env.OPENAI_API_KEY = undefined
+    process.env.OPENAI_IMAGE_MODEL = undefined
     process.env.IMAGE_OUTPUT_DIR = './test-output'
   })
 
@@ -176,6 +229,9 @@ describe('MCP Server', () => {
     } else {
       process.env.GEMINI_API_KEY = undefined
     }
+    process.env.IMAGE_PROVIDER = originalImageProvider
+    process.env.OPENAI_API_KEY = originalOpenAIApiKey
+    process.env.OPENAI_IMAGE_MODEL = originalOpenAIImageModel
   })
   it('should create MCP server instance', async () => {
     // Arrange & Act
@@ -392,6 +448,38 @@ describe('MCP Server', () => {
     expect(responseData.error.code).toBe('INPUT_VALIDATION_ERROR')
     expect(responseData.error.message).toContain('1 and 4000 characters')
     expect(responseData.error.suggestion).toContain('descriptive prompt')
+  })
+
+  it('should route image generation through OpenAI provider when configured', async () => {
+    // Arrange
+    process.env.IMAGE_PROVIDER = 'openai'
+    process.env.GEMINI_API_KEY = undefined
+    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
+    process.env.OPENAI_IMAGE_MODEL = 'gpt-image-2'
+    const mcpServer = createMCPServer()
+
+    // Act
+    const result = await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+    })
+
+    // Assert
+    expect(result).toBeDefined()
+    expect(result.isError).toBe(false)
+
+    const { createGeminiClient } = await import('../../api/geminiClient')
+    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
+    const { createOpenAITextClient } = await import('../../api/openaiTextClient')
+
+    expect(createGeminiClient).not.toHaveBeenCalled()
+    expect(createOpenAIImageClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageProvider: 'openai',
+        openaiApiKey: 'test-openai-api-key-unit-tests',
+        openaiImageModel: 'gpt-image-2',
+      })
+    )
+    expect(createOpenAITextClient).toHaveBeenCalled()
   })
 })
 

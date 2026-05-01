@@ -30,6 +30,6 @@ if (args[0] === 'skills') {
   await import('./server-main.js')
 }
 
-export type { GeneratedImageResult } from './api/geminiClient.js'
+export type { GeneratedImageResult } from './api/imageClient.js'
 export { createMCPServer, MCPServerImpl } from './server/mcpServer.js'
 export type { GenerateImageParams, MCPServerConfig } from './types/mcp.js'

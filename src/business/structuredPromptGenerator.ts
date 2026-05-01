@@ -4,7 +4,7 @@
  * Applies 7 best practices and 3 feature perspectives through intelligent selection
  */
 
-import type { GeminiTextClient } from '../api/geminiTextClient.js'
+import type { TextClient } from '../api/textClient.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { GeminiAPIError } from '../utils/errors.js'
@@ -88,7 +88,7 @@ export interface StructuredPromptGenerator {
  * Implementation of StructuredPromptGenerator using Gemini Flash
  */
 export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator {
-  constructor(private readonly geminiTextClient: GeminiTextClient) {}
+  constructor(private readonly textClient: TextClient) {}
 
   async generateStructuredPrompt(
     userPrompt: string,
@@ -124,7 +124,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         ...(inputImageData && { inputImage: inputImageData }),
         ...(inputImageMimeType && { inputImageMimeType }),
       }
-      const result = await this.geminiTextClient.generateText(completePrompt, config)
+      const result = await this.textClient.generateText(completePrompt, config)
 
       if (!result.success) {
         return Err(result.error)
@@ -310,8 +310,6 @@ Now transform the user's request with similar attention to detail and creative e
 /**
  * Factory function to create StructuredPromptGenerator
  */
-export function createStructuredPromptGenerator(
-  geminiTextClient: GeminiTextClient
-): StructuredPromptGenerator {
-  return new StructuredPromptGeneratorImpl(geminiTextClient)
+export function createStructuredPromptGenerator(textClient: TextClient): StructuredPromptGenerator {
+  return new StructuredPromptGeneratorImpl(textClient)
 }
