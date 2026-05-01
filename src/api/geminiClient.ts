@@ -443,7 +443,8 @@ class GeminiClientImpl implements GeminiClient {
         provider: 'gemini',
         prompt,
         upstreamMessage: errorMessage,
-        suggestion: 'Check your API key, quota, and prompt validity. Try again with a different prompt',
+        suggestion:
+          'Check your API key, quota, and prompt validity. Try again with a different prompt',
       })
     )
   }

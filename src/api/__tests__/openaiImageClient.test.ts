@@ -208,10 +208,11 @@ describe('openaiImageClient', () => {
 
       // 'abc:1' parses to NaN width — current behavior is silent fallback to square.
       // Pinning this so future changes that promote it to a typed error are deliberate.
+      // 'abc:1' is not a valid AspectRatio union member; cast through unknown to
+      // exercise the runtime fallback branch in mapSize.
       await clientResult.data.generateImage({
         prompt: 'Generate an image',
-        // biome-ignore lint/suspicious/noExplicitAny: deliberately exercise malformed input
-        aspectRatio: 'abc:1' as any,
+        aspectRatio: 'abc:1' as unknown as never,
       })
 
       expect(mockGenerate).toHaveBeenCalledWith(
