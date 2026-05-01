@@ -24,6 +24,7 @@ interface StructuredLogEntry {
 export class Logger {
   private readonly sensitivePatterns = [
     /GEMINI_API_KEY=([^\s]+)/gi,
+    /OPENAI_API_KEY=([^\s]+)/gi,
     /api[_-]?key[^\s]*[:=]\s*([^\s]+)/gi,
     /password[^\s]*[:=]\s*([^\s]+)/gi,
     /bearer\s+([a-zA-Z0-9\-._~+/]+=*)/gi,

@@ -184,6 +184,20 @@ describe('Logger', () => {
       )
     })
 
+    it('should redact OPENAI_API_KEY in environment variable format', () => {
+      // Arrange
+      const message = 'Starting service with OPENAI_API_KEY=sk-proj-ABCDEF123456789'
+
+      // Act
+      logger.info('config', message)
+
+      // Assert
+      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('[REDACTED]'))
+      expect(mockConsoleError).toHaveBeenCalledWith(
+        expect.not.stringContaining('sk-proj-ABCDEF123456789')
+      )
+    })
+
     it('should redact URLs in log messages', () => {
       // Arrange
       const message = 'Fetching data from https://api.example.com/v1/data?key=secret'
