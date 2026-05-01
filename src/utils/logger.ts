@@ -18,31 +18,62 @@ interface StructuredLogEntry {
   sessionId?: string
 }
 
+const SENSITIVE_PATTERNS = [
+  /GEMINI_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /OPENAI_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /api[_-]?key[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /password[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /bearer\s+([a-zA-Z0-9\-._~+/]+=*)/gi,
+  /secret[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /token[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /(sk-(?:proj-)?[A-Za-z0-9_-]{16,})/g,
+]
+
+const URL_PATTERNS = [
+  /(https?:\/\/[^\s]+)/gi, // URLs - separate to handle differently
+]
+
+const FILTER_PATTERNS = [
+  /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, // Credit card numbers
+  /\b\d{3}-\d{2}-\d{4}\b/g, // SSN
+  /\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b/g, // Phone numbers
+  /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi, // Emails
+]
+
+/**
+ * Sanitize a string by redacting sensitive information.
+ * Exposed at module scope so non-Logger code paths (response builders,
+ * error handlers) can sanitize before placing values into caller-visible
+ * fields without instantiating a Logger.
+ */
+export function sanitizeText(input: string): string {
+  let sanitized = input
+
+  for (const pattern of SENSITIVE_PATTERNS) {
+    sanitized = sanitized.replace(pattern, (match, group1: string) =>
+      match.replace(group1, '[REDACTED]')
+    )
+  }
+
+  sanitized = sanitized.replace(/\bapi[_-]?key\b/gi, '[REDACTED]')
+  sanitized = sanitized.replace(/\bgemini[_-]?api[_-]?key\b/gi, '[REDACTED]')
+  sanitized = sanitized.replace(/\b[A-Za-z0-9]{20,}\b/g, '[REDACTED]')
+
+  for (const pattern of URL_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '[URL_REDACTED]')
+  }
+
+  for (const pattern of FILTER_PATTERNS) {
+    sanitized = sanitized.replace(pattern, '[FILTERED]')
+  }
+
+  return sanitized
+}
+
 /**
  * Logger class for structured logging with sensitive data protection
  */
 export class Logger {
-  private readonly sensitivePatterns = [
-    /GEMINI_API_KEY=([^\s]+)/gi,
-    /OPENAI_API_KEY=([^\s]+)/gi,
-    /api[_-]?key[^\s]*[:=]\s*([^\s]+)/gi,
-    /password[^\s]*[:=]\s*([^\s]+)/gi,
-    /bearer\s+([a-zA-Z0-9\-._~+/]+=*)/gi,
-    /secret[^\s]*[:=]\s*([^\s]+)/gi,
-    /token[^\s]*[:=]\s*([^\s]+)/gi,
-  ]
-
-  private readonly urlPatterns = [
-    /(https?:\/\/[^\s]+)/gi, // URLs - separate to handle differently
-  ]
-
-  private readonly filterPatterns = [
-    /\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b/g, // Credit card numbers
-    /\b\d{3}-\d{2}-\d{4}\b/g, // SSN
-    /\b(?:\+?1[-.]?)?\(?\d{3}\)?[-.]?\d{3}[-.]?\d{4}\b/g, // Phone numbers
-    /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/gi, // Emails
-  ]
-
   private readonly keyBasedSensitivePatterns = [
     /api[_-]?key/i,
     /gemini[_-]?api[_-]?key/i,
@@ -140,36 +171,9 @@ export class Logger {
 
   /**
    * Sanitize string content by redacting sensitive information
-   * @param input String to sanitize
-   * @returns Sanitized string
    */
   private sanitizeString(input: string): string {
-    let sanitized = input
-
-    // Redact sensitive data patterns (API keys, passwords, etc.)
-    for (const pattern of this.sensitivePatterns) {
-      sanitized = sanitized.replace(pattern, (match, group1) => match.replace(group1, '[REDACTED]'))
-    }
-
-    // Additional broad filter for API key-like strings in text
-    // Remove any reference to API key terms even in plain text
-    sanitized = sanitized.replace(/\bapi[_-]?key\b/gi, '[REDACTED]')
-    sanitized = sanitized.replace(/\bgemini[_-]?api[_-]?key\b/gi, '[REDACTED]')
-
-    // Remove long alphanumeric strings that might be API keys or secrets
-    sanitized = sanitized.replace(/\b[A-Za-z0-9]{20,}\b/g, '[REDACTED]')
-
-    // Redact URLs with specific label
-    for (const pattern of this.urlPatterns) {
-      sanitized = sanitized.replace(pattern, '[URL_REDACTED]')
-    }
-
-    // Filter personal information patterns
-    for (const pattern of this.filterPatterns) {
-      sanitized = sanitized.replace(pattern, '[FILTERED]')
-    }
-
-    return sanitized
+    return sanitizeText(input)
   }
 
   /**

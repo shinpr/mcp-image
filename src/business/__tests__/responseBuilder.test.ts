@@ -205,6 +205,36 @@ describe('ResponseBuilder', () => {
       expect(errorData.error.suggestion).toBe('Please try again later or upgrade your API quota')
     })
 
+    it('should expose allowlisted context fields in details for GeminiAPIError', () => {
+      const error = new GeminiAPIError('Failed to generate image with Gemini', {
+        provider: 'gemini',
+        prompt: 'a photograph of a cat',
+        upstreamMessage: 'content policy violation: NSFW request',
+        suggestion: 'Rephrase the prompt',
+      })
+
+      const response = responseBuilder.buildErrorResponse(error)
+      const errorData = JSON.parse(response.content[0].text)
+
+      expect(errorData.error.details).toBeDefined()
+      expect(errorData.error.details.provider).toBe('gemini')
+      expect(errorData.error.details.upstreamMessage).toContain('content policy violation')
+      expect(errorData.error.details.prompt).toBeUndefined()
+    })
+
+    it('should redact API keys from upstreamMessage in details', () => {
+      const error = new GeminiAPIError('Failed to generate image with Gemini', {
+        provider: 'gemini',
+        upstreamMessage: 'Auth failed for OPENAI_API_KEY=sk-proj-ABCDEF123456789',
+      })
+
+      const response = responseBuilder.buildErrorResponse(error)
+      const errorData = JSON.parse(response.content[0].text)
+
+      expect(errorData.error.details.upstreamMessage).toContain('[REDACTED]')
+      expect(errorData.error.details.upstreamMessage).not.toContain('sk-proj-ABCDEF123456789')
+    })
+
     it('should create error response for NetworkError', () => {
       const error = new NetworkError(
         'Network connection failed',

@@ -7,23 +7,17 @@ import { GEMINI_MODELS } from '../types/mcp.js'
 import { SUPPORTED_EXTENSIONS } from './mimeUtils.js'
 
 /**
- * Structured error format for consistent error reporting
- */
-export interface StructuredError {
-  code: string
-  message: string
-  suggestion: string
-  timestamp: string
-  context?: Record<string, unknown>
-}
-
-/**
  * Result type pattern for explicit error handling
  */
 export type Result<T, E> = { ok: true; value: T } | { ok: false; error: E }
 
 /**
- * Base class for all application errors with structured error support
+ * Base class for all application errors with structured error support.
+ *
+ * Caller-visible error fields (code, message, suggestion) are available
+ * directly on the instance. Raw upstream details and prompt content live
+ * in `context` and must be projected through a sanitizer (see
+ * `responseBuilder.buildPublicDetails`) before being placed on the wire.
  */
 export abstract class BaseError extends Error {
   abstract readonly code: string
@@ -36,16 +30,6 @@ export abstract class BaseError extends Error {
     this.name = this.constructor.name
     this.timestamp = new Date().toISOString()
     this.context = context
-  }
-
-  toStructuredError(): StructuredError {
-    return {
-      code: this.code,
-      message: this.message,
-      suggestion: this.suggestion,
-      timestamp: this.timestamp,
-      ...(this.context && { context: this.context }),
-    }
   }
 }
 

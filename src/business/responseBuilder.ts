@@ -16,10 +16,43 @@ import {
   NetworkError,
   SecurityError,
 } from '../utils/errors.js'
+import { sanitizeText } from '../utils/logger.js'
 import { getMimeTypeFromExtension, SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
 
 const UNKNOWN_ERROR_CODE = 'UNKNOWN_ERROR'
 const DEFAULT_ERROR_SUGGESTION = 'Please try again or contact support if the problem persists'
+
+/**
+ * Context keys safe to surface in MCP error responses. Anything not on this
+ * list (notably `prompt`, which the caller already supplied, and any future
+ * additions) stays out of the wire format.
+ */
+const SAFE_CONTEXT_KEYS = ['provider', 'stage', 'statusCode'] as const
+
+/**
+ * Project an error's context object into a sanitized subset suitable for
+ * inclusion in caller-visible error responses. The upstream API message is
+ * passed through the logger's redaction patterns before exposure.
+ */
+function buildPublicDetails(
+  context: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!context) return undefined
+
+  const details: Record<string, unknown> = {}
+
+  for (const key of SAFE_CONTEXT_KEYS) {
+    if (context[key] !== undefined) {
+      details[key] = context[key]
+    }
+  }
+
+  if (typeof context['upstreamMessage'] === 'string') {
+    details['upstreamMessage'] = sanitizeText(context['upstreamMessage'])
+  }
+
+  return Object.keys(details).length > 0 ? details : undefined
+}
 
 /**
  * Interface for response builder functionality
@@ -56,6 +89,7 @@ function convertErrorToStructured(error: BaseError | Error): {
   message: string
   suggestion: string
   timestamp: string
+  details?: Record<string, unknown>
 } {
   const baseError = {
     timestamp: new Date().toISOString(),
@@ -70,11 +104,13 @@ function convertErrorToStructured(error: BaseError | Error): {
     error instanceof ConfigError ||
     error instanceof SecurityError
   ) {
+    const details = buildPublicDetails(error.context)
     return {
       ...baseError,
       code: error.code,
       message: error.message,
       suggestion: error.suggestion,
+      ...(details && { details }),
     }
   }
 

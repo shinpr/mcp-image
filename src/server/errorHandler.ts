@@ -12,7 +12,29 @@ import {
   NetworkError,
   type Result,
 } from '../utils/errors.js'
-import { Logger } from '../utils/logger.js'
+import { Logger, sanitizeText } from '../utils/logger.js'
+
+const SAFE_CONTEXT_KEYS = ['provider', 'stage', 'statusCode'] as const
+
+function buildPublicDetails(
+  context: Record<string, unknown> | undefined
+): Record<string, unknown> | undefined {
+  if (!context) return undefined
+
+  const details: Record<string, unknown> = {}
+
+  for (const key of SAFE_CONTEXT_KEYS) {
+    if (context[key] !== undefined) {
+      details[key] = context[key]
+    }
+  }
+
+  if (typeof context['upstreamMessage'] === 'string') {
+    details['upstreamMessage'] = sanitizeText(context['upstreamMessage'])
+  }
+
+  return Object.keys(details).length > 0 ? details : undefined
+}
 
 // Create logger instance for error handling
 const logger = new Logger()
@@ -92,28 +114,14 @@ function convertErrorToStructured(error: Error): {
     error instanceof NetworkError ||
     error instanceof ConfigError
   ) {
-    const errorResponse = {
+    const details = error instanceof GeminiAPIError ? buildPublicDetails(error.context) : undefined
+
+    return {
       ...baseError,
       code: error.code,
       message: error.message,
       suggestion: error.suggestion,
-    } as Record<string, unknown>
-
-    // Include context details for GeminiAPIError to provide better debugging info
-    if (error instanceof GeminiAPIError && error.context) {
-      // Add non-sensitive context information
-      const { suggestion, ...otherContext } = error.context as Record<string, unknown>
-      if (Object.keys(otherContext).length > 0) {
-        errorResponse['details'] = otherContext
-      }
-    }
-
-    return errorResponse as {
-      code: string
-      message: string
-      suggestion: string
-      timestamp: string
-      details?: Record<string, unknown>
+      ...(details && { details }),
     }
   }
 
