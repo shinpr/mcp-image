@@ -111,7 +111,7 @@ OPENAI_API_KEY=your_openai_api_key_here
 OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
-OpenAI mode does not require `GEMINI_API_KEY`. Prompt enhancement also runs through OpenAI by default, using `OPENAI_TEXT_MODEL` (defaults to `gpt-5.2`). Set `SKIP_PROMPT_ENHANCEMENT=true` if you want prompts sent directly to the image model.
+OpenAI mode does not require `GEMINI_API_KEY`. Prompt enhancement also runs through OpenAI by default, using `OPENAI_TEXT_MODEL` (defaults to `gpt-5-mini`). Set `SKIP_PROMPT_ENHANCEMENT=true` if you want prompts sent directly to the image model.
 
 ### 2. MCP Configuration
 
@@ -265,7 +265,7 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 | `GEMINI_API_KEY` | - | Required when `IMAGE_PROVIDER=gemini` |
 | `OPENAI_API_KEY` | - | Required when `IMAGE_PROVIDER=openai` |
 | `OPENAI_IMAGE_MODEL` | `gpt-image-2` | OpenAI image model to use |
-| `OPENAI_TEXT_MODEL` | `gpt-5.2` | OpenAI text model used for prompt enhancement |
+| `OPENAI_TEXT_MODEL` | `gpt-5-mini` | OpenAI text model used for prompt enhancement |
 
 OpenAI provider notes:
 - `quality` maps to OpenAI image quality as `fast -> low`, `balanced -> medium`, `quality -> high`.

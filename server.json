@@ -49,7 +49,7 @@
         },
         {
           "name": "OPENAI_TEXT_MODEL",
-          "description": "OpenAI text model used for prompt enhancement when IMAGE_PROVIDER=openai (defaults to gpt-5.2)",
+          "description": "OpenAI text model used for prompt enhancement when IMAGE_PROVIDER=openai (defaults to gpt-5-mini)",
           "isRequired": false,
           "format": "string",
           "isSecret": false

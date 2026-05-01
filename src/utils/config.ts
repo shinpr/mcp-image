@@ -32,7 +32,7 @@ const DEFAULT_CONFIG = {
   imageOutputDir: './output',
   apiTimeout: 30000, // 30 seconds
   openaiImageModel: 'gpt-image-2',
-  openaiTextModel: 'gpt-5.2',
+  openaiTextModel: 'gpt-5-mini',
 } as const
 
 function readEnv(name: string): string | undefined {

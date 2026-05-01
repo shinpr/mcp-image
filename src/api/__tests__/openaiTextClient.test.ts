@@ -24,7 +24,7 @@ describe('openaiTextClient', () => {
     geminiApiKey: '',
     openaiApiKey: 'test-openai-api-key-12345',
     openaiImageModel: 'gpt-image-2',
-    openaiTextModel: 'gpt-5.2',
+    openaiTextModel: 'gpt-5-mini',
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,
@@ -59,7 +59,7 @@ describe('openaiTextClient', () => {
 
     expect(result.success).toBe(true)
     expect(mockResponsesCreate).toHaveBeenCalledWith({
-      model: 'gpt-5.2',
+      model: 'gpt-5-mini',
       input: 'make a product photo',
       instructions: 'Enhance image prompts',
       max_output_tokens: 1000,

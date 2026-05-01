@@ -3,6 +3,11 @@
  */
 
 import OpenAI, { toFile } from 'openai'
+import type {
+  ImageEditParamsNonStreaming,
+  ImageGenerateParamsNonStreaming,
+  ImagesResponse,
+} from 'openai/resources/images'
 import type { ImageQuality } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
@@ -25,16 +30,9 @@ type OpenAIImageQuality = 'low' | 'medium' | 'high'
 type OpenAIOutputFormat = 'png'
 // The OpenAI guide documents flexible gpt-image-2 resolutions, while SDK types still
 // enumerate the older fixed GPT image sizes. Keep the request cast local to this file.
-type OpenAIImageGenerateRequest = Parameters<OpenAI['images']['generate']>[0]
-type OpenAIImageEditRequest = Parameters<OpenAI['images']['edit']>[0]
-
-interface OpenAIImageResponse {
-  data?: Array<{
-    b64_json?: string
-    revised_prompt?: string
-    url?: string
-  }>
-}
+type OpenAIImageGenerateRequest = ImageGenerateParamsNonStreaming
+type OpenAIImageEditRequest = ImageEditParamsNonStreaming
+type ImageEditApiParams = ImageApiParams & { inputImage: string }
 
 interface ErrorWithCode extends Error {
   code?: string
@@ -128,6 +126,10 @@ function supportsFlexibleGPTImageSizes(modelName: string): boolean {
   return modelName === 'gpt-image-2' || modelName.startsWith('gpt-image-2-')
 }
 
+function hasInputImage(params: ImageApiParams): params is ImageEditApiParams {
+  return typeof params.inputImage === 'string' && params.inputImage.length > 0
+}
+
 function validateOpenAIOptions(
   params: ImageApiParams,
   modelName: string
@@ -174,7 +176,7 @@ class OpenAIImageClientImpl implements ImageClient {
       const quality = mapQuality(params.quality ?? this.defaultQuality)
       const size = mapSize(params)
 
-      const response = params.inputImage
+      const response = hasInputImage(params)
         ? await this.editImage(params, quality, size)
         : await this.createImage(params, quality, size)
 
@@ -212,7 +214,7 @@ class OpenAIImageClientImpl implements ImageClient {
     params: ImageApiParams,
     quality: OpenAIImageQuality,
     size: OpenAIImageSize
-  ): Promise<OpenAIImageResponse> {
+  ): Promise<ImagesResponse> {
     const request = {
       model: this.modelName,
       prompt: params.prompt,
@@ -222,19 +224,17 @@ class OpenAIImageClientImpl implements ImageClient {
       size,
     }
 
-    return (await this.client.images.generate(
-      request as unknown as OpenAIImageGenerateRequest
-    )) as OpenAIImageResponse
+    return await this.client.images.generate(request as unknown as OpenAIImageGenerateRequest)
   }
 
   private async editImage(
-    params: ImageApiParams,
+    params: ImageEditApiParams,
     quality: OpenAIImageQuality,
     size: OpenAIImageSize
-  ): Promise<OpenAIImageResponse> {
+  ): Promise<ImagesResponse> {
     const mimeType = normalizeMimeType(params.inputImageMimeType ?? DEFAULT_MIME_TYPE)
     const inputFile = await toFile(
-      Buffer.from(params.inputImage ?? '', 'base64'),
+      Buffer.from(params.inputImage, 'base64'),
       `input.${mimeTypeToExtension(mimeType)}`,
       { type: mimeType }
     )
@@ -249,9 +249,7 @@ class OpenAIImageClientImpl implements ImageClient {
       size,
     }
 
-    return (await this.client.images.edit(
-      request as unknown as OpenAIImageEditRequest
-    )) as OpenAIImageResponse
+    return await this.client.images.edit(request as unknown as OpenAIImageEditRequest)
   }
 
   private handleError(error: unknown, prompt: string): Result<never, ImageAPIError | NetworkError> {

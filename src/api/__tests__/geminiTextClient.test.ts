@@ -60,7 +60,7 @@ describe('GeminiTextClient', () => {
       geminiApiKey: 'test-api-key',
       openaiApiKey: '',
       openaiImageModel: 'gpt-image-2',
-      openaiTextModel: 'gpt-5.2',
+      openaiTextModel: 'gpt-5-mini',
       imageOutputDir: './test-output',
       apiTimeout: 30000,
       skipPromptEnhancement: false,
