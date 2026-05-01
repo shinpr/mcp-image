@@ -126,6 +126,35 @@ describe('openaiTextClient', () => {
     }
   })
 
+  it('should reject prompts that exceed the 100k character cap', async () => {
+    const clientResult = createOpenAITextClient(testConfig)
+    expect(clientResult.success).toBe(true)
+    if (!clientResult.success) return
+
+    const overLimitPrompt = 'a'.repeat(100_001)
+    const result = await clientResult.data.generateText(overLimitPrompt)
+
+    expect(result.success).toBe(false)
+    expect(mockResponsesCreate).not.toHaveBeenCalled()
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(ImageAPIError)
+      expect(result.error.message).toContain('Prompt too long')
+    }
+  })
+
+  it('should accept prompts at the 100k character cap', async () => {
+    mockResponsesCreate.mockResolvedValue({ output_text: 'ok' })
+
+    const clientResult = createOpenAITextClient(testConfig)
+    expect(clientResult.success).toBe(true)
+    if (!clientResult.success) return
+
+    const atLimitPrompt = 'a'.repeat(100_000)
+    const result = await clientResult.data.generateText(atLimitPrompt)
+
+    expect(result.success).toBe(true)
+  })
+
   it('should return NetworkError for network failures', async () => {
     const networkError = new Error('ECONNRESET') as Error & { code: string }
     networkError.code = 'ECONNRESET'
