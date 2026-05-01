@@ -14,6 +14,7 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
 type OpenAIImageSize =
@@ -33,11 +34,6 @@ type OpenAIOutputFormat = 'png'
 type OpenAIImageGenerateRequest = ImageGenerateParamsNonStreaming
 type OpenAIImageEditRequest = ImageEditParamsNonStreaming
 type ImageEditApiParams = ImageApiParams & { inputImage: string }
-
-interface ErrorWithCode extends Error {
-  code?: string
-  status?: number
-}
 
 function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   switch (quality) {
@@ -110,16 +106,6 @@ function mimeTypeToExtension(mimeType: string): string {
     default:
       return 'png'
   }
-}
-
-function isNetworkError(error: unknown): boolean {
-  if (error instanceof Error) {
-    const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-    return networkErrorCodes.some(
-      (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-    )
-  }
-  return false
 }
 
 function supportsFlexibleGPTImageSizes(modelName: string): boolean {
@@ -269,7 +255,7 @@ class OpenAIImageClientImpl implements ImageClient {
       new ImageAPIError(
         `Failed to generate image with OpenAI for prompt "${prompt}": ${errorMessage}`,
         this.getAPIErrorSuggestion(errorMessage),
-        this.extractStatusCode(error)
+        extractStatusCode(error)
       )
     )
   }
@@ -294,13 +280,6 @@ class OpenAIImageClientImpl implements ImageClient {
     }
 
     return 'Check OpenAI API configuration and try again'
-  }
-
-  private extractStatusCode(error: unknown): number | undefined {
-    if (error && typeof error === 'object' && 'status' in error) {
-      return typeof error.status === 'number' ? error.status : undefined
-    }
-    return undefined
   }
 }
 

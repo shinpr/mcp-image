@@ -10,6 +10,7 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE } from '../utils/mimeUtils.js'
+import { isNetworkError } from './errorClassification.js'
 import type { GenerationConfig, TextClient } from './textClient.js'
 
 /**
@@ -212,7 +213,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
     // Check for network errors
-    if (this.isNetworkError(error)) {
+    if (isNetworkError(error)) {
       return Err(
         new NetworkError(
           `Network error during ${context}: ${errorMessage}`,
@@ -238,16 +239,6 @@ class GeminiTextClientImpl implements GeminiTextClient {
         'Check your API configuration and try again'
       )
     )
-  }
-
-  private isNetworkError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-      return networkErrorCodes.some(
-        (code) => error.message.includes(code) || (error as { code?: string }).code === code
-      )
-    }
-    return false
   }
 
   private isAPIError(error: unknown): boolean {

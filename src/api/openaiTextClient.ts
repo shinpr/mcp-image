@@ -8,12 +8,8 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GenerationConfig, TextClient } from './textClient.js'
-
-interface ErrorWithCode extends Error {
-  code?: string
-  status?: number
-}
 
 interface OpenAITextResponse {
   output_text?: string
@@ -23,16 +19,6 @@ interface OpenAITextResponse {
       text?: string
     }>
   }>
-}
-
-function isNetworkError(error: unknown): boolean {
-  if (error instanceof Error) {
-    const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-    return networkErrorCodes.some(
-      (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-    )
-  }
-  return false
 }
 
 class OpenAITextClientImpl implements TextClient {
@@ -159,7 +145,7 @@ class OpenAITextClientImpl implements TextClient {
       new ImageAPIError(
         `Failed during OpenAI ${context}: ${errorMessage}`,
         this.getAPIErrorSuggestion(errorMessage),
-        this.extractStatusCode(error)
+        extractStatusCode(error)
       )
     )
   }
@@ -180,13 +166,6 @@ class OpenAITextClientImpl implements TextClient {
     }
 
     return 'Check OpenAI API configuration and try again'
-  }
-
-  private extractStatusCode(error: unknown): number | undefined {
-    if (error && typeof error === 'object' && 'status' in error) {
-      return typeof error.status === 'number' ? error.status : undefined
-    }
-    return undefined
   }
 
   private validatePromptInput(prompt: string): Result<true, ImageAPIError> {

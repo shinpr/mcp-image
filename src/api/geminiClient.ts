@@ -12,6 +12,7 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type {
   GeneratedImageResult,
   ImageApiParams,
@@ -129,10 +130,6 @@ function isGeminiResponse(obj: unknown): obj is GeminiResponse {
 
   // Check direct candidates property (direct response)
   return 'candidates' in response && Array.isArray(response['candidates'])
-}
-
-interface ErrorWithCode extends Error {
-  code?: string
 }
 
 /**
@@ -414,7 +411,7 @@ class GeminiClientImpl implements GeminiClient {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
     // Check if it's a network error
-    if (this.isNetworkError(error)) {
+    if (isNetworkError(error)) {
       return Err(
         new NetworkError(
           `Network error during image generation: ${errorMessage}`,
@@ -430,7 +427,7 @@ class GeminiClientImpl implements GeminiClient {
         new GeminiAPIError(
           `Failed to generate image: ${errorMessage}`,
           this.getAPIErrorSuggestion(errorMessage),
-          this.extractStatusCode(error)
+          extractStatusCode(error)
         )
       )
     }
@@ -442,16 +439,6 @@ class GeminiClientImpl implements GeminiClient {
         'Check your API key, quota, and prompt validity. Try again with a different prompt'
       )
     )
-  }
-
-  private isNetworkError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-      return networkErrorCodes.some(
-        (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-      )
-    }
-    return false
   }
 
   private isAPIError(error: unknown): boolean {
@@ -478,13 +465,6 @@ class GeminiClientImpl implements GeminiClient {
     }
 
     return 'Check your API configuration and try again'
-  }
-
-  private extractStatusCode(error: unknown): number | undefined {
-    if (error && typeof error === 'object' && 'status' in error) {
-      return typeof error.status === 'number' ? error.status : undefined
-    }
-    return undefined
   }
 }
 
