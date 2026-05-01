@@ -244,7 +244,7 @@ class OpenAIImageClientImpl implements ImageClient {
     if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during OpenAI image generation: ${errorMessage}`,
+          'Network error during OpenAI image generation',
           'Check your internet connection and try again',
           error instanceof Error ? error : undefined
         )
@@ -253,8 +253,13 @@ class OpenAIImageClientImpl implements ImageClient {
 
     return Err(
       new ImageAPIError(
-        `Failed to generate image with OpenAI for prompt "${prompt}": ${errorMessage}`,
-        this.getAPIErrorSuggestion(errorMessage),
+        'Failed to generate image with OpenAI',
+        {
+          provider: 'openai',
+          prompt,
+          upstreamMessage: errorMessage,
+          suggestion: this.getAPIErrorSuggestion(errorMessage),
+        },
         extractStatusCode(error)
       )
     )

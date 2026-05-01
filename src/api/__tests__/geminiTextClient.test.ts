@@ -132,7 +132,8 @@ describe('GeminiTextClient', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error).toBeInstanceOf(GeminiAPIError)
-        expect(result.error.message.toLowerCase()).toContain('rate limit')
+        const upstream = String(result.error.context?.upstreamMessage ?? '').toLowerCase()
+        expect(upstream).toContain('rate limit')
       }
     })
 

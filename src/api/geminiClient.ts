@@ -414,7 +414,7 @@ class GeminiClientImpl implements GeminiClient {
     if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during image generation: ${errorMessage}`,
+          'Network error during Gemini image generation',
           'Check your internet connection and try again',
           error instanceof Error ? error : undefined
         )
@@ -425,8 +425,13 @@ class GeminiClientImpl implements GeminiClient {
     if (this.isAPIError(error)) {
       return Err(
         new GeminiAPIError(
-          `Failed to generate image: ${errorMessage}`,
-          this.getAPIErrorSuggestion(errorMessage),
+          'Failed to generate image with Gemini',
+          {
+            provider: 'gemini',
+            prompt,
+            upstreamMessage: errorMessage,
+            suggestion: this.getAPIErrorSuggestion(errorMessage),
+          },
           extractStatusCode(error)
         )
       )
@@ -434,10 +439,12 @@ class GeminiClientImpl implements GeminiClient {
 
     // Generic API error
     return Err(
-      new GeminiAPIError(
-        `Failed to generate image with prompt "${prompt}": ${errorMessage}`,
-        'Check your API key, quota, and prompt validity. Try again with a different prompt'
-      )
+      new GeminiAPIError('Failed to generate image with Gemini', {
+        provider: 'gemini',
+        prompt,
+        upstreamMessage: errorMessage,
+        suggestion: 'Check your API key, quota, and prompt validity. Try again with a different prompt',
+      })
     )
   }
 

@@ -131,7 +131,7 @@ class OpenAITextClientImpl implements TextClient {
     if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during OpenAI ${context}: ${errorMessage}`,
+          `Network error during OpenAI ${context}`,
           'Check your internet connection and try again'
         )
       )
@@ -139,8 +139,13 @@ class OpenAITextClientImpl implements TextClient {
 
     return Err(
       new ImageAPIError(
-        `Failed during OpenAI ${context}: ${errorMessage}`,
-        this.getAPIErrorSuggestion(errorMessage),
+        `Failed during OpenAI ${context}`,
+        {
+          provider: 'openai',
+          stage: context,
+          upstreamMessage: errorMessage,
+          suggestion: this.getAPIErrorSuggestion(errorMessage),
+        },
         extractStatusCode(error)
       )
     )

@@ -180,8 +180,8 @@ describe('geminiClient', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error).toBeInstanceOf(GeminiAPIError)
-        expect(result.error.message).toContain('Failed to generate image')
-        expect(result.error.message).toContain('API quota exceeded')
+        expect(result.error.message).toBe('Failed to generate image with Gemini')
+        expect(result.error.context?.upstreamMessage).toContain('API quota exceeded')
       }
     })
 

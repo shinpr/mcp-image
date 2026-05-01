@@ -211,7 +211,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
     if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during ${context}: ${errorMessage}`,
+          `Network error during Gemini ${context}`,
           'Check your internet connection and try again'
         )
       )
@@ -220,19 +220,23 @@ class GeminiTextClientImpl implements GeminiTextClient {
     // Check for API errors
     if (this.isAPIError(error)) {
       return Err(
-        new GeminiAPIError(
-          `Failed during ${context}: ${errorMessage}`,
-          this.getAPIErrorSuggestion(errorMessage)
-        )
+        new GeminiAPIError(`Failed during Gemini ${context}`, {
+          provider: 'gemini',
+          stage: context,
+          upstreamMessage: errorMessage,
+          suggestion: this.getAPIErrorSuggestion(errorMessage),
+        })
       )
     }
 
     // Generic error
     return Err(
-      new GeminiAPIError(
-        `Failed during ${context}: ${errorMessage}`,
-        'Check your API configuration and try again'
-      )
+      new GeminiAPIError(`Failed during Gemini ${context}`, {
+        provider: 'gemini',
+        stage: context,
+        upstreamMessage: errorMessage,
+        suggestion: 'Check your API configuration and try again',
+      })
     )
   }
 

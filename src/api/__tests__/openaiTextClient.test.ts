@@ -122,7 +122,7 @@ describe('openaiTextClient', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error).toBeInstanceOf(ImageAPIError)
-      expect(result.error.message).toContain('Empty response')
+      expect(result.error.context?.upstreamMessage).toContain('Empty response')
     }
   })
 
