@@ -49,6 +49,7 @@ interface GeminiAIInstance {
         thinkingConfig?: {
           thinkingBudget: number
         }
+        abortSignal?: AbortSignal
       }
     }): Promise<{
       text: string
@@ -107,11 +108,6 @@ class GeminiTextClientImpl implements GeminiTextClient {
    */
   private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
-      // Generate content with timeout
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('API call timeout')), config.timeout || 15000)
-      })
-
       // Build contents based on whether input image is provided (multimodal support)
       let contents:
         | string
@@ -142,8 +138,8 @@ class GeminiTextClientImpl implements GeminiTextClient {
         contents = prompt
       }
 
-      // Call Gemini API
-      const apiCall = this.genai.models.generateContent({
+      // Call Gemini API with timeout via AbortSignal
+      const response = await this.genai.models.generateContent({
         model: this.modelName,
         contents,
         config: {
@@ -157,10 +153,9 @@ class GeminiTextClientImpl implements GeminiTextClient {
           thinkingConfig: {
             thinkingBudget: 0,
           },
+          abortSignal: AbortSignal.timeout(config.timeout || 15000),
         },
       })
-
-      const response = await Promise.race([apiCall, timeoutPromise])
 
       // Extract text from response - handling both possible response structures
       let responseText: string

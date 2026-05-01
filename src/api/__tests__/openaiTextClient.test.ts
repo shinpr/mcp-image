@@ -58,13 +58,16 @@ describe('openaiTextClient', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(mockResponsesCreate).toHaveBeenCalledWith({
-      model: 'gpt-5-mini',
-      input: 'make a product photo',
-      instructions: 'Enhance image prompts',
-      max_output_tokens: 1000,
-      temperature: 0.2,
-    })
+    expect(mockResponsesCreate).toHaveBeenCalledWith(
+      {
+        model: 'gpt-5-mini',
+        input: 'make a product photo',
+        instructions: 'Enhance image prompts',
+        max_output_tokens: 1000,
+        temperature: 0.2,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     if (result.success) {
       expect(result.data).toBe('Enhanced prompt with precise lighting and composition')
     }
@@ -102,7 +105,8 @@ describe('openaiTextClient', () => {
             ],
           },
         ],
-      })
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
   })
 

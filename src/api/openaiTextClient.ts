@@ -44,20 +44,16 @@ class OpenAITextClientImpl implements TextClient {
     const timeout = config.timeout ?? 15000
 
     try {
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('API call timeout')), timeout)
-      })
-
-      const response = (await Promise.race([
-        this.client.responses.create({
+      const response = (await this.client.responses.create(
+        {
           model: this.modelName,
           input: this.buildInput(prompt, config),
           ...(config.systemInstruction && { instructions: config.systemInstruction }),
           max_output_tokens: config.maxTokens ?? 8192,
           temperature: config.temperature ?? 0.7,
-        }),
-        timeoutPromise,
-      ])) as OpenAITextResponse
+        },
+        { signal: AbortSignal.timeout(timeout) }
+      )) as OpenAITextResponse
 
       const responseText = this.extractResponseText(response)
       if (!responseText || responseText.trim().length === 0) {
