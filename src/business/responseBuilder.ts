@@ -108,7 +108,7 @@ function convertErrorToStructured(error: BaseError | Error): {
     return {
       ...baseError,
       code: error.code,
-      message: error.message,
+      message: sanitizeText(error.message),
       suggestion: error.suggestion,
       ...(details && { details }),
     }

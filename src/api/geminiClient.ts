@@ -237,11 +237,14 @@ class GeminiClientImpl implements GeminiClient {
         if (asRecord['error']) {
           const error = asRecord['error'] as Record<string, unknown>
           return Err(
-            new GeminiAPIError(`Gemini API Error: ${error['message'] || 'Unknown error'}`, {
-              code: error['code'],
-              status: error['status'],
-              details: error['details'] || responseStructure,
+            new GeminiAPIError('Gemini API returned an error response', {
+              provider: 'gemini',
               stage: 'api_error',
+              upstreamMessage:
+                typeof error['message'] === 'string' ? error['message'] : 'Unknown error',
+              statusCode: typeof error['status'] === 'number' ? error['status'] : undefined,
+              rawErrorCode: error['code'],
+              rawDetails: error['details'] || responseStructure,
             })
           )
         }
