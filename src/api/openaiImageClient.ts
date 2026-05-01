@@ -108,18 +108,13 @@ function mimeTypeToExtension(mimeType: string): string {
   }
 }
 
-function supportsFlexibleGPTImageSizes(modelName: string): boolean {
-  return modelName === 'gpt-image-2' || modelName.startsWith('gpt-image-2-')
-}
+const OPENAI_IMAGE_MODEL = 'gpt-image-2'
 
 function hasInputImage(params: ImageApiParams): params is ImageEditApiParams {
   return typeof params.inputImage === 'string' && params.inputImage.length > 0
 }
 
-function validateOpenAIOptions(
-  params: ImageApiParams,
-  modelName: string
-): Result<true, ImageAPIError> {
+function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIError> {
   if (params.useGoogleSearch) {
     return Err(
       new ImageAPIError(
@@ -129,24 +124,15 @@ function validateOpenAIOptions(
     )
   }
 
-  if (params.imageSize && !supportsFlexibleGPTImageSizes(modelName)) {
-    return Err(
-      new ImageAPIError(
-        `imageSize requires gpt-image-2 when using the OpenAI image provider; current model is ${modelName}`,
-        'Remove imageSize, set OPENAI_IMAGE_MODEL=gpt-image-2, or use IMAGE_PROVIDER=gemini for Gemini size presets.'
-      )
-    )
-  }
-
   return Ok(true)
 }
 
 class OpenAIImageClientImpl implements ImageClient {
   private readonly outputFormat: OpenAIOutputFormat = 'png'
+  private readonly modelName = OPENAI_IMAGE_MODEL
 
   constructor(
     private readonly client: OpenAI,
-    private readonly modelName: string,
     private readonly defaultQuality: ImageQuality = 'fast'
   ) {}
 
@@ -154,7 +140,7 @@ class OpenAIImageClientImpl implements ImageClient {
     params: ImageApiParams
   ): Promise<Result<GeneratedImageResult, ImageAPIError | NetworkError>> {
     try {
-      const optionsResult = validateOpenAIOptions(params, this.modelName)
+      const optionsResult = validateOpenAIOptions(params)
       if (!optionsResult.success) {
         return optionsResult
       }
@@ -277,7 +263,7 @@ class OpenAIImageClientImpl implements ImageClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Check OPENAI_IMAGE_MODEL. Use gpt-image-2, or another model available to your account'
+      return 'Verify your OpenAI organization has been verified to use gpt-image-2 (https://platform.openai.com/settings/organization/general)'
     }
 
     if (lowerMessage.includes('forbidden') || lowerMessage.includes('permission')) {
@@ -296,7 +282,7 @@ export function createOpenAIImageClient(config: Config): Result<ImageClient, Ima
     const client = new OpenAI({
       apiKey: config.openaiApiKey,
     })
-    return Ok(new OpenAIImageClientImpl(client, config.openaiImageModel, config.imageQuality))
+    return Ok(new OpenAIImageClientImpl(client, config.imageQuality))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Err(

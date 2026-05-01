@@ -16,8 +16,6 @@ export interface Config {
   imageProvider: ImageProvider
   geminiApiKey: string
   openaiApiKey: string
-  openaiImageModel: string
-  openaiTextModel: string
   imageOutputDir: string
   apiTimeout: number
   skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
@@ -31,8 +29,6 @@ const DEFAULT_CONFIG = {
   imageProvider: 'gemini',
   imageOutputDir: './output',
   apiTimeout: 30000, // 30 seconds
-  openaiImageModel: 'gpt-image-2',
-  openaiTextModel: 'gpt-5-mini',
 } as const
 
 function readEnv(name: string): string | undefined {
@@ -103,31 +99,6 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
-  if (
-    config.imageProvider === 'openai' &&
-    (!config.openaiImageModel || config.openaiImageModel.trim().length === 0)
-  ) {
-    return Err(
-      new ConfigError(
-        'OPENAI_IMAGE_MODEL cannot be empty',
-        'Set OPENAI_IMAGE_MODEL to a valid OpenAI image model such as gpt-image-2'
-      )
-    )
-  }
-
-  if (
-    config.imageProvider === 'openai' &&
-    !config.skipPromptEnhancement &&
-    (!config.openaiTextModel || config.openaiTextModel.trim().length === 0)
-  ) {
-    return Err(
-      new ConfigError(
-        'OPENAI_TEXT_MODEL cannot be empty when prompt enhancement is enabled',
-        'Set OPENAI_TEXT_MODEL to a valid OpenAI text model, or set SKIP_PROMPT_ENHANCEMENT=true'
-      )
-    )
-  }
-
   // Validate apiTimeout
   if (config.apiTimeout <= 0) {
     return Err(
@@ -170,8 +141,6 @@ export function getConfig(): Result<Config, ConfigError> {
     imageProvider: (readEnv('IMAGE_PROVIDER') || DEFAULT_CONFIG.imageProvider) as ImageProvider,
     geminiApiKey: readEnv('GEMINI_API_KEY') || '',
     openaiApiKey: readEnv('OPENAI_API_KEY') || '',
-    openaiImageModel: readEnv('OPENAI_IMAGE_MODEL') || DEFAULT_CONFIG.openaiImageModel,
-    openaiTextModel: readEnv('OPENAI_TEXT_MODEL') || DEFAULT_CONFIG.openaiTextModel,
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',

@@ -29,8 +29,6 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: '',
         openaiApiKey: '',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -55,8 +53,6 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'short',
         openaiApiKey: '',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -80,8 +76,6 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: -1000, // Invalid negative timeout
         skipPromptEnhancement: false,
@@ -109,8 +103,6 @@ describe('config', () => {
           imageProvider: 'gemini' as const,
           geminiApiKey: 'valid-api-key-12345',
           openaiApiKey: '',
-          openaiImageModel: 'gpt-image-2',
-          openaiTextModel: 'gpt-5-mini',
           imageOutputDir: './output',
           apiTimeout: 30000,
           skipPromptEnhancement: false,
@@ -131,8 +123,6 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -159,8 +149,6 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -183,8 +171,6 @@ describe('config', () => {
         imageProvider: 'openai' as const,
         geminiApiKey: '',
         openaiApiKey: 'test-openai-api-key-12345',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -204,8 +190,6 @@ describe('config', () => {
         imageProvider: 'openai' as const,
         geminiApiKey: '',
         openaiApiKey: '',
-        openaiImageModel: 'gpt-image-2',
-        openaiTextModel: 'gpt-5-mini',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -269,8 +253,6 @@ describe('config', () => {
       if (result.success) {
         expect(result.data.imageProvider).toBe('openai')
         expect(result.data.openaiApiKey).toBe('test-openai-api-key-12345')
-        expect(result.data.openaiImageModel).toBe('gpt-image-2')
-        expect(result.data.openaiTextModel).toBe('gpt-5-mini')
       }
     })
 

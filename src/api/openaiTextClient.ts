@@ -21,15 +21,16 @@ interface OpenAITextResponse {
   }>
 }
 
+const OPENAI_TEXT_MODEL = 'gpt-4o-mini'
+
 class OpenAITextClientImpl implements TextClient {
   private readonly client: OpenAI
-  private readonly modelName: string
+  private readonly modelName = OPENAI_TEXT_MODEL
 
   constructor(config: Config) {
     this.client = new OpenAI({
       apiKey: config.openaiApiKey,
     })
-    this.modelName = config.openaiTextModel
   }
 
   async generateText(
@@ -41,7 +42,7 @@ class OpenAITextClientImpl implements TextClient {
       return validationResult
     }
 
-    const timeout = config.timeout ?? 15000
+    const timeout = config.timeout ?? 30000
 
     try {
       const response = (await this.client.responses.create(
@@ -51,6 +52,7 @@ class OpenAITextClientImpl implements TextClient {
           ...(config.systemInstruction && { instructions: config.systemInstruction }),
           max_output_tokens: config.maxTokens ?? 8192,
           temperature: config.temperature ?? 0.7,
+          top_p: config.topP ?? 0.95,
         },
         { signal: AbortSignal.timeout(timeout) }
       )) as OpenAITextResponse
@@ -163,7 +165,7 @@ class OpenAITextClientImpl implements TextClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Check OPENAI_TEXT_MODEL and ensure the model is available to your account'
+      return 'Ensure gpt-4o-mini is available to your OpenAI account'
     }
 
     return 'Check OpenAI API configuration and try again'

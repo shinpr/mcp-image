@@ -206,7 +206,6 @@ describe('MCP Server', () => {
   let originalApiKey: string | undefined
   let originalImageProvider: string | undefined
   let originalOpenAIApiKey: string | undefined
-  let originalOpenAIImageModel: string | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -214,11 +213,9 @@ describe('MCP Server', () => {
     originalApiKey = process.env.GEMINI_API_KEY
     originalImageProvider = process.env.IMAGE_PROVIDER
     originalOpenAIApiKey = process.env.OPENAI_API_KEY
-    originalOpenAIImageModel = process.env.OPENAI_IMAGE_MODEL
     process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
     process.env.OPENAI_API_KEY = undefined
-    process.env.OPENAI_IMAGE_MODEL = undefined
     process.env.IMAGE_OUTPUT_DIR = './test-output'
   })
 
@@ -231,7 +228,6 @@ describe('MCP Server', () => {
     }
     process.env.IMAGE_PROVIDER = originalImageProvider
     process.env.OPENAI_API_KEY = originalOpenAIApiKey
-    process.env.OPENAI_IMAGE_MODEL = originalOpenAIImageModel
   })
   it('should create MCP server instance', async () => {
     // Arrange & Act
@@ -455,7 +451,6 @@ describe('MCP Server', () => {
     process.env.IMAGE_PROVIDER = 'openai'
     process.env.GEMINI_API_KEY = undefined
     process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
-    process.env.OPENAI_IMAGE_MODEL = 'gpt-image-2'
     const mcpServer = createMCPServer()
 
     // Act
@@ -476,7 +471,6 @@ describe('MCP Server', () => {
       expect.objectContaining({
         imageProvider: 'openai',
         openaiApiKey: 'test-openai-api-key-unit-tests',
-        openaiImageModel: 'gpt-image-2',
       })
     )
     expect(createOpenAITextClient).toHaveBeenCalled()

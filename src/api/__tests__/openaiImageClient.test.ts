@@ -27,8 +27,6 @@ describe('openaiImageClient', () => {
     imageProvider: 'openai',
     geminiApiKey: '',
     openaiApiKey: 'test-openai-api-key-12345',
-    openaiImageModel: 'gpt-image-2',
-    openaiTextModel: 'gpt-5-mini',
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,
@@ -303,28 +301,6 @@ describe('openaiImageClient', () => {
           size: '2160x3840',
         })
       )
-    })
-
-    it('should reject imageSize for non-GPT Image 2 OpenAI models', async () => {
-      const clientResult = createOpenAIImageClient({
-        ...testConfig,
-        openaiImageModel: 'gpt-image-1.5',
-      })
-      expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
-
-      const result = await clientResult.data.generateImage({
-        prompt: 'Generate a 4K product photo',
-        imageSize: '4K',
-      })
-
-      expect(result.success).toBe(false)
-      expect(mockGenerate).not.toHaveBeenCalled()
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(ImageAPIError)
-        expect(result.error.message).toContain('imageSize')
-        expect(result.error.message).toContain('gpt-image-2')
-      }
     })
 
     it('should return ImageAPIError when response has no base64 image data', async () => {

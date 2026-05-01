@@ -35,24 +35,10 @@
         },
         {
           "name": "OPENAI_API_KEY",
-          "description": "OpenAI API key for image generation when IMAGE_PROVIDER=openai",
+          "description": "OpenAI API key for image generation when IMAGE_PROVIDER=openai. Requires OpenAI organization verification to access gpt-image-2 (https://platform.openai.com/settings/organization/general)",
           "isRequired": false,
           "format": "string",
           "isSecret": true
-        },
-        {
-          "name": "OPENAI_IMAGE_MODEL",
-          "description": "OpenAI image model to use when IMAGE_PROVIDER=openai (defaults to gpt-image-2)",
-          "isRequired": false,
-          "format": "string",
-          "isSecret": false
-        },
-        {
-          "name": "OPENAI_TEXT_MODEL",
-          "description": "OpenAI text model used for prompt enhancement when IMAGE_PROVIDER=openai (defaults to gpt-5-mini)",
-          "isRequired": false,
-          "format": "string",
-          "isSecret": false
         },
         {
           "name": "IMAGE_OUTPUT_DIR",
