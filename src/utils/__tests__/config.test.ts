@@ -11,8 +11,6 @@ describe('config', () => {
     process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = undefined
     process.env.OPENAI_API_KEY = undefined
-    process.env.OPENAI_IMAGE_MODEL = undefined
-    process.env.OPENAI_TEXT_MODEL = undefined
     process.env.IMAGE_OUTPUT_DIR = undefined
     process.env.IMAGE_QUALITY = undefined
   })
