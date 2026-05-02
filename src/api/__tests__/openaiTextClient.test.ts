@@ -23,8 +23,6 @@ describe('openaiTextClient', () => {
     imageProvider: 'openai',
     geminiApiKey: '',
     openaiApiKey: 'test-openai-api-key-12345',
-    openaiImageModel: 'gpt-image-2',
-    openaiTextModel: 'gpt-5-mini',
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,
@@ -58,13 +56,17 @@ describe('openaiTextClient', () => {
     })
 
     expect(result.success).toBe(true)
-    expect(mockResponsesCreate).toHaveBeenCalledWith({
-      model: 'gpt-5-mini',
-      input: 'make a product photo',
-      instructions: 'Enhance image prompts',
-      max_output_tokens: 1000,
-      temperature: 0.2,
-    })
+    expect(mockResponsesCreate).toHaveBeenCalledWith(
+      {
+        model: 'gpt-4o-mini',
+        input: 'make a product photo',
+        instructions: 'Enhance image prompts',
+        max_output_tokens: 1000,
+        temperature: 0.2,
+        top_p: 0.95,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     if (result.success) {
       expect(result.data).toBe('Enhanced prompt with precise lighting and composition')
     }
@@ -102,7 +104,8 @@ describe('openaiTextClient', () => {
             ],
           },
         ],
-      })
+      }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
   })
 
@@ -118,8 +121,37 @@ describe('openaiTextClient', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error).toBeInstanceOf(ImageAPIError)
-      expect(result.error.message).toContain('Empty response')
+      expect(result.error.context?.upstreamMessage).toContain('Empty response')
     }
+  })
+
+  it('should reject prompts that exceed the 100k character cap', async () => {
+    const clientResult = createOpenAITextClient(testConfig)
+    expect(clientResult.success).toBe(true)
+    if (!clientResult.success) return
+
+    const overLimitPrompt = 'a'.repeat(100_001)
+    const result = await clientResult.data.generateText(overLimitPrompt)
+
+    expect(result.success).toBe(false)
+    expect(mockResponsesCreate).not.toHaveBeenCalled()
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(ImageAPIError)
+      expect(result.error.message).toContain('Prompt too long')
+    }
+  })
+
+  it('should accept prompts at the 100k character cap', async () => {
+    mockResponsesCreate.mockResolvedValue({ output_text: 'ok' })
+
+    const clientResult = createOpenAITextClient(testConfig)
+    expect(clientResult.success).toBe(true)
+    if (!clientResult.success) return
+
+    const atLimitPrompt = 'a'.repeat(100_000)
+    const result = await clientResult.data.generateText(atLimitPrompt)
+
+    expect(result.success).toBe(true)
   })
 
   it('should return NetworkError for network failures', async () => {

@@ -27,8 +27,6 @@ describe('geminiClient', () => {
     imageProvider: 'gemini',
     geminiApiKey: 'test-api-key-12345',
     openaiApiKey: '',
-    openaiImageModel: 'gpt-image-2',
-    openaiTextModel: 'gpt-5-mini',
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,
@@ -180,8 +178,8 @@ describe('geminiClient', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error).toBeInstanceOf(GeminiAPIError)
-        expect(result.error.message).toContain('Failed to generate image')
-        expect(result.error.message).toContain('API quota exceeded')
+        expect(result.error.message).toBe('Failed to generate image with Gemini')
+        expect(result.error.context?.upstreamMessage).toContain('API quota exceeded')
       }
     })
 

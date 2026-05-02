@@ -108,10 +108,9 @@ To use OpenAI instead, get an OpenAI API key and set:
 ```bash
 IMAGE_PROVIDER=openai
 OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_IMAGE_MODEL=gpt-image-2
 ```
 
-OpenAI mode does not require `GEMINI_API_KEY`. Prompt enhancement also runs through OpenAI by default, using `OPENAI_TEXT_MODEL` (defaults to `gpt-5-mini`). Set `SKIP_PROMPT_ENHANCEMENT=true` if you want prompts sent directly to the image model.
+OpenAI mode requires organization verification — see [Using the OpenAI provider](#using-the-openai-provider) below for setup details and feature differences.
 
 ### 2. MCP Configuration
 
@@ -139,7 +138,6 @@ args = ["/absolute/path/to/mcp-image/dist/index.js"]
 [mcp_servers.mcp-image.env]
 IMAGE_PROVIDER = "openai"
 OPENAI_API_KEY = "your_openai_api_key_here"
-OPENAI_IMAGE_MODEL = "gpt-image-2"
 IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
 ```
 
@@ -175,7 +173,6 @@ For OpenAI GPT Image from a local fork:
       "env": {
         "IMAGE_PROVIDER": "openai",
         "OPENAI_API_KEY": "your_openai_api_key_here",
-        "OPENAI_IMAGE_MODEL": "gpt-image-2",
         "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
       }
     }
@@ -206,7 +203,6 @@ npm run build
 claude mcp add mcp-image --scope user \
   --env IMAGE_PROVIDER=openai \
   --env OPENAI_API_KEY=your-openai-api-key \
-  --env OPENAI_IMAGE_MODEL=gpt-image-2 \
   --env IMAGE_OUTPUT_DIR=/absolute/path/to/images \
   -- node /absolute/path/to/mcp-image/dist/index.js
 ```
@@ -264,14 +260,22 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 | `IMAGE_PROVIDER` | `gemini` | `gemini` or `openai` |
 | `GEMINI_API_KEY` | - | Required when `IMAGE_PROVIDER=gemini` |
 | `OPENAI_API_KEY` | - | Required when `IMAGE_PROVIDER=openai` |
-| `OPENAI_IMAGE_MODEL` | `gpt-image-2` | OpenAI image model to use |
-| `OPENAI_TEXT_MODEL` | `gpt-5-mini` | OpenAI text model used for prompt enhancement |
 
-OpenAI provider notes:
-- `quality` maps to OpenAI image quality as `fast -> low`, `balanced -> medium`, `quality -> high`.
-- `aspectRatio` maps to the closest supported GPT Image size: square, landscape, or portrait.
-- `imageSize` maps to valid `gpt-image-2` dimensions, including 2K/4K outputs. OpenAI 2K+ outputs are experimental and can be slower/more expensive.
-- `useGoogleSearch` is Gemini-specific and is rejected in OpenAI mode because Google Search grounding is not available through the OpenAI image provider.
+### Using the OpenAI provider
+
+Set `IMAGE_PROVIDER=openai` to use OpenAI for both prompt enhancement and image generation. mcp-image currently uses `gpt-4o-mini` for prompt enhancement and `gpt-image-2` for image generation. These model choices are fixed by the server and are not configurable through environment variables.
+
+OpenAI may require organization verification before allowing access to `gpt-image-2`. If image generation fails with a 403 permission or verification error, check your organization settings: https://platform.openai.com/settings/organization/general
+
+OpenAI provider behavior:
+
+- Supports text-to-image and image-to-image generation.
+- Supports `aspectRatio`, mapped to the closest supported OpenAI image size.
+- Supports `imageSize` values `1K`, `2K`, and `4K`.
+- Maps `quality` as `fast -> low`, `balanced -> medium`, and `quality -> high`.
+- Does not support `useGoogleSearch`; that option is only available with the Gemini provider.
+
+Prompt enhancement uses a separate OpenAI Responses API call. Set `SKIP_PROMPT_ENHANCEMENT=true` to send prompts directly to the image model.
 
 ## Usage Examples
 
@@ -317,8 +321,8 @@ Your prompt is automatically enhanced with rich details about lighting, material
 ### `generate_image` Tool
 
 The server uses a two-stage process with separate models for each stage:
-1. **Prompt Optimization** (Gemini 2.5 Flash by default, or OpenAI Responses in OpenAI mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
-2. **Image Generation** (Nano Banana 2/Pro by default, or `OPENAI_IMAGE_MODEL` in OpenAI mode): Creates the final image. Model varies by quality preset and provider configuration.
+1. **Prompt Optimization** (Gemini 2.5 Flash by default, or `gpt-4o-mini` via OpenAI Responses in OpenAI mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
+2. **Image Generation** (Nano Banana 2/Pro by default, or `gpt-image-2` in OpenAI mode): Creates the final image. In Gemini mode the model varies by quality preset; in OpenAI mode the model is pinned and `quality` maps to OpenAI's `low`/`medium`/`high`.
 
 #### Parameters
 

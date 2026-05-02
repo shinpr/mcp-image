@@ -14,6 +14,7 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
 type OpenAIImageSize =
@@ -33,11 +34,6 @@ type OpenAIOutputFormat = 'png'
 type OpenAIImageGenerateRequest = ImageGenerateParamsNonStreaming
 type OpenAIImageEditRequest = ImageEditParamsNonStreaming
 type ImageEditApiParams = ImageApiParams & { inputImage: string }
-
-interface ErrorWithCode extends Error {
-  code?: string
-  status?: number
-}
 
 function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   switch (quality) {
@@ -112,28 +108,13 @@ function mimeTypeToExtension(mimeType: string): string {
   }
 }
 
-function isNetworkError(error: unknown): boolean {
-  if (error instanceof Error) {
-    const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-    return networkErrorCodes.some(
-      (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-    )
-  }
-  return false
-}
-
-function supportsFlexibleGPTImageSizes(modelName: string): boolean {
-  return modelName === 'gpt-image-2' || modelName.startsWith('gpt-image-2-')
-}
+const OPENAI_IMAGE_MODEL = 'gpt-image-2'
 
 function hasInputImage(params: ImageApiParams): params is ImageEditApiParams {
   return typeof params.inputImage === 'string' && params.inputImage.length > 0
 }
 
-function validateOpenAIOptions(
-  params: ImageApiParams,
-  modelName: string
-): Result<true, ImageAPIError> {
+function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIError> {
   if (params.useGoogleSearch) {
     return Err(
       new ImageAPIError(
@@ -143,24 +124,15 @@ function validateOpenAIOptions(
     )
   }
 
-  if (params.imageSize && !supportsFlexibleGPTImageSizes(modelName)) {
-    return Err(
-      new ImageAPIError(
-        `imageSize requires gpt-image-2 when using the OpenAI image provider; current model is ${modelName}`,
-        'Remove imageSize, set OPENAI_IMAGE_MODEL=gpt-image-2, or use IMAGE_PROVIDER=gemini for Gemini size presets.'
-      )
-    )
-  }
-
   return Ok(true)
 }
 
 class OpenAIImageClientImpl implements ImageClient {
   private readonly outputFormat: OpenAIOutputFormat = 'png'
+  private readonly modelName = OPENAI_IMAGE_MODEL
 
   constructor(
     private readonly client: OpenAI,
-    private readonly modelName: string,
     private readonly defaultQuality: ImageQuality = 'fast'
   ) {}
 
@@ -168,7 +140,7 @@ class OpenAIImageClientImpl implements ImageClient {
     params: ImageApiParams
   ): Promise<Result<GeneratedImageResult, ImageAPIError | NetworkError>> {
     try {
-      const optionsResult = validateOpenAIOptions(params, this.modelName)
+      const optionsResult = validateOpenAIOptions(params)
       if (!optionsResult.success) {
         return optionsResult
       }
@@ -258,7 +230,7 @@ class OpenAIImageClientImpl implements ImageClient {
     if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during OpenAI image generation: ${errorMessage}`,
+          'Network error during OpenAI image generation',
           'Check your internet connection and try again',
           error instanceof Error ? error : undefined
         )
@@ -267,9 +239,14 @@ class OpenAIImageClientImpl implements ImageClient {
 
     return Err(
       new ImageAPIError(
-        `Failed to generate image with OpenAI for prompt "${prompt}": ${errorMessage}`,
-        this.getAPIErrorSuggestion(errorMessage),
-        this.extractStatusCode(error)
+        'Failed to generate image with OpenAI',
+        {
+          provider: 'openai',
+          prompt,
+          upstreamMessage: errorMessage,
+          suggestion: this.getAPIErrorSuggestion(errorMessage),
+        },
+        extractStatusCode(error)
       )
     )
   }
@@ -286,7 +263,7 @@ class OpenAIImageClientImpl implements ImageClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Check OPENAI_IMAGE_MODEL. Use gpt-image-2, or another model available to your account'
+      return 'Verify your OpenAI organization has been verified to use gpt-image-2 (https://platform.openai.com/settings/organization/general)'
     }
 
     if (lowerMessage.includes('forbidden') || lowerMessage.includes('permission')) {
@@ -294,13 +271,6 @@ class OpenAIImageClientImpl implements ImageClient {
     }
 
     return 'Check OpenAI API configuration and try again'
-  }
-
-  private extractStatusCode(error: unknown): number | undefined {
-    if (error && typeof error === 'object' && 'status' in error) {
-      return typeof error.status === 'number' ? error.status : undefined
-    }
-    return undefined
   }
 }
 
@@ -312,7 +282,7 @@ export function createOpenAIImageClient(config: Config): Result<ImageClient, Ima
     const client = new OpenAI({
       apiKey: config.openaiApiKey,
     })
-    return Ok(new OpenAIImageClientImpl(client, config.openaiImageModel, config.imageQuality))
+    return Ok(new OpenAIImageClientImpl(client, config.imageQuality))
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return Err(

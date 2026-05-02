@@ -8,12 +8,8 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GenerationConfig, TextClient } from './textClient.js'
-
-interface ErrorWithCode extends Error {
-  code?: string
-  status?: number
-}
 
 interface OpenAITextResponse {
   output_text?: string
@@ -25,25 +21,16 @@ interface OpenAITextResponse {
   }>
 }
 
-function isNetworkError(error: unknown): boolean {
-  if (error instanceof Error) {
-    const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-    return networkErrorCodes.some(
-      (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-    )
-  }
-  return false
-}
+const OPENAI_TEXT_MODEL = 'gpt-4o-mini'
 
 class OpenAITextClientImpl implements TextClient {
   private readonly client: OpenAI
-  private readonly modelName: string
+  private readonly modelName = OPENAI_TEXT_MODEL
 
   constructor(config: Config) {
     this.client = new OpenAI({
       apiKey: config.openaiApiKey,
     })
-    this.modelName = config.openaiTextModel
   }
 
   async generateText(
@@ -55,23 +42,20 @@ class OpenAITextClientImpl implements TextClient {
       return validationResult
     }
 
-    const timeout = config.timeout ?? 15000
+    const timeout = config.timeout ?? 30000
 
     try {
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('API call timeout')), timeout)
-      })
-
-      const response = (await Promise.race([
-        this.client.responses.create({
+      const response = (await this.client.responses.create(
+        {
           model: this.modelName,
           input: this.buildInput(prompt, config),
           ...(config.systemInstruction && { instructions: config.systemInstruction }),
           max_output_tokens: config.maxTokens ?? 8192,
           temperature: config.temperature ?? 0.7,
-        }),
-        timeoutPromise,
-      ])) as OpenAITextResponse
+          top_p: config.topP ?? 0.95,
+        },
+        { signal: AbortSignal.timeout(timeout) }
+      )) as OpenAITextResponse
 
       const responseText = this.extractResponseText(response)
       if (!responseText || responseText.trim().length === 0) {
@@ -149,7 +133,7 @@ class OpenAITextClientImpl implements TextClient {
     if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during OpenAI ${context}: ${errorMessage}`,
+          `Network error during OpenAI ${context}`,
           'Check your internet connection and try again'
         )
       )
@@ -157,9 +141,14 @@ class OpenAITextClientImpl implements TextClient {
 
     return Err(
       new ImageAPIError(
-        `Failed during OpenAI ${context}: ${errorMessage}`,
-        this.getAPIErrorSuggestion(errorMessage),
-        this.extractStatusCode(error)
+        `Failed during OpenAI ${context}`,
+        {
+          provider: 'openai',
+          stage: context,
+          upstreamMessage: errorMessage,
+          suggestion: this.getAPIErrorSuggestion(errorMessage),
+        },
+        extractStatusCode(error)
       )
     )
   }
@@ -176,17 +165,10 @@ class OpenAITextClientImpl implements TextClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Check OPENAI_TEXT_MODEL and ensure the model is available to your account'
+      return 'Ensure gpt-4o-mini is available to your OpenAI account'
     }
 
     return 'Check OpenAI API configuration and try again'
-  }
-
-  private extractStatusCode(error: unknown): number | undefined {
-    if (error && typeof error === 'object' && 'status' in error) {
-      return typeof error.status === 'number' ? error.status : undefined
-    }
-    return undefined
   }
 
   private validatePromptInput(prompt: string): Result<true, ImageAPIError> {

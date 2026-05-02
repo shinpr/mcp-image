@@ -27,8 +27,6 @@ describe('openaiImageClient', () => {
     imageProvider: 'openai',
     geminiApiKey: '',
     openaiApiKey: 'test-openai-api-key-12345',
-    openaiImageModel: 'gpt-image-2',
-    openaiTextModel: 'gpt-5-mini',
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,
@@ -197,6 +195,49 @@ describe('openaiImageClient', () => {
       )
     })
 
+    it('should fall back to square size when aspect ratio is malformed', async () => {
+      mockGenerate.mockResolvedValue({
+        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+      })
+
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      // 'abc:1' parses to NaN width — current behavior is silent fallback to square.
+      // Pinning this so future changes that promote it to a typed error are deliberate.
+      // 'abc:1' is not a valid AspectRatio union member; cast through unknown to
+      // exercise the runtime fallback branch in mapSize.
+      await clientResult.data.generateImage({
+        prompt: 'Generate an image',
+        aspectRatio: 'abc:1' as unknown as never,
+      })
+
+      expect(mockGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          size: '1024x1024',
+        })
+      )
+    })
+
+    it('should return ImageAPIError when response data array is empty', async () => {
+      mockGenerate.mockResolvedValue({ data: [] })
+
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate image',
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ImageAPIError)
+        expect(result.error.message).toContain('No image data returned')
+      }
+    })
+
     it('should reject useGoogleSearch because OpenAI image generation does not support Google Search grounding', async () => {
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -217,6 +258,10 @@ describe('openaiImageClient', () => {
     })
 
     it('should map 2K imageSize with landscape aspect ratio to a GPT Image 2 size', async () => {
+      mockGenerate.mockResolvedValue({
+        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+      })
+
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
       if (!clientResult.success) return
@@ -236,6 +281,10 @@ describe('openaiImageClient', () => {
     })
 
     it('should map 4K imageSize with portrait aspect ratio to a GPT Image 2 size', async () => {
+      mockGenerate.mockResolvedValue({
+        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+      })
+
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
       if (!clientResult.success) return
@@ -252,28 +301,6 @@ describe('openaiImageClient', () => {
           size: '2160x3840',
         })
       )
-    })
-
-    it('should reject imageSize for non-GPT Image 2 OpenAI models', async () => {
-      const clientResult = createOpenAIImageClient({
-        ...testConfig,
-        openaiImageModel: 'gpt-image-1.5',
-      })
-      expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
-
-      const result = await clientResult.data.generateImage({
-        prompt: 'Generate a 4K product photo',
-        imageSize: '4K',
-      })
-
-      expect(result.success).toBe(false)
-      expect(mockGenerate).not.toHaveBeenCalled()
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(ImageAPIError)
-        expect(result.error.message).toContain('imageSize')
-        expect(result.error.message).toContain('gpt-image-2')
-      }
     })
 
     it('should return ImageAPIError when response has no base64 image data', async () => {

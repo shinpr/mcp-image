@@ -19,6 +19,7 @@ vi.mock('../../utils/logger', () => ({
     warn = vi.fn()
     info = vi.fn()
   },
+  sanitizeText: (input: string) => input,
 }))
 
 describe('ErrorHandler', () => {

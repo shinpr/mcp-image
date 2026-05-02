@@ -59,8 +59,6 @@ describe('GeminiTextClient', () => {
       imageProvider: 'gemini',
       geminiApiKey: 'test-api-key',
       openaiApiKey: '',
-      openaiImageModel: 'gpt-image-2',
-      openaiTextModel: 'gpt-5-mini',
       imageOutputDir: './test-output',
       apiTimeout: 30000,
       skipPromptEnhancement: false,
@@ -132,7 +130,8 @@ describe('GeminiTextClient', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error).toBeInstanceOf(GeminiAPIError)
-        expect(result.error.message.toLowerCase()).toContain('rate limit')
+        const upstream = String(result.error.context?.upstreamMessage ?? '').toLowerCase()
+        expect(upstream).toContain('rate limit')
       }
     })
 

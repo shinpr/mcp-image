@@ -12,6 +12,7 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type {
   GeneratedImageResult,
   ImageApiParams,
@@ -131,10 +132,6 @@ function isGeminiResponse(obj: unknown): obj is GeminiResponse {
   return 'candidates' in response && Array.isArray(response['candidates'])
 }
 
-interface ErrorWithCode extends Error {
-  code?: string
-}
-
 /**
  * Metadata for generated images
  */
@@ -240,11 +237,14 @@ class GeminiClientImpl implements GeminiClient {
         if (asRecord['error']) {
           const error = asRecord['error'] as Record<string, unknown>
           return Err(
-            new GeminiAPIError(`Gemini API Error: ${error['message'] || 'Unknown error'}`, {
-              code: error['code'],
-              status: error['status'],
-              details: error['details'] || responseStructure,
+            new GeminiAPIError('Gemini API returned an error response', {
+              provider: 'gemini',
               stage: 'api_error',
+              upstreamMessage:
+                typeof error['message'] === 'string' ? error['message'] : 'Unknown error',
+              statusCode: typeof error['status'] === 'number' ? error['status'] : undefined,
+              rawErrorCode: error['code'],
+              rawDetails: error['details'] || responseStructure,
             })
           )
         }
@@ -414,10 +414,10 @@ class GeminiClientImpl implements GeminiClient {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
     // Check if it's a network error
-    if (this.isNetworkError(error)) {
+    if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during image generation: ${errorMessage}`,
+          'Network error during Gemini image generation',
           'Check your internet connection and try again',
           error instanceof Error ? error : undefined
         )
@@ -428,30 +428,28 @@ class GeminiClientImpl implements GeminiClient {
     if (this.isAPIError(error)) {
       return Err(
         new GeminiAPIError(
-          `Failed to generate image: ${errorMessage}`,
-          this.getAPIErrorSuggestion(errorMessage),
-          this.extractStatusCode(error)
+          'Failed to generate image with Gemini',
+          {
+            provider: 'gemini',
+            prompt,
+            upstreamMessage: errorMessage,
+            suggestion: this.getAPIErrorSuggestion(errorMessage),
+          },
+          extractStatusCode(error)
         )
       )
     }
 
     // Generic API error
     return Err(
-      new GeminiAPIError(
-        `Failed to generate image with prompt "${prompt}": ${errorMessage}`,
-        'Check your API key, quota, and prompt validity. Try again with a different prompt'
-      )
+      new GeminiAPIError('Failed to generate image with Gemini', {
+        provider: 'gemini',
+        prompt,
+        upstreamMessage: errorMessage,
+        suggestion:
+          'Check your API key, quota, and prompt validity. Try again with a different prompt',
+      })
     )
-  }
-
-  private isNetworkError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-      return networkErrorCodes.some(
-        (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-      )
-    }
-    return false
   }
 
   private isAPIError(error: unknown): boolean {
@@ -478,13 +476,6 @@ class GeminiClientImpl implements GeminiClient {
     }
 
     return 'Check your API configuration and try again'
-  }
-
-  private extractStatusCode(error: unknown): number | undefined {
-    if (error && typeof error === 'object' && 'status' in error) {
-      return typeof error.status === 'number' ? error.status : undefined
-    }
-    return undefined
   }
 }
 

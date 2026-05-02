@@ -10,6 +10,7 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
 import { DEFAULT_MIME_TYPE } from '../utils/mimeUtils.js'
+import { isNetworkError } from './errorClassification.js'
 import type { GenerationConfig, TextClient } from './textClient.js'
 
 /**
@@ -48,6 +49,7 @@ interface GeminiAIInstance {
         thinkingConfig?: {
           thinkingBudget: number
         }
+        abortSignal?: AbortSignal
       }
     }): Promise<{
       text: string
@@ -106,11 +108,6 @@ class GeminiTextClientImpl implements GeminiTextClient {
    */
   private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
-      // Generate content with timeout
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('API call timeout')), config.timeout || 15000)
-      })
-
       // Build contents based on whether input image is provided (multimodal support)
       let contents:
         | string
@@ -141,8 +138,8 @@ class GeminiTextClientImpl implements GeminiTextClient {
         contents = prompt
       }
 
-      // Call Gemini API
-      const apiCall = this.genai.models.generateContent({
+      // Call Gemini API with timeout via AbortSignal
+      const response = await this.genai.models.generateContent({
         model: this.modelName,
         contents,
         config: {
@@ -156,10 +153,9 @@ class GeminiTextClientImpl implements GeminiTextClient {
           thinkingConfig: {
             thinkingBudget: 0,
           },
+          abortSignal: AbortSignal.timeout(config.timeout || 15000),
         },
       })
-
-      const response = await Promise.race([apiCall, timeoutPromise])
 
       // Extract text from response - handling both possible response structures
       let responseText: string
@@ -212,10 +208,10 @@ class GeminiTextClientImpl implements GeminiTextClient {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 
     // Check for network errors
-    if (this.isNetworkError(error)) {
+    if (isNetworkError(error)) {
       return Err(
         new NetworkError(
-          `Network error during ${context}: ${errorMessage}`,
+          `Network error during Gemini ${context}`,
           'Check your internet connection and try again'
         )
       )
@@ -224,30 +220,24 @@ class GeminiTextClientImpl implements GeminiTextClient {
     // Check for API errors
     if (this.isAPIError(error)) {
       return Err(
-        new GeminiAPIError(
-          `Failed during ${context}: ${errorMessage}`,
-          this.getAPIErrorSuggestion(errorMessage)
-        )
+        new GeminiAPIError(`Failed during Gemini ${context}`, {
+          provider: 'gemini',
+          stage: context,
+          upstreamMessage: errorMessage,
+          suggestion: this.getAPIErrorSuggestion(errorMessage),
+        })
       )
     }
 
     // Generic error
     return Err(
-      new GeminiAPIError(
-        `Failed during ${context}: ${errorMessage}`,
-        'Check your API configuration and try again'
-      )
+      new GeminiAPIError(`Failed during Gemini ${context}`, {
+        provider: 'gemini',
+        stage: context,
+        upstreamMessage: errorMessage,
+        suggestion: 'Check your API configuration and try again',
+      })
     )
-  }
-
-  private isNetworkError(error: unknown): boolean {
-    if (error instanceof Error) {
-      const networkErrorCodes = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND']
-      return networkErrorCodes.some(
-        (code) => error.message.includes(code) || (error as { code?: string }).code === code
-      )
-    }
-    return false
   }
 
   private isAPIError(error: unknown): boolean {
