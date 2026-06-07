@@ -12,15 +12,20 @@ const mockGeminiClientInstance = {
 
 const mockGoogleGenAI = vi.fn()
 
-// Mock @google/genai
-vi.mock('@google/genai', () => ({
-  GoogleGenAI: class {
-    models = mockGeminiClientInstance.models
-    constructor(...args: any[]) {
-      mockGoogleGenAI(...args)
-    }
-  },
-}))
+// Mock @google/genai: only stub the network-touching GoogleGenAI class, keep
+// the rest of the module real (e.g. the ThinkingLevel enum) via importActual.
+vi.mock('@google/genai', async (importActual) => {
+  const actual = await importActual<typeof import('@google/genai')>()
+  return {
+    ...actual,
+    GoogleGenAI: class {
+      models = mockGeminiClientInstance.models
+      constructor(...args: any[]) {
+        mockGoogleGenAI(...args)
+      }
+    },
+  }
+})
 
 describe('geminiClient', () => {
   const testConfig: Config = {
@@ -789,7 +794,7 @@ describe('geminiClient', () => {
       // Verify tools parameter includes both web and image search
       const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
         .mock.calls[0][0]
-      expect(callArgs.tools).toEqual([
+      expect(callArgs.config.tools).toEqual([
         { googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } },
       ])
     })
@@ -839,7 +844,7 @@ describe('geminiClient', () => {
       // Verify tools parameter is not included when disabled
       const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
         .mock.calls[0][0]
-      expect(callArgs.tools).toBeUndefined()
+      expect(callArgs.config.tools).toBeUndefined()
     })
 
     it('should generate image successfully without useGoogleSearch parameter', async () => {
@@ -886,7 +891,7 @@ describe('geminiClient', () => {
       // Verify tools parameter is not included when omitted
       const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
         .mock.calls[0][0]
-      expect(callArgs.tools).toBeUndefined()
+      expect(callArgs.config.tools).toBeUndefined()
     })
 
     it('should generate image with combined parameters', async () => {
@@ -936,7 +941,7 @@ describe('geminiClient', () => {
       // Verify tools parameter includes both web and image search with combined params
       const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
         .mock.calls[0][0]
-      expect(callArgs.tools).toEqual([
+      expect(callArgs.config.tools).toEqual([
         { googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } },
       ])
     })
@@ -1017,7 +1022,7 @@ describe('geminiClient', () => {
         expect.objectContaining({
           model: 'gemini-3.1-flash-image-preview',
           config: expect.objectContaining({
-            thinkingConfig: { thinkingLevel: 'high' },
+            thinkingConfig: { thinkingLevel: 'HIGH' },
           }),
         })
       )
@@ -1111,7 +1116,7 @@ describe('geminiClient', () => {
         expect.objectContaining({
           model: 'gemini-3.1-flash-image-preview',
           config: expect.objectContaining({
-            thinkingConfig: { thinkingLevel: 'high' },
+            thinkingConfig: { thinkingLevel: 'HIGH' },
           }),
         })
       )
