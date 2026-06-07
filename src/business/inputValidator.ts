@@ -131,9 +131,7 @@ export function validateBase64Image(
  * @param imagePath - Path to the input image file
  * @returns Result with validated path or error
  */
-export function validateImagePath(
-  imagePath?: string
-): Result<string | undefined, InputValidationError> {
+function validateImagePath(imagePath?: string): Result<string | undefined, InputValidationError> {
   // If no path provided, it's valid (optional parameter)
   if (!imagePath) {
     return Ok(undefined)
