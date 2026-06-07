@@ -3,7 +3,6 @@
  * Provides protection against path traversal, null byte injection, and other security threats
  */
 
-import { randomBytes } from 'node:crypto'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import { Err, Ok, type Result } from '../types/result.js'
@@ -91,45 +90,6 @@ export class SecurityManager {
     }
 
     return Ok(undefined)
-  }
-
-  /**
-   * Validate directory path for security
-   * @param dirPath Directory path to validate
-   * @returns Result indicating validation success or security error
-   */
-  validateDirectoryPath(dirPath: string): Result<void, SecurityError> {
-    // Use same security checks as file path validation
-    const pathValidation = this.sanitizeFilePath(dirPath)
-    if (!pathValidation.success) {
-      return pathValidation
-    }
-
-    return Ok(undefined)
-  }
-
-  /**
-   * Generate secure temporary file path
-   * @param baseName Base name for the temporary file
-   * @param extension File extension (with dot)
-   * @returns Secure temporary file path
-   */
-  generateSecureTempPath(baseName: string, extension: string): string {
-    const timestamp = Date.now()
-    const randomSuffix = randomBytes(6).toString('hex')
-    const secureFilename = `${baseName}-${timestamp}-${randomSuffix}${extension}`
-
-    return path.join('/tmp', secureFilename)
-  }
-
-  /**
-   * Check if a path is within allowed directories
-   * @param targetPath Path to check
-   * @returns True if path is within allowed directories
-   */
-  isPathAllowed(targetPath: string): boolean {
-    const resolvedPath = path.resolve(targetPath)
-    return this.allowedBasePaths.some((basePath) => resolvedPath.startsWith(path.resolve(basePath)))
   }
 
   /**

@@ -9,7 +9,6 @@ import {
   ensureExtension,
   getExtensionFromMimeType,
   getMimeTypeFromExtension,
-  hasImageExtension,
   normalizeMimeType,
   SUPPORTED_EXTENSIONS,
   SUPPORTED_MIME_TYPES,
@@ -168,40 +167,6 @@ describe('mimeUtils', () => {
 
       // Assert
       expect(result).toBe('image/png')
-    })
-  })
-
-  describe('hasImageExtension', () => {
-    it('should return true for .png', () => {
-      expect(hasImageExtension('photo.png')).toBe(true)
-    })
-
-    it('should return true for .jpg', () => {
-      expect(hasImageExtension('photo.jpg')).toBe(true)
-    })
-
-    it('should return true for .jpeg', () => {
-      expect(hasImageExtension('photo.jpeg')).toBe(true)
-    })
-
-    it('should return true for .webp', () => {
-      expect(hasImageExtension('photo.webp')).toBe(true)
-    })
-
-    it('should return true for .gif', () => {
-      expect(hasImageExtension('photo.gif')).toBe(true)
-    })
-
-    it('should return true for .bmp', () => {
-      expect(hasImageExtension('photo.bmp')).toBe(true)
-    })
-
-    it('should return false for no extension', () => {
-      expect(hasImageExtension('photo')).toBe(false)
-    })
-
-    it('should return false for .txt', () => {
-      expect(hasImageExtension('document.txt')).toBe(false)
     })
   })
 
