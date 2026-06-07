@@ -65,7 +65,7 @@
     "test:safe": "npm test && npm run cleanup:processes"
   },
   "dependencies": {
-    "@google/genai": "^1.52.0",
+    "@google/genai": "^2.8.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "openai": "^6.39.0"
   },
