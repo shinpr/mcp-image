@@ -60,7 +60,8 @@
     "check": "biome check src",
     "check:fix": "biome check --write src",
     "check:deps": "dpdm --no-tree --no-warning --circular --exit-code circular:1 --exclude \"(node_modules|__tests__|\\.test\\.ts$|\\.spec\\.ts$)\" --tsconfig ./tsconfig.json \"src/**/*.ts\"",
-    "check:all": "npm run check && npm run lint && npm run format:check && npm run check:deps && npm run build && npm run test",
+    "check:unused": "knip",
+    "check:all": "npm run check && npm run lint && npm run format:check && npm run check:deps && npm run check:unused && npm run build && npm run test",
     "cleanup:processes": "bash ./scripts/cleanup-test-processes.sh",
     "test:safe": "npm test && npm run cleanup:processes"
   },
@@ -76,6 +77,7 @@
     "@vitest/ui": "^4.1.7",
     "dpdm": "^4.2.0",
     "husky": "^9.1.7",
+    "knip": "^6.16.1",
     "lint-staged": "^17.0.7",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
