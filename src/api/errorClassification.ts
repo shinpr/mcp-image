@@ -4,7 +4,7 @@
  * and extract HTTP status codes from SDK errors.
  */
 
-export interface ErrorWithCode extends Error {
+interface ErrorWithCode extends Error {
   code?: string
   status?: number
 }

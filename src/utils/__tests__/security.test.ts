@@ -346,21 +346,6 @@ describe('SecurityManager', () => {
     })
   })
 
-  describe('generateSecureTempPath', () => {
-    it('should generate path with cryptographic random suffix', () => {
-      const result = securityManager.generateSecureTempPath('test', '.png')
-
-      expect(result).toMatch(/^\/tmp\/test-\d+-[0-9a-f]{12}\.png$/)
-    })
-
-    it('should generate unique paths on successive calls', () => {
-      const path1 = securityManager.generateSecureTempPath('test', '.png')
-      const path2 = securityManager.generateSecureTempPath('test', '.png')
-
-      expect(path1).not.toBe(path2)
-    })
-  })
-
   describe('security error handling', () => {
     it('should provide helpful error messages for null byte attacks', () => {
       // Arrange

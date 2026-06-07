@@ -117,7 +117,7 @@ export interface MCPServerConfig {
 /**
  * Content types for MCP responses
  */
-export type McpContent = {
+type McpContent = {
   type: 'text'
   text: string
 }

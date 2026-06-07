@@ -4,7 +4,13 @@
  * Supports automatic URL Context processing and feature parameters
  */
 
-import { GoogleGenAI } from '@google/genai'
+import type {
+  Content,
+  GenerateContentConfig,
+  GenerateContentParameters,
+  ImageConfig,
+} from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { ImageQuality } from '../types/mcp.js'
 import { GEMINI_MODELS } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
@@ -47,24 +53,10 @@ interface GeminiResponse {
 
 interface GeminiClientInstance {
   models: {
-    generateContent(params: {
-      model: string
-      contents: unknown[] | string
-      systemInstruction?: string
-      generationConfig?: {
-        [key: string]: unknown
-      }
-      config?: {
-        imageConfig?: {
-          aspectRatio?: string
-        }
-        responseModalities?: string[]
-        thinkingConfig?: {
-          thinkingLevel?: string
-        }
-      }
-      tools?: unknown[]
-    }): Promise<unknown> // Response is unknown, we'll validate with type guards
+    // Request is typed against the SDK contract so misplaced parameters (e.g.
+    // tools nested under config) are caught at compile time. The response is
+    // validated at runtime with type guards, so it stays intentionally `unknown`.
+    generateContent(params: GenerateContentParameters): Promise<unknown>
   }
 }
 
@@ -133,35 +125,20 @@ function isGeminiResponse(obj: unknown): obj is GeminiResponse {
 }
 
 /**
- * Metadata for generated images
- */
-export type GeminiGenerationMetadata = ImageGenerationMetadata
-
-/**
- * Parameters for Gemini API image generation
- */
-export type GeminiApiParams = ImageApiParams
-
-/**
- * Gemini API client interface
- */
-export type GeminiClient = ImageClient
-
-/**
  * Implementation of Gemini API client
  */
-class GeminiClientImpl implements GeminiClient {
+class GeminiClientImpl implements ImageClient {
   constructor(
     private readonly genai: GeminiClientInstance,
     private readonly defaultQuality: ImageQuality = 'fast'
   ) {}
 
   async generateImage(
-    params: GeminiApiParams
+    params: ImageApiParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     try {
       // Prepare the request content with proper structure for multimodal input
-      const requestContent: unknown[] = []
+      const requestContent: Content[] = []
 
       // Structure the contents properly for image generation/editing
       if (params.inputImage) {
@@ -197,35 +174,33 @@ class GeminiClientImpl implements GeminiClient {
       const modelName = effectiveQuality === 'quality' ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH
 
       // Construct config object for generateContent
-      const imageConfig: Record<string, string> = {}
+      const imageConfig: ImageConfig = {}
       if (params.aspectRatio) {
-        imageConfig['aspectRatio'] = params.aspectRatio
+        imageConfig.aspectRatio = params.aspectRatio
       }
       if (params.imageSize) {
-        imageConfig['imageSize'] = params.imageSize
+        imageConfig.imageSize = params.imageSize
       }
 
-      // Build config with optional thinkingConfig
-      const thinkingConfig =
-        effectiveQuality === 'balanced' ? { thinkingConfig: { thinkingLevel: 'high' } } : {}
-
-      const config = {
+      const config: GenerateContentConfig = {
         ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
         responseModalities: ['IMAGE'],
-        ...thinkingConfig,
+        // 'balanced' raises the thinking level for higher-fidelity generation
+        ...(effectiveQuality === 'balanced' && {
+          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
+        }),
+        // Google Search grounding (web + image search) must live under config.tools;
+        // a top-level `tools` field is not part of the generateContent contract.
+        ...(params.useGoogleSearch && {
+          tools: [{ googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } }],
+        }),
       }
-
-      // Construct tools array for Google Search grounding (web + image search)
-      const tools = params.useGoogleSearch
-        ? [{ googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } }]
-        : undefined
 
       // Generate content using Gemini API
       const rawResponse = await this.genai.models.generateContent({
         model: modelName,
         contents: requestContent,
         config,
-        ...(tools && { tools }),
       })
 
       // Validate response structure with type guard
@@ -388,7 +363,7 @@ class GeminiClientImpl implements GeminiClient {
       const mimeType = normalizeMimeType(imagePart.inlineData.mimeType || DEFAULT_MIME_TYPE)
 
       // Create metadata
-      const metadata: GeminiGenerationMetadata = {
+      const metadata: ImageGenerationMetadata = {
         model: modelName,
         prompt: params.prompt,
         mimeType,
@@ -484,7 +459,7 @@ class GeminiClientImpl implements GeminiClient {
  * @param config Configuration containing API key and other settings
  * @returns Result containing the client or an error
  */
-export function createGeminiClient(config: Config): Result<GeminiClient, GeminiAPIError> {
+export function createGeminiClient(config: Config): Result<ImageClient, GeminiAPIError> {
   try {
     const genai = new GoogleGenAI({
       apiKey: config.geminiApiKey,

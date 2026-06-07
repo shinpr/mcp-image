@@ -41,8 +41,8 @@ jobs:
     - name: Type check
       run: npm run build
 
+    - name: Unused code check
+      run: npm run check:unused
+
     - name: Run tests
       run: npm test
-
-    - name: Check production dependencies
-      run: npx report-missing-dependencies

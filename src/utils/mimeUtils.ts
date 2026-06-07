@@ -79,17 +79,6 @@ export function getMimeTypeFromExtension(ext: string): string {
 }
 
 /**
- * Check if a filename has a recognized image file extension.
- *
- * @param fileName - The filename to check
- * @returns true if the filename has a recognized image extension
- */
-export function hasImageExtension(fileName: string): boolean {
-  const ext = path.extname(fileName).toLowerCase()
-  return EXTENSION_TO_MIME.has(ext)
-}
-
-/**
  * Normalize a MIME type against the supported allowlist.
  * Returns the MIME type as-is if supported, otherwise falls back to image/png with a warning.
  *
