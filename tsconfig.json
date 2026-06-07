@@ -6,11 +6,7 @@
     "moduleResolution": "Node16",
     "lib": ["ES2020"],
     "types": ["node"],
-    "baseUrl": ".",  // Use project root as reference
-    "paths": {
-      "src/*": ["src/*"]
-    },
-    
+
     // Output configuration
     "outDir": "./dist",
     "rootDir": "./src",
