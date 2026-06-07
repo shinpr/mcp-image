@@ -133,31 +133,16 @@ function isGeminiResponse(obj: unknown): obj is GeminiResponse {
 }
 
 /**
- * Metadata for generated images
- */
-export type GeminiGenerationMetadata = ImageGenerationMetadata
-
-/**
- * Parameters for Gemini API image generation
- */
-export type GeminiApiParams = ImageApiParams
-
-/**
- * Gemini API client interface
- */
-export type GeminiClient = ImageClient
-
-/**
  * Implementation of Gemini API client
  */
-class GeminiClientImpl implements GeminiClient {
+class GeminiClientImpl implements ImageClient {
   constructor(
     private readonly genai: GeminiClientInstance,
     private readonly defaultQuality: ImageQuality = 'fast'
   ) {}
 
   async generateImage(
-    params: GeminiApiParams
+    params: ImageApiParams
   ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
     try {
       // Prepare the request content with proper structure for multimodal input
@@ -388,7 +373,7 @@ class GeminiClientImpl implements GeminiClient {
       const mimeType = normalizeMimeType(imagePart.inlineData.mimeType || DEFAULT_MIME_TYPE)
 
       // Create metadata
-      const metadata: GeminiGenerationMetadata = {
+      const metadata: ImageGenerationMetadata = {
         model: modelName,
         prompt: params.prompt,
         mimeType,
@@ -484,7 +469,7 @@ class GeminiClientImpl implements GeminiClient {
  * @param config Configuration containing API key and other settings
  * @returns Result containing the client or an error
  */
-export function createGeminiClient(config: Config): Result<GeminiClient, GeminiAPIError> {
+export function createGeminiClient(config: Config): Result<ImageClient, GeminiAPIError> {
   try {
     const genai = new GoogleGenAI({
       apiKey: config.geminiApiKey,
