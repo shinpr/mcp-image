@@ -71,8 +71,8 @@
     "openai": "^6.39.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.15",
-    "@types/node": "^25.9.1",
+    "@biomejs/biome": "^2.5.0",
+    "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^4.1.7",
     "@vitest/ui": "^4.1.7",
     "dpdm": "^4.2.0",
