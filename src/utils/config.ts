@@ -20,6 +20,9 @@ export interface Config {
   apiTimeout: number
   skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
   imageQuality: ImageQuality
+  removeWatermark: boolean // Remove AI watermarks as a post-generation step
+  removeWatermarkCmd: string // Command for the remove-ai-watermarks CLI
+  removeWatermarkTimeout: number // Timeout (ms) for the watermark removal command
 }
 
 /**
@@ -109,6 +112,16 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
+  // Validate removeWatermarkTimeout
+  if (config.removeWatermarkTimeout <= 0) {
+    return Err(
+      new ConfigError(
+        'REMOVE_WATERMARK_TIMEOUT must be a positive number',
+        'Set a positive timeout value in milliseconds (e.g., 600000 for 10 minutes)'
+      )
+    )
+  }
+
   // Validate imageOutputDir (basic check - non-empty string)
   if (!config.imageOutputDir || config.imageOutputDir.trim().length === 0) {
     return Err(
@@ -145,6 +158,9 @@ export function getConfig(): Result<Config, ConfigError> {
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',
     imageQuality: (readEnv('IMAGE_QUALITY') || 'fast') as ImageQuality,
+    removeWatermark: readEnv('REMOVE_WATERMARK') === 'true',
+    removeWatermarkCmd: readEnv('REMOVE_WATERMARK_CMD') || 'remove-ai-watermarks',
+    removeWatermarkTimeout: Number(readEnv('REMOVE_WATERMARK_TIMEOUT')) || 600000,
   }
 
   return validateConfig(config)
