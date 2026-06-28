@@ -16,6 +16,7 @@ export interface Config {
   imageProvider: ImageProvider
   geminiApiKey: string
   openaiApiKey: string
+  ideogramApiKey: string
   imageOutputDir: string
   apiTimeout: number
   skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
@@ -99,6 +100,28 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
+  // Validate IDEOGRAM_API_KEY only when Ideogram is the selected provider.
+  if (
+    config.imageProvider === 'ideogram' &&
+    (!config.ideogramApiKey || config.ideogramApiKey.trim().length === 0)
+  ) {
+    return Err(
+      new ConfigError(
+        'IDEOGRAM_API_KEY is required but not provided',
+        'Set IDEOGRAM_API_KEY environment variable with your Ideogram API key'
+      )
+    )
+  }
+
+  if (config.imageProvider === 'ideogram' && config.ideogramApiKey.length < 10) {
+    return Err(
+      new ConfigError(
+        'IDEOGRAM_API_KEY appears to be invalid - must be at least 10 characters',
+        'Set the IDEOGRAM_API_KEY environment variable to your valid Ideogram API key'
+      )
+    )
+  }
+
   // Validate apiTimeout
   if (config.apiTimeout <= 0) {
     return Err(
@@ -141,6 +164,7 @@ export function getConfig(): Result<Config, ConfigError> {
     imageProvider: (readEnv('IMAGE_PROVIDER') || DEFAULT_CONFIG.imageProvider) as ImageProvider,
     geminiApiKey: readEnv('GEMINI_API_KEY') || '',
     openaiApiKey: readEnv('OPENAI_API_KEY') || '',
+    ideogramApiKey: readEnv('IDEOGRAM_API_KEY') || '',
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',

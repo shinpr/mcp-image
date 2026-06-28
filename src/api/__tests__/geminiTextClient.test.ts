@@ -59,6 +59,7 @@ describe('GeminiTextClient', () => {
       imageProvider: 'gemini',
       geminiApiKey: 'test-api-key',
       openaiApiKey: '',
+      ideogramApiKey: '',
       imageOutputDir: './test-output',
       apiTimeout: 30000,
       skipPromptEnhancement: false,
