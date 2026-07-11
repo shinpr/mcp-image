@@ -72,7 +72,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.3",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.3",
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/ui": "^4.1.10",
     "dpdm": "^4.2.0",
