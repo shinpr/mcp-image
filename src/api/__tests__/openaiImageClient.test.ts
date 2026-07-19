@@ -30,6 +30,9 @@ describe('openaiImageClient', () => {
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,
+    removeWatermark: false,
+    removeWatermarkCmd: 'remove-ai-watermarks',
+    removeWatermarkTimeout: 600000,
     imageQuality: 'fast',
   }
 

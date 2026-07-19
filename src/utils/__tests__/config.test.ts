@@ -13,6 +13,9 @@ describe('config', () => {
     process.env.OPENAI_API_KEY = undefined
     process.env.IMAGE_OUTPUT_DIR = undefined
     process.env.IMAGE_QUALITY = undefined
+    process.env.REMOVE_WATERMARK = undefined
+    process.env.REMOVE_WATERMARK_CMD = undefined
+    process.env.REMOVE_WATERMARK_TIMEOUT = undefined
   })
 
   afterEach(() => {
@@ -30,6 +33,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'fast' as const,
       }
 
@@ -54,6 +60,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'fast' as const,
       }
 
@@ -77,6 +86,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: -1000, // Invalid negative timeout
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'fast' as const,
       }
 
@@ -104,6 +116,9 @@ describe('config', () => {
           imageOutputDir: './output',
           apiTimeout: 30000,
           skipPromptEnhancement: false,
+          removeWatermark: false,
+          removeWatermarkCmd: 'remove-ai-watermarks',
+          removeWatermarkTimeout: 600000,
           imageQuality: quality,
         }
 
@@ -124,6 +139,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'invalid' as any,
       }
 
@@ -150,6 +168,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'fast' as const,
       }
 
@@ -172,6 +193,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'fast' as const,
       }
 
@@ -191,6 +215,9 @@ describe('config', () => {
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
+        removeWatermark: false,
+        removeWatermarkCmd: 'remove-ai-watermarks',
+        removeWatermarkTimeout: 600000,
         imageQuality: 'fast' as const,
       }
 
@@ -312,6 +339,69 @@ describe('config', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.message).toContain('Invalid IMAGE_QUALITY')
+      }
+    })
+
+    it('should default removeWatermark to false and provide default command/timeout', () => {
+      // Arrange
+      process.env.GEMINI_API_KEY = 'test-api-key-12345'
+
+      // Act
+      const result = getConfig()
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.removeWatermark).toBe(false)
+        expect(result.data.removeWatermarkCmd).toBe('remove-ai-watermarks')
+        expect(result.data.removeWatermarkTimeout).toBe(600000)
+      }
+    })
+
+    it('should enable removeWatermark when REMOVE_WATERMARK=true', () => {
+      // Arrange
+      process.env.GEMINI_API_KEY = 'test-api-key-12345'
+      process.env.REMOVE_WATERMARK = 'true'
+
+      // Act
+      const result = getConfig()
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.removeWatermark).toBe(true)
+      }
+    })
+
+    it('should not enable removeWatermark for non-"true" values', () => {
+      // Arrange
+      process.env.GEMINI_API_KEY = 'test-api-key-12345'
+      process.env.REMOVE_WATERMARK = 'yes'
+
+      // Act
+      const result = getConfig()
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.removeWatermark).toBe(false)
+      }
+    })
+
+    it('should read REMOVE_WATERMARK_CMD and REMOVE_WATERMARK_TIMEOUT overrides', () => {
+      // Arrange
+      process.env.GEMINI_API_KEY = 'test-api-key-12345'
+      process.env.REMOVE_WATERMARK_CMD = '/venv/bin/remove-ai-watermarks'
+      process.env.REMOVE_WATERMARK_TIMEOUT = '120000'
+
+      // Act
+      const result = getConfig()
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.removeWatermarkCmd).toBe('/venv/bin/remove-ai-watermarks')
+        expect(result.data.removeWatermarkTimeout).toBe(120000)
       }
     })
 

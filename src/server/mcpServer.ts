@@ -36,6 +36,7 @@ import { getConfig } from '../utils/config.js'
 import { Logger } from '../utils/logger.js'
 import { ensureExtension, getMimeTypeFromExtension } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
+import { removeWatermark } from '../utils/watermarkRemover.js'
 import { ErrorHandler } from './errorHandler.js'
 
 /**
@@ -352,6 +353,11 @@ export class MCPServerImpl {
       )
       if (!saveResult.success) {
         throw saveResult.error
+      }
+
+      // Remove AI watermarks in place (best-effort; failures are logged, not thrown)
+      if (configResult.data.removeWatermark) {
+        await removeWatermark(saveResult.data, configResult.data, this.logger)
       }
 
       // Build response

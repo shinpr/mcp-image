@@ -60,6 +60,27 @@
           "isRequired": false,
           "format": "boolean",
           "isSecret": false
+        },
+        {
+          "name": "REMOVE_WATERMARK",
+          "description": "Set to 'true' to remove AI watermarks (visible + invisible + provenance metadata) from generated images as a post-generation step. Requires the external Python tool 'remove-ai-watermarks' (https://github.com/wiltodelta/remove-ai-watermarks) installed and on PATH; best-effort with graceful fallback",
+          "isRequired": false,
+          "format": "boolean",
+          "isSecret": false
+        },
+        {
+          "name": "REMOVE_WATERMARK_CMD",
+          "description": "Command used to invoke the remove-ai-watermarks CLI (defaults to 'remove-ai-watermarks'). Accepts a full path or a 'python -m remove_ai_watermarks' style invocation; paths with spaces are not supported",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        },
+        {
+          "name": "REMOVE_WATERMARK_TIMEOUT",
+          "description": "Timeout in milliseconds for the watermark removal command (defaults to 600000)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
         }
       ],
       "features": {

@@ -253,6 +253,20 @@ claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_QUALITY=b
 
 Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and send your prompts directly to the image generator. Useful when you need full control over the exact prompt wording.
 
+### Remove AI Watermark
+
+Set `REMOVE_WATERMARK=true` to strip AI watermarks from every generated image as a post-generation step, regardless of provider. This removes visible marks (e.g. the Gemini / nano banana "sparkle"), invisible watermarks (e.g. SynthID), and provenance metadata (C2PA/EXIF). The cleaned image overwrites the original in place — no duplicate file is produced.
+
+This feature shells out to the external Python tool [`remove-ai-watermarks`](https://github.com/wiltodelta/remove-ai-watermarks), which you must install separately. It is invoked in `all` mode, so the invisible-watermark step requires `torch` + `diffusers`, a GPU, and a ~2GB model download (slow on first run); see that project's README for installation.
+
+Removal is best-effort: if the tool is not installed or fails, a warning is logged and the original (un-cleaned) image is returned so generation still succeeds.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REMOVE_WATERMARK` | `false` | Set to `true` to remove AI watermarks from generated images |
+| `REMOVE_WATERMARK_CMD` | `remove-ai-watermarks` | Command to invoke (e.g. a full path like `/venv/bin/remove-ai-watermarks`, or `python -m remove_ai_watermarks`). Paths containing spaces are not supported |
+| `REMOVE_WATERMARK_TIMEOUT` | `600000` | Timeout in milliseconds for the removal command |
+
 ### Provider Configuration
 
 | Variable | Default | Description |
