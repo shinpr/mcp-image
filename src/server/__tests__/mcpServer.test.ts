@@ -51,6 +51,31 @@ vi.mock('../../api/openaiImageClient', () => {
   }
 })
 
+// Mock the Ideogram image client for provider routing tests
+vi.mock('../../api/ideogramImageClient', () => {
+  return {
+    createIdeogramImageClient: vi.fn().mockImplementation(() => {
+      const mockClient = {
+        generateImage: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            imageData: Buffer.from('mock-ideogram-image-data', 'utf-8'),
+            metadata: {
+              model: 'ideogram-v4',
+              provider: 'ideogram',
+              prompt: 'test prompt',
+              mimeType: 'image/png',
+              timestamp: new Date(),
+              inputImageProvided: false,
+            },
+          },
+        }),
+      }
+      return { success: true, data: mockClient }
+    }),
+  }
+})
+
 // Mock the OpenAI text client for provider routing tests
 vi.mock('../../api/openaiTextClient', () => {
   return {
@@ -206,6 +231,7 @@ describe('MCP Server', () => {
   let originalApiKey: string | undefined
   let originalImageProvider: string | undefined
   let originalOpenAIApiKey: string | undefined
+  let originalIdeogramApiKey: string | undefined
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -213,9 +239,11 @@ describe('MCP Server', () => {
     originalApiKey = process.env.GEMINI_API_KEY
     originalImageProvider = process.env.IMAGE_PROVIDER
     originalOpenAIApiKey = process.env.OPENAI_API_KEY
+    originalIdeogramApiKey = process.env.IDEOGRAM_API_KEY
     process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
     process.env.OPENAI_API_KEY = undefined
+    process.env.IDEOGRAM_API_KEY = undefined
     process.env.IMAGE_OUTPUT_DIR = './test-output'
   })
 
@@ -228,6 +256,7 @@ describe('MCP Server', () => {
     }
     process.env.IMAGE_PROVIDER = originalImageProvider
     process.env.OPENAI_API_KEY = originalOpenAIApiKey
+    process.env.IDEOGRAM_API_KEY = originalIdeogramApiKey
   })
   it('should create MCP server instance', async () => {
     // Arrange & Act
@@ -474,6 +503,37 @@ describe('MCP Server', () => {
       })
     )
     expect(createOpenAITextClient).toHaveBeenCalled()
+  })
+
+  it('should route image generation through Ideogram provider when configured', async () => {
+    // Arrange
+    process.env.IMAGE_PROVIDER = 'ideogram'
+    process.env.GEMINI_API_KEY = undefined
+    process.env.OPENAI_API_KEY = undefined
+    process.env.IDEOGRAM_API_KEY = 'test-ideogram-api-key-unit-tests'
+    const mcpServer = createMCPServer()
+
+    // Act
+    const result = await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+    })
+
+    // Assert
+    expect(result).toBeDefined()
+    expect(result.isError).toBe(false)
+
+    const { createGeminiClient } = await import('../../api/geminiClient')
+    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
+    const { createIdeogramImageClient } = await import('../../api/ideogramImageClient')
+
+    expect(createGeminiClient).not.toHaveBeenCalled()
+    expect(createOpenAIImageClient).not.toHaveBeenCalled()
+    expect(createIdeogramImageClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageProvider: 'ideogram',
+        ideogramApiKey: 'test-ideogram-api-key-unit-tests',
+      })
+    )
   })
 })
 

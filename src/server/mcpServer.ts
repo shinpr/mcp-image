@@ -15,6 +15,7 @@ import {
 // API clients
 import { createGeminiClient } from '../api/geminiClient.js'
 import { createGeminiTextClient } from '../api/geminiTextClient.js'
+import { createIdeogramImageClient } from '../api/ideogramImageClient.js'
 import type { ImageClient } from '../api/imageClient.js'
 import { createOpenAIImageClient } from '../api/openaiImageClient.js'
 import { createOpenAITextClient } from '../api/openaiTextClient.js'
@@ -30,6 +31,7 @@ import {
 } from '../business/structuredPromptGenerator.js'
 // Types
 import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
+import type { Result } from '../types/result.js'
 
 // Utilities
 import { getConfig } from '../utils/config.js'
@@ -196,12 +198,17 @@ export class MCPServerImpl {
     }
     const config = configResult.data
 
-    if (this.imageClient && (config.skipPromptEnhancement || this.structuredPromptGenerator)) {
+    // Ideogram enhances prompts natively via its `magic_prompt` option, so it
+    // does not use the external text-model prompt enhancement pipeline.
+    const usesExternalPromptEnhancement = config.imageProvider !== 'ideogram'
+    const needsTextClient = usesExternalPromptEnhancement && !config.skipPromptEnhancement
+
+    if (this.imageClient && (!needsTextClient || this.structuredPromptGenerator)) {
       return
     }
 
     // Initialize Text Client for prompt generation when enhancement is enabled.
-    if (!config.skipPromptEnhancement && !this.textClient) {
+    if (needsTextClient && !this.textClient) {
       const textClientResult =
         config.imageProvider === 'openai'
           ? createOpenAITextClient(config)
@@ -213,16 +220,20 @@ export class MCPServerImpl {
     }
 
     // Initialize Structured Prompt Generator
-    if (!config.skipPromptEnhancement && this.textClient && !this.structuredPromptGenerator) {
+    if (needsTextClient && this.textClient && !this.structuredPromptGenerator) {
       this.structuredPromptGenerator = createStructuredPromptGenerator(this.textClient)
     }
 
     // Initialize image generation client.
     if (!this.imageClient) {
-      const clientResult =
-        config.imageProvider === 'openai'
-          ? createOpenAIImageClient(config)
-          : createGeminiClient(config)
+      let clientResult: Result<ImageClient, Error>
+      if (config.imageProvider === 'openai') {
+        clientResult = createOpenAIImageClient(config)
+      } else if (config.imageProvider === 'ideogram') {
+        clientResult = createIdeogramImageClient(config)
+      } else {
+        clientResult = createGeminiClient(config)
+      }
       if (!clientResult.success) {
         throw clientResult.error
       }

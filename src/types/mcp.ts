@@ -43,8 +43,9 @@ export type ImageQuality = 'fast' | 'balanced' | 'quality'
  * Supported image providers.
  * - 'gemini': Google Gemini/Nano Banana models (default)
  * - 'openai': OpenAI GPT Image models such as gpt-image-2
+ * - 'ideogram': Ideogram 4.0 image models
  */
-export type ImageProvider = 'gemini' | 'openai'
+export type ImageProvider = 'gemini' | 'openai' | 'ideogram'
 
 /**
  * Supported quality preset values
@@ -58,7 +59,11 @@ export const IMAGE_QUALITY_VALUES: readonly ImageQuality[] = [
 /**
  * Supported image provider values.
  */
-export const IMAGE_PROVIDER_VALUES: readonly ImageProvider[] = ['gemini', 'openai'] as const
+export const IMAGE_PROVIDER_VALUES: readonly ImageProvider[] = [
+  'gemini',
+  'openai',
+  'ideogram',
+] as const
 
 /**
  * Gemini image generation model identifiers
@@ -69,6 +74,11 @@ export const GEMINI_MODELS = {
   /** Nano Banana Pro - highest quality output */
   PRO: 'gemini-3-pro-image-preview',
 } as const
+
+/**
+ * Ideogram image generation model identifier (Ideogram 4.0 / v4)
+ */
+export const IDEOGRAM_MODEL = 'ideogram-v4' as const
 
 /**
  * Parameters for image generation using Gemini API

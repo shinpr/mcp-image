@@ -94,6 +94,7 @@ npx mcp-image skills install --path ~/.claude/skills
 - **Node.js** 22 or higher
 - **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey) for the default Gemini provider
 - **OpenAI API Key** - Get yours from [OpenAI](https://platform.openai.com/api-keys) when using `IMAGE_PROVIDER=openai`
+- **Ideogram API Key** - Get yours from [Ideogram](https://ideogram.ai/manage-api) when using `IMAGE_PROVIDER=ideogram`
 - An MCP-compatible AI tool: **Cursor**, **Claude Code**, **Codex**, or others
 - Basic terminal/command line knowledge
 
@@ -257,9 +258,10 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `IMAGE_PROVIDER` | `gemini` | `gemini` or `openai` |
+| `IMAGE_PROVIDER` | `gemini` | `gemini`, `openai`, or `ideogram` |
 | `GEMINI_API_KEY` | - | Required when `IMAGE_PROVIDER=gemini` |
 | `OPENAI_API_KEY` | - | Required when `IMAGE_PROVIDER=openai` |
+| `IDEOGRAM_API_KEY` | - | Required when `IMAGE_PROVIDER=ideogram` |
 
 ### Using the OpenAI provider
 
@@ -276,6 +278,27 @@ OpenAI provider behavior:
 - Does not support `useGoogleSearch`; that option is only available with the Gemini provider.
 
 Prompt enhancement uses a separate OpenAI Responses API call. Set `SKIP_PROMPT_ENHANCEMENT=true` to send prompts directly to the image model.
+
+### Using the Ideogram provider
+
+Set `IMAGE_PROVIDER=ideogram` and `IDEOGRAM_API_KEY` to generate images with Ideogram 4.0 (`ideogram-v4`). Get an API key from [Ideogram](https://ideogram.ai/manage-api).
+
+Ideogram provider behavior:
+
+- Supports text-to-image generation.
+- `IMAGE_QUALITY` controls the Ideogram v4 `resolution`: a higher preset selects a larger resolution for the chosen orientation. Because v4 ties resolution to aspect ratio (every v4 resolution is ~4 MP), `aspectRatio` only selects the orientation, and `imageSize` is not used.
+
+  | `IMAGE_QUALITY` | Landscape | Portrait | Square |
+  |-----------------|-----------|----------|--------|
+  | `fast` | `2560x1440` | `1440x2560` | `2048x2048` |
+  | `balanced` | `2304x1728` | `1728x2304` | `2048x2048` |
+  | `quality` | `2496x1664` | `1664x2496` | `2048x2048` |
+
+  Square has a single v4 resolution, so the preset has no size effect there.
+- `IMAGE_QUALITY` also maps to Ideogram rendering speed as `fast -> TURBO`, `balanced -> DEFAULT`, and `quality -> QUALITY`. (v4 does not yet support its `FLASH` speed.)
+- Does not support `useGoogleSearch` or image-to-image editing; use the Gemini or OpenAI provider for those.
+
+Prompt enhancement is handled natively: Ideogram v4 automatically applies magic-prompt to text prompts, so the Ideogram provider does not require a separate text model or API key. Because v4 always enhances text prompts, `SKIP_PROMPT_ENHANCEMENT` does not disable Ideogram's magic-prompt.
 
 ## Usage Examples
 

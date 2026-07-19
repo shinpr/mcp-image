@@ -32,6 +32,7 @@ describe('geminiClient', () => {
     imageProvider: 'gemini',
     geminiApiKey: 'test-api-key-12345',
     openaiApiKey: '',
+    ideogramApiKey: '',
     imageOutputDir: './output',
     apiTimeout: 30000,
     skipPromptEnhancement: false,

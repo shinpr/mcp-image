@@ -11,6 +11,7 @@ describe('config', () => {
     process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = undefined
     process.env.OPENAI_API_KEY = undefined
+    process.env.IDEOGRAM_API_KEY = undefined
     process.env.IMAGE_OUTPUT_DIR = undefined
     process.env.IMAGE_QUALITY = undefined
   })
@@ -27,6 +28,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: '',
         openaiApiKey: '',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -51,6 +53,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'short',
         openaiApiKey: '',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -74,6 +77,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: -1000, // Invalid negative timeout
         skipPromptEnhancement: false,
@@ -101,6 +105,7 @@ describe('config', () => {
           imageProvider: 'gemini' as const,
           geminiApiKey: 'valid-api-key-12345',
           openaiApiKey: '',
+          ideogramApiKey: '',
           imageOutputDir: './output',
           apiTimeout: 30000,
           skipPromptEnhancement: false,
@@ -121,6 +126,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -147,6 +153,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -169,6 +176,7 @@ describe('config', () => {
         imageProvider: 'openai' as const,
         geminiApiKey: '',
         openaiApiKey: 'test-openai-api-key-12345',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -188,6 +196,7 @@ describe('config', () => {
         imageProvider: 'openai' as const,
         geminiApiKey: '',
         openaiApiKey: '',
+        ideogramApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -202,6 +211,50 @@ describe('config', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(ConfigError)
         expect(result.error.message).toContain('OPENAI_API_KEY')
+      }
+    })
+
+    it('should accept Ideogram provider without GEMINI_API_KEY', () => {
+      // Arrange
+      const config = {
+        imageProvider: 'ideogram' as const,
+        geminiApiKey: '',
+        openaiApiKey: '',
+        ideogramApiKey: 'test-ideogram-api-key-12345',
+        imageOutputDir: './output',
+        apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
+      }
+
+      // Act
+      const result = validateConfig(config)
+
+      // Assert
+      expect(result.success).toBe(true)
+    })
+
+    it('should require IDEOGRAM_API_KEY for Ideogram provider', () => {
+      // Arrange
+      const config = {
+        imageProvider: 'ideogram' as const,
+        geminiApiKey: '',
+        openaiApiKey: '',
+        ideogramApiKey: '',
+        imageOutputDir: './output',
+        apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
+      }
+
+      // Act
+      const result = validateConfig(config)
+
+      // Assert
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ConfigError)
+        expect(result.error.message).toContain('IDEOGRAM_API_KEY')
       }
     })
   })

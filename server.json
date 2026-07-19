@@ -21,7 +21,7 @@
       "environmentVariables": [
         {
           "name": "IMAGE_PROVIDER",
-          "description": "Image provider to use: 'gemini' (default) or 'openai'",
+          "description": "Image provider to use: 'gemini' (default), 'openai', or 'ideogram'",
           "isRequired": false,
           "format": "string",
           "isSecret": false
@@ -36,6 +36,13 @@
         {
           "name": "OPENAI_API_KEY",
           "description": "OpenAI API key for image generation when IMAGE_PROVIDER=openai. Requires OpenAI organization verification to access gpt-image-2 (https://platform.openai.com/settings/organization/general)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "IDEOGRAM_API_KEY",
+          "description": "Ideogram API key for image generation (Ideogram 4.0) when IMAGE_PROVIDER=ideogram (get from https://ideogram.ai/manage-api)",
           "isRequired": false,
           "format": "string",
           "isSecret": true
@@ -87,6 +94,7 @@
     "prompt-enhancement",
     "gemini",
     "openai",
+    "ideogram",
     "gpt-image-2",
     "nano-banana",
     "nano-banana-2",
