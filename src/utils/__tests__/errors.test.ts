@@ -16,8 +16,8 @@ describe('GeminiAPIError', () => {
       const suggestion = error.suggestion
 
       // Assert - should mention both models
-      expect(suggestion).toContain('gemini-3.1-flash-image-preview')
-      expect(suggestion).toContain('gemini-3-pro-image-preview')
+      expect(suggestion).toContain('gemini-3.1-flash-image')
+      expect(suggestion).toContain('gemini-3-pro-image')
     })
 
     it('should not contain only a single hardcoded model name for model-related errors', () => {
@@ -28,8 +28,8 @@ describe('GeminiAPIError', () => {
       const suggestion = error.suggestion
 
       // Assert - suggestion should reference both models, not just one
-      expect(suggestion).toMatch(/gemini-3\.1-flash-image-preview/)
-      expect(suggestion).toMatch(/gemini-3-pro-image-preview/)
+      expect(suggestion).toMatch(/gemini-3\.1-flash-image/)
+      expect(suggestion).toMatch(/gemini-3-pro-image/)
     })
 
     it('should use custom suggestion when provided', () => {

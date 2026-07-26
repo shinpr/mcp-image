@@ -109,7 +109,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
         expect(result.data.metadata.mimeType).toBe('image/png')
       }
@@ -157,7 +157,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
         expect(result.data.metadata.prompt).toBe('Enhance this image')
         expect(result.data.metadata.mimeType).toBe('image/jpeg')
       }
@@ -474,7 +474,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Generate character with blending')
       }
@@ -520,7 +520,7 @@ describe('geminiClient', () => {
       if (result.success) {
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Generate factually accurate historical scene')
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
       }
     })
 
@@ -563,7 +563,7 @@ describe('geminiClient', () => {
       if (result.success) {
         // Features not specified - standard metadata only
         expect(result.data.metadata.prompt).toBe('Generate simple landscape')
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
       }
     })
 
@@ -613,7 +613,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.inputImageProvided).toBe(true)
         // Features are passed to the API but not stored in metadata
         expect(result.data.metadata.prompt).toBe('Blend this character with fantasy elements')
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
       }
     })
   })
@@ -967,7 +967,7 @@ describe('geminiClient', () => {
       },
     }
 
-    it('should use gemini-3.1-flash-image-preview for fast preset (default)', async () => {
+    it('should use gemini-3.1-flash-image for fast preset (default)', async () => {
       // Arrange
       mockGeminiClientInstance.models.generateContent = vi
         .fn()
@@ -984,12 +984,12 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
       }
       // Verify generateContent called with correct model and no thinkingConfig
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           config: expect.not.objectContaining({
             thinkingConfig: expect.anything(),
           }),
@@ -997,7 +997,7 @@ describe('geminiClient', () => {
       )
     })
 
-    it('should use gemini-3.1-flash-image-preview with thinkingConfig for balanced preset', async () => {
+    it('should use gemini-3.1-flash-image with thinkingConfig for balanced preset', async () => {
       // Arrange
       mockGeminiClientInstance.models.generateContent = vi
         .fn()
@@ -1015,12 +1015,12 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
       }
       // Verify generateContent called with thinkingConfig
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           config: expect.objectContaining({
             thinkingConfig: { thinkingLevel: 'HIGH' },
           }),
@@ -1028,7 +1028,7 @@ describe('geminiClient', () => {
       )
     })
 
-    it('should use gemini-3-pro-image-preview for quality preset', async () => {
+    it('should use gemini-3-pro-image for quality preset', async () => {
       // Arrange
       mockGeminiClientInstance.models.generateContent = vi
         .fn()
@@ -1046,12 +1046,12 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-pro-image')
       }
       // Verify generateContent called with correct model and no thinkingConfig
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3-pro-image-preview',
+          model: 'gemini-3-pro-image',
           config: expect.not.objectContaining({
             thinkingConfig: expect.anything(),
           }),
@@ -1080,12 +1080,12 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3-pro-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3-pro-image')
       }
       // Verify generateContent called with quality model
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3-pro-image-preview',
+          model: 'gemini-3-pro-image',
         })
       )
     })
@@ -1109,12 +1109,12 @@ describe('geminiClient', () => {
       // Assert
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image-preview')
+        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
       }
       // Verify thinkingConfig is present (balanced preset)
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           config: expect.objectContaining({
             thinkingConfig: { thinkingLevel: 'HIGH' },
           }),
