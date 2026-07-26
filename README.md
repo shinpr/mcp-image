@@ -351,7 +351,7 @@ The server uses a two-stage process with separate models for each stage:
     "mimeType": "image/png"
   },
   "metadata": {
-    "model": "gemini-3.1-flash-image-preview",
+    "model": "gemini-3.1-flash-image",
     "provider": "gemini",
     "processingTime": 5000,
     "timestamp": "2026-01-01T12:00:00.000Z"

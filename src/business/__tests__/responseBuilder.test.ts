@@ -26,7 +26,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: testImageData,
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: 'image/png',
           timestamp: new Date('2025-08-28T12:00:00Z'),
@@ -58,7 +58,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: 'image/jpeg',
           timestamp: new Date('2025-08-28T12:00:00Z'),
@@ -75,7 +75,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: 'image/webp',
           timestamp: new Date('2025-08-28T12:00:00Z'),
@@ -92,7 +92,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: 'image/png',
           timestamp: new Date('2025-08-28T12:00:00Z'),
@@ -109,7 +109,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: undefined as unknown as string,
           timestamp: new Date('2025-08-28T12:00:00Z'),
@@ -126,7 +126,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: '',
           timestamp: new Date('2025-08-28T12:00:00Z'),
@@ -143,7 +143,7 @@ describe('ResponseBuilder', () => {
       const generationResult: GeneratedImageResult = {
         imageData: Buffer.from('fake-image-data'),
         metadata: {
-          model: 'gemini-3.1-flash-image-preview',
+          model: 'gemini-3.1-flash-image',
           prompt: 'test prompt',
           mimeType: 'image/tiff',
           timestamp: new Date('2025-08-28T12:00:00Z'),

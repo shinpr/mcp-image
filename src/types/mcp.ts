@@ -65,9 +65,9 @@ export const IMAGE_PROVIDER_VALUES: readonly ImageProvider[] = ['gemini', 'opena
  */
 export const GEMINI_MODELS = {
   /** Nano Banana 2 - fast generation with Flash speed */
-  FLASH: 'gemini-3.1-flash-image-preview',
+  FLASH: 'gemini-3.1-flash-image',
   /** Nano Banana Pro - highest quality output */
-  PRO: 'gemini-3-pro-image-preview',
+  PRO: 'gemini-3-pro-image',
 } as const
 
 /**
