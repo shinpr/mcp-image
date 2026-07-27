@@ -1,5 +1,7 @@
 # MCP Image Generator 🍌
 
+[![MCP Toplist](https://mcptoplist.com/badge/io.github.shinpr%2Fmcp-image.svg)](https://mcptoplist.com/server/io.github.shinpr%2Fmcp-image)
+
 > AI image generation and editing MCP server for Cursor, Claude Code, Codex, and any MCP-compatible tool — powered by Nano Banana 2 and Nano Banana Pro (Google Gemini), with optional OpenAI GPT Image support.
 
 [![npm version](https://badge.fury.io/js/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
