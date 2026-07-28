@@ -1,6 +1,6 @@
 # MCP Image Generator 🍌
 
-> AI image generation and editing MCP server for Cursor, Claude Code, Codex, and any MCP-compatible tool — powered by Nano Banana 2 and Nano Banana Pro (Google Gemini), with optional OpenAI GPT Image support.
+> AI image generation and editing MCP server for Cursor, Claude Code, Codex, and any MCP-compatible tool — powered by Google Gemini, OpenAI GPT Image, or BytePlus Seedream.
 
 [![npm version](https://badge.fury.io/js/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
@@ -27,7 +27,7 @@ You: "cat on a roof"
 
 Your AI assistant interprets your intent — the style, purpose, and context behind your request. The MCP focuses on output quality by refining the prompt to meet a structured visual clarity standard and selecting appropriate generation settings. You just describe what you want.
 
-The prompt optimizer uses a **Subject–Context–Style** framework (powered by Gemini 2.5 Flash by default, or OpenAI Responses when `IMAGE_PROVIDER=openai`) to fill in missing visual details — subject characteristics, environment, lighting, camera work — while preserving your original intent. It doesn't blindly add details: prompts that already meet the quality standard are left largely intact.
+The prompt optimizer uses a **Subject–Context–Style** framework (powered by Gemini 2.5 Flash by default, OpenAI Responses when `IMAGE_PROVIDER=openai`, or ModelArk Responses when `IMAGE_PROVIDER=seedream`) to fill in missing visual details — subject characteristics, environment, lighting, camera work — while preserving your original intent. It doesn't blindly add details: prompts that already meet the quality standard are left largely intact.
 
 **Example — what the optimizer does to a short prompt:**
 
@@ -37,19 +37,19 @@ The prompt optimizer uses a **Subject–Context–Style** framework (powered by 
 
 ## Features
 
-- **Built-in Prompt Optimization**: Your simple prompt is automatically enriched with photographic and artistic details — lighting, composition, atmosphere — using Gemini 2.5 Flash by default, or OpenAI Responses when `IMAGE_PROVIDER=openai`. No prompt engineering skills required.
-- **Optional OpenAI Provider**: Set `IMAGE_PROVIDER=openai` to generate and edit images with OpenAI GPT Image models such as `gpt-image-2`.
-- **Three Quality Tiers**: Choose between fast iteration, balanced quality, or maximum fidelity with Nano Banana 2 (Gemini 3.1 Flash Image) and Nano Banana Pro (Gemini 3 Pro Image). [See Quality Presets](#quality-presets).
+- **Built-in Prompt Optimization**: Your simple prompt is automatically enriched with photographic and artistic details — lighting, composition, atmosphere — using the selected provider's text path. No prompt engineering skills required.
+- **Optional Image Providers**: Set `IMAGE_PROVIDER=openai` for OpenAI GPT Image or `IMAGE_PROVIDER=seedream` for BytePlus Seedream through ModelArk.
+- **Three Quality Presets**: Select `fast`, `balanced`, or `quality`; each provider maps these values to its own supported model route. [See Quality Presets](#quality-presets).
 - **Image Editing**: Transform existing images with natural language instructions (image-to-image) while preserving original style and visual consistency.
-- **High-Resolution Output**: Up to 4K image generation for professional-grade output with superior text rendering and fine details.
+- **High-Resolution Output**: Up to a 4K resolution token, depending on the selected provider and quality route.
 - **Flexible Aspect Ratios**: From square (1:1) to ultra-wide (21:9) and ultra-tall (1:8) formats.
 - **Character Consistency**: Maintain consistent character appearance across multiple generations — ideal for storyboards, product shots, and visual series.
 - **Advanced Capabilities**:
-  - Google Search grounding for real-time factual accuracy
+  - Google Search grounding for real-time factual accuracy with the Gemini provider
   - World knowledge for photorealistic depictions of historical figures, landmarks, and factual scenarios
-  - Multi-image blending for composite scenes
+  - Prompt-level blending guidance for composite scenes
   - Purpose-aware generation (e.g., "cookbook cover" produces different results than "social media post")
-- **Multiple Output Formats**: PNG, JPEG, WebP support.
+- **Multiple Output Formats**: PNG, JPEG, and WebP support where the selected provider supports them; Seedream output is PNG.
 
 ## Agent Skill: Image Generation Prompt Guide
 
@@ -83,8 +83,8 @@ npx mcp-image skills install --path ~/.claude/skills
 | | MCP Server | Agent Skill |
 |---|---|---|
 | **Use when** | Your AI tool does not have built-in image generation | Your AI tool already generates images natively |
-| **Requires** | Gemini API key | Nothing |
-| **What it does** | Generates images via Gemini API with automatic prompt optimization | Teaches the AI to write better prompts |
+| **Requires** | API key for the selected image provider | Nothing |
+| **What it does** | Generates images through the selected provider with automatic prompt optimization | Teaches the AI to write better prompts |
 | **Works with** | MCP-compatible tools (Cursor, Claude Code, Codex, etc.) | Any tool supporting the [Agent Skills](https://agentskills.io) open standard |
 
 ---
@@ -94,6 +94,7 @@ npx mcp-image skills install --path ~/.claude/skills
 - **Node.js** 22 or higher
 - **Gemini API Key** - Get yours at [Google AI Studio](https://aistudio.google.com/apikey) for the default Gemini provider
 - **OpenAI API Key** - Get yours from [OpenAI](https://platform.openai.com/api-keys) when using `IMAGE_PROVIDER=openai`
+- **BytePlus ModelArk API Key** - Create one in the [AP region ModelArk console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey) when using `IMAGE_PROVIDER=seedream`
 - An MCP-compatible AI tool: **Cursor**, **Claude Code**, **Codex**, or others
 - Basic terminal/command line knowledge
 
@@ -111,6 +112,15 @@ OPENAI_API_KEY=your_openai_api_key_here
 ```
 
 OpenAI mode requires organization verification — see [Using the OpenAI provider](#using-the-openai-provider) below for setup details and feature differences.
+
+To use BytePlus Seedream instead, create an API key in the ModelArk AP region and set:
+
+```bash
+IMAGE_PROVIDER=seedream
+ARK_API_KEY=<your-api-key>
+```
+
+See [Using the BytePlus Seedream provider](#using-the-byteplus-seedream-provider) for its exact compatibility matrix and restart requirements.
 
 ### 2. MCP Configuration
 
@@ -257,9 +267,53 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `IMAGE_PROVIDER` | `gemini` | `gemini` or `openai` |
+| `IMAGE_PROVIDER` | `gemini` | `gemini`, `openai`, or `seedream` |
 | `GEMINI_API_KEY` | - | Required when `IMAGE_PROVIDER=gemini` |
 | `OPENAI_API_KEY` | - | Required when `IMAGE_PROVIDER=openai` |
+| `ARK_API_KEY` | - | Required when `IMAGE_PROVIDER=seedream`; use a ModelArk AP region key |
+
+### Using the BytePlus Seedream provider
+
+Seedream uses the BytePlus ModelArk AP endpoint at `https://ark.ap-southeast.bytepluses.com/api/v3/images/generations`. Create an API key in the [AP region ModelArk console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey), ensure the account can access the required Seedream models, and place only a placeholder in shared configuration examples:
+
+```toml
+[mcp_servers.mcp-image.env]
+IMAGE_PROVIDER = "seedream"
+ARK_API_KEY = "<your-api-key>"
+IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
+```
+
+The equivalent environment block for JSON-based MCP clients is:
+
+```json
+{
+  "IMAGE_PROVIDER": "seedream",
+  "ARK_API_KEY": "<your-api-key>",
+  "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
+}
+```
+
+After changing `IMAGE_PROVIDER`, `ARK_API_KEY`, or the Seedream `IMAGE_QUALITY` default, fully restart the MCP server process (and reconnect or restart the owning client if it keeps the process alive). The selected provider clients and their API key are retained after lazy initialization, and the Seedream image client captures the default quality when it is created. Later environment changes do not replace those initialized clients; request-level `quality` still overrides the captured default.
+
+Seedream quality routing is fixed:
+
+| Public preset | Seedream route | Native image optimizer | Supported `imageSize` | Default when omitted |
+|---------------|----------------|------------------------|-----------------------|----------------------|
+| `fast` | Seedream 5.0 Lite | `standard` | `2K`, `4K` | `2K` |
+| `balanced` | Seedream 5.0 Pro | `standard` | `1K`, `2K` | `1K` |
+| `quality` | Seedream 5.0 Pro | `standard` | `1K`, `2K` | `1K` |
+
+For Seedream, these presets are routing names rather than a promise that one route is visually superior to another. Unsupported model/resolution pairs fail explicitly; `3K` is not a public value.
+
+All 14 public aspect ratios (`1:1`, `1:4`, `1:8`, `2:3`, `3:2`, `3:4`, `4:1`, `4:3`, `4:5`, `5:4`, `8:1`, `9:16`, `16:9`, and `21:9`) use BytePlus Method 1. The selected resolution token is sent as `size`, and one `Output aspect ratio: <ratio>.` instruction is appended to the final image prompt. The model chooses the final pixel dimensions, so an exact width × height is not promised.
+
+Prompt enhancement uses the same ModelArk Responses path for `fast`, `balanced`, and `quality`; it is not rerun or changed by the image tier. A successful enhancement is used once, an enhancement error preserves the existing original-prompt behavior, and `SKIP_PROMPT_ENHANCEMENT=true` sends the original prompt without a text request. The Method 1 ratio instruction is applied afterward in every path. This prompt-only fallback does not switch provider, model, or option values.
+
+Seedream does not support Google Search. A request with `useGoogleSearch=true` fails capability validation before prompt-enhancement or image-provider requests. Native multi-image/output, streaming, layers, online search, and provider/model/value fallback are not part of the Seedream integration.
+
+Seedream direct image requests use a fixed `180000` ms timeout. This timeout is not configurable and is independent of the existing `30000` ms `apiTimeout` default. Seedream text requests retain their separate `30000` ms default, and other providers' timeout behavior is unchanged.
+
+The authorized one-call Method 1 validation probe passed with sanitized evidence: request count 1; retries 0; one Lite `2K` request using the `16:9` suffix; HTTP 200; decoded PNG dimensions 2848 × 1600; duration 27,602 ms; relative-ratio error 0.125% against `16:9`; sanitized error category none. This was a one-time billable gate, not a permanent paid test or a visual-quality evaluation.
 
 ### Using the OpenAI provider
 
@@ -321,8 +375,8 @@ Your prompt is automatically enhanced with rich details about lighting, material
 ### `generate_image` Tool
 
 The server uses a two-stage process with separate models for each stage:
-1. **Prompt Optimization** (Gemini 2.5 Flash by default, or `gpt-4o-mini` via OpenAI Responses in OpenAI mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
-2. **Image Generation** (Nano Banana 2/Pro by default, or `gpt-image-2` in OpenAI mode): Creates the final image. In Gemini mode the model varies by quality preset; in OpenAI mode the model is pinned and `quality` maps to OpenAI's `low`/`medium`/`high`.
+1. **Prompt Optimization** (Gemini 2.5 Flash by default, `gpt-4o-mini` via OpenAI Responses in OpenAI mode, or the pinned ModelArk Responses text model in Seedream mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
+2. **Image Generation** (Nano Banana 2/Pro by default, `gpt-image-2` in OpenAI mode, or Seedream 5.0 Lite/Pro in Seedream mode): Creates the final image. Provider-specific quality mappings are described above.
 
 #### Parameters
 
@@ -337,7 +391,7 @@ The server uses a two-stage process with separate models for each stage:
 | `blendImages` | boolean | - | Enable multi-image blending for combining multiple visual elements naturally |
 | `maintainCharacterConsistency` | boolean | - | Maintain character appearance consistency across different poses and scenes |
 | `useWorldKnowledge` | boolean | - | Use real-world knowledge for accurate context (historical figures, landmarks, factual scenarios) |
-| `useGoogleSearch` | boolean | - | Enable Google Search grounding for real-time factual accuracy |
+| `useGoogleSearch` | boolean | - | Enable Google Search grounding with Gemini. OpenAI and Seedream reject `true` |
 | `purpose` | string | - | Intended use (e.g., "cookbook cover", "social media post"). Helps tailor visual style and details |
 
 #### Response
@@ -364,7 +418,7 @@ The server uses a two-stage process with separate models for each stage:
 ### Common Issues
 
 **"API key not found"**
-- Ensure `GEMINI_API_KEY` is set when using Gemini, or `OPENAI_API_KEY` is set when `IMAGE_PROVIDER=openai`
+- Ensure `GEMINI_API_KEY` is set when using Gemini, `OPENAI_API_KEY` is set when `IMAGE_PROVIDER=openai`, or `ARK_API_KEY` is set when `IMAGE_PROVIDER=seedream`
 - Verify the API key is valid and has image generation permissions
 
 **"Input image file not found"**
@@ -379,10 +433,10 @@ The server uses a two-stage process with separate models for each stage:
 
 ### Performance Tips
 
-- `fast` preset: ~30–40 seconds typical (includes prompt optimization)
-- `balanced` preset: Slightly longer due to enhanced thinking
-- `quality` preset: Slower but highest fidelity output
-- High-resolution (2K/4K): Additional processing time for superior detail
+- In Gemini mode, the `fast` preset typically takes ~30–40 seconds including prompt optimization
+- In Gemini mode, `balanced` uses additional thinking and `quality` selects Nano Banana Pro
+- In Seedream mode, use the route table above; `balanced` and `quality` both select Pro `standard`
+- High-resolution (2K/4K): Processing time varies by provider and route
 - Simple prompts work great — the optimizer automatically adds professional details
 - Complex prompts are preserved and further enhanced
 - Consider `useWorldKnowledge` for historical or factual subjects
