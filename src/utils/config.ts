@@ -16,6 +16,7 @@ export interface Config {
   imageProvider: ImageProvider
   geminiApiKey: string
   openaiApiKey: string
+  arkApiKey: string
   imageOutputDir: string
   apiTimeout: number
   skipPromptEnhancement: boolean // Skip prompt enhancement for direct control
@@ -99,6 +100,19 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
+  // Seedream only requires a trimmed non-empty key; no vendor-specific length heuristic is defined.
+  if (
+    config.imageProvider === 'seedream' &&
+    (!config.arkApiKey || config.arkApiKey.trim().length === 0)
+  ) {
+    return Err(
+      new ConfigError(
+        'ARK_API_KEY is required but not provided',
+        'Set ARK_API_KEY environment variable with your BytePlus ModelArk API key'
+      )
+    )
+  }
+
   // Validate apiTimeout
   if (config.apiTimeout <= 0) {
     return Err(
@@ -141,6 +155,7 @@ export function getConfig(): Result<Config, ConfigError> {
     imageProvider: (readEnv('IMAGE_PROVIDER') || DEFAULT_CONFIG.imageProvider) as ImageProvider,
     geminiApiKey: readEnv('GEMINI_API_KEY') || '',
     openaiApiKey: readEnv('OPENAI_API_KEY') || '',
+    arkApiKey: readEnv('ARK_API_KEY') || '',
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',

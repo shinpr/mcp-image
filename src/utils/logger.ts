@@ -21,12 +21,15 @@ interface StructuredLogEntry {
 const SENSITIVE_PATTERNS = [
   /GEMINI_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /OPENAI_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
+  /ARK_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /api[_-]?key[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /password[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /bearer\s+([a-zA-Z0-9\-._~+/]+=*)/gi,
   /secret[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /token[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /(sk-(?:proj-)?[A-Za-z0-9_-]{16,})/g,
+  /\b(?:prompt|(?:input[_-]?)?image(?:[_-]?(?:data|body|content|base64))?|(?:raw|request|response)[_-]?body)['"]?\s*[:=]\s*"([^"]*)"/gi,
+  /\b(?:prompt|(?:input[_-]?)?image(?:[_-]?(?:data|body|content|base64))?|(?:raw|request|response)[_-]?body)['"]?\s*[:=]\s*'([^']*)'/gi,
 ]
 
 const URL_PATTERNS = [
@@ -82,6 +85,9 @@ export class Logger {
     /token/i,
     /credential/i,
     /bearer/i,
+    /^prompt(?:$|[_-]?(?:text|body|data)$)/i,
+    /^(?:input[_-]?)?image(?:$|[_-]?(?:data|body|content|base64)$)/i,
+    /^(?:raw|request|response)[_-]?body$/i,
   ]
 
   private currentTraceId?: string

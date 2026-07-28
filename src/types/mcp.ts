@@ -43,8 +43,9 @@ export type ImageQuality = 'fast' | 'balanced' | 'quality'
  * Supported image providers.
  * - 'gemini': Google Gemini/Nano Banana models (default)
  * - 'openai': OpenAI GPT Image models such as gpt-image-2
+ * - 'seedream': BytePlus Seedream models through ModelArk
  */
-export type ImageProvider = 'gemini' | 'openai'
+export type ImageProvider = 'gemini' | 'openai' | 'seedream'
 
 /**
  * Supported quality preset values
@@ -58,7 +59,11 @@ export const IMAGE_QUALITY_VALUES: readonly ImageQuality[] = [
 /**
  * Supported image provider values.
  */
-export const IMAGE_PROVIDER_VALUES: readonly ImageProvider[] = ['gemini', 'openai'] as const
+export const IMAGE_PROVIDER_VALUES: readonly ImageProvider[] = [
+  'gemini',
+  'openai',
+  'seedream',
+] as const
 
 /**
  * Gemini image generation model identifiers
