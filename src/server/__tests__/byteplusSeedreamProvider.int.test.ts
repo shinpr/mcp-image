@@ -1094,7 +1094,7 @@ describe('BytePlus Seedream integration', () => {
       {
         name: 'unsupported-editing-input',
         args: { inputImagePath: '__CREATE_UNSUPPORTED_INPUT__' },
-        expectedCode: 'INPUT_VALIDATION_ERROR',
+        expectedCode: 'IMAGE_API_ERROR',
         expectedDecodeCalls: 0,
         expectedImageCalls: 0,
         expectedParseCalls: 0,
@@ -1417,9 +1417,34 @@ describe('BytePlus Seedream integration', () => {
       const parseCount = jsonParseSpy.mock.calls
         .slice(beforeParseCalls)
         .filter(([value]) => typeof value === 'string' && value.includes(responseSentinel)).length
+      const pngBase64 = createPngFixture(imageSentinel).toString('base64')
+      const nonPngBase64 = Buffer.from(`not-a-png:${imageSentinel}`).toString('base64')
+      const oversizedBase64Length = Math.ceil(((32 * 1024 * 1024 + 1) * 4) / 3)
       const decodeCount = bufferFromSpy.mock.calls
         .slice(beforeDecodeCalls)
-        .filter(([, encoding]) => encoding === 'base64').length
+        .filter(([value, encoding]) => {
+          if (encoding !== 'base64' || typeof value !== 'string') {
+            return false
+          }
+
+          if (row.name === 'extra-images' || row.name === 'wrong-mime') {
+            return value === pngBase64
+          }
+          if (row.name === 'malformed-base64') {
+            return value === `***${imageSentinel}`
+          }
+          if (row.name === 'empty-base64') {
+            return value === ''
+          }
+          if (row.name === 'decoded-size-over-32-mib') {
+            return value.length === oversizedBase64Length && value.startsWith('A')
+          }
+          if (row.name === 'non-png-magic') {
+            return value === nonPngBase64
+          }
+
+          return false
+        }).length
       const publicResponse = parsePublicResponse(result)
       const publicError = (publicResponse.error ?? {}) as Record<string, unknown>
       const exposed = `${JSON.stringify(publicResponse)}\n${capturedLogs()}`

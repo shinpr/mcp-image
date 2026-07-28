@@ -15,9 +15,14 @@ import {
 // API clients
 import { createGeminiClient } from '../api/geminiClient.js'
 import { createGeminiTextClient } from '../api/geminiTextClient.js'
-import type { ImageClient } from '../api/imageClient.js'
+import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
 import { createOpenAIImageClient } from '../api/openaiImageClient.js'
 import { createOpenAITextClient } from '../api/openaiTextClient.js'
+import {
+  createSeedreamImageClient,
+  validateSeedreamCapabilities,
+} from '../api/seedreamImageClient.js'
+import { createSeedreamTextClient } from '../api/seedreamTextClient.js'
 import type { TextClient } from '../api/textClient.js'
 // Business logic
 import { createFileManager, type FileManager } from '../business/fileManager.js'
@@ -205,7 +210,9 @@ export class MCPServerImpl {
       const textClientResult =
         config.imageProvider === 'openai'
           ? createOpenAITextClient(config)
-          : createGeminiTextClient(config)
+          : config.imageProvider === 'seedream'
+            ? createSeedreamTextClient(config)
+            : createGeminiTextClient(config)
       if (!textClientResult.success) {
         throw textClientResult.error
       }
@@ -222,7 +229,9 @@ export class MCPServerImpl {
       const clientResult =
         config.imageProvider === 'openai'
           ? createOpenAIImageClient(config)
-          : createGeminiClient(config)
+          : config.imageProvider === 'seedream'
+            ? createSeedreamImageClient(config)
+            : createGeminiClient(config)
       if (!clientResult.success) {
         throw clientResult.error
       }
@@ -270,6 +279,27 @@ export class MCPServerImpl {
         const imageBuffer = await fs.readFile(sanitizedInputPath.data)
         inputImageData = imageBuffer.toString('base64')
         inputImageMimeType = getMimeTypeFromExtension(path.extname(sanitizedInputPath.data))
+      }
+
+      const imageOptions = {
+        ...(inputImageData && { inputImage: inputImageData }),
+        ...(inputImageMimeType && { inputImageMimeType }),
+        ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
+        ...(params.imageSize && { imageSize: params.imageSize }),
+        ...(params.useGoogleSearch !== undefined && {
+          useGoogleSearch: params.useGoogleSearch,
+        }),
+        ...(params.quality !== undefined && { quality: params.quality }),
+      } satisfies Omit<ImageApiParams, 'prompt'>
+
+      if (configResult.data.imageProvider === 'seedream') {
+        const capabilityResult = validateSeedreamCapabilities(
+          imageOptions,
+          configResult.data.imageQuality
+        )
+        if (!capabilityResult.success) {
+          throw capabilityResult.error
+        }
       }
 
       // Generate structured prompt (unless skipped)
@@ -321,12 +351,7 @@ export class MCPServerImpl {
 
       const generationResult = await this.imageClient.generateImage({
         prompt: structuredPrompt,
-        ...(inputImageData && { inputImage: inputImageData }),
-        ...(inputImageMimeType && { inputImageMimeType }),
-        ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
-        ...(params.imageSize && { imageSize: params.imageSize }),
-        ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
-        ...(params.quality !== undefined && { quality: params.quality }),
+        ...imageOptions,
       })
 
       if (!generationResult.success) {
