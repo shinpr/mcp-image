@@ -120,7 +120,7 @@ IMAGE_PROVIDER=seedream
 ARK_API_KEY=<your-api-key>
 ```
 
-See [Using the BytePlus Seedream provider](#using-the-byteplus-seedream-provider) for its exact compatibility matrix and restart requirements.
+See [Using the BytePlus Seedream provider](#using-the-byteplus-seedream-provider) for compatibility details.
 
 ### 2. MCP Configuration
 
@@ -274,26 +274,7 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 
 ### Using the BytePlus Seedream provider
 
-Seedream uses the BytePlus ModelArk AP endpoint at `https://ark.ap-southeast.bytepluses.com/api/v3/images/generations`. Create an API key in the [AP region ModelArk console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey), ensure the account can access the required Seedream models, and place only a placeholder in shared configuration examples:
-
-```toml
-[mcp_servers.mcp-image.env]
-IMAGE_PROVIDER = "seedream"
-ARK_API_KEY = "<your-api-key>"
-IMAGE_OUTPUT_DIR = "/absolute/path/to/images"
-```
-
-The equivalent environment block for JSON-based MCP clients is:
-
-```json
-{
-  "IMAGE_PROVIDER": "seedream",
-  "ARK_API_KEY": "<your-api-key>",
-  "IMAGE_OUTPUT_DIR": "/absolute/path/to/images"
-}
-```
-
-After changing `IMAGE_PROVIDER`, `ARK_API_KEY`, or the Seedream `IMAGE_QUALITY` default, fully restart the MCP server process (and reconnect or restart the owning client if it keeps the process alive). The selected provider clients and their API key are retained after lazy initialization, and the Seedream image client captures the default quality when it is created. Later environment changes do not replace those initialized clients; request-level `quality` still overrides the captured default.
+Create an API key in the [ModelArk AP region console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey). Restart the MCP server after changing provider settings.
 
 Seedream quality routing is fixed:
 
@@ -303,15 +284,9 @@ Seedream quality routing is fixed:
 | `balanced` | Seedream 5.0 Pro | `standard` | `1K`, `2K` | `1K` |
 | `quality` | Seedream 5.0 Pro | `standard` | `1K`, `2K` | `1K` |
 
-For Seedream, these presets are routing names rather than a promise that one route is visually superior to another. Unsupported model/resolution pairs fail explicitly; `3K` is not a public value.
-
-All 14 public aspect ratios (`1:1`, `1:4`, `1:8`, `2:3`, `3:2`, `3:4`, `4:1`, `4:3`, `4:5`, `5:4`, `8:1`, `9:16`, `16:9`, and `21:9`) use BytePlus Method 1. The selected resolution token is sent as `size`, and one `Output aspect ratio: <ratio>.` instruction is appended to the final image prompt. The model chooses the final pixel dimensions, so an exact width × height is not promised.
-
-Prompt enhancement uses the same ModelArk Responses path for `fast`, `balanced`, and `quality`; it is not rerun or changed by the image tier. A successful enhancement is used once, an enhancement error preserves the existing original-prompt behavior, and `SKIP_PROMPT_ENHANCEMENT=true` sends the original prompt without a text request. The Method 1 ratio instruction is applied afterward in every path. This prompt-only fallback does not switch provider, model, or option values.
-
-Seedream does not support Google Search. A request with `useGoogleSearch=true` fails capability validation before prompt-enhancement or image-provider requests. Native multi-image/output, streaming, layers, online search, and provider/model/value fallback are not part of the Seedream integration.
-
-Seedream direct image requests use a fixed `300000` ms timeout. This timeout is not configurable and is independent of the existing `30000` ms `apiTimeout` default. Seedream text requests retain their separate `30000` ms default, and other providers' timeout behavior is unchanged.
+All supported aspect ratios use BytePlus Method 1, so final pixel dimensions are model-selected.
+Seedream rejects `imageSize: "4K"` and `useGoogleSearch: true`. Image requests have a fixed
+300-second timeout.
 
 ### Using the OpenAI provider
 
@@ -374,7 +349,7 @@ Your prompt is automatically enhanced with rich details about lighting, material
 
 The server uses a two-stage process with separate models for each stage:
 1. **Prompt Optimization** (Gemini 2.5 Flash by default, `gpt-4o-mini` via OpenAI Responses in OpenAI mode, or the pinned ModelArk Responses text model in Seedream mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
-2. **Image Generation** (Nano Banana 2/Pro by default, `gpt-image-2` in OpenAI mode, or Seedream 5.0 Lite/Pro in Seedream mode): Creates the final image. Provider-specific quality mappings are described above.
+2. **Image Generation** (Nano Banana 2/Pro by default, `gpt-image-2` in OpenAI mode, or Seedream 5.0 Pro in Seedream mode): Creates the final image. Provider-specific quality mappings are described above.
 
 #### Parameters
 
