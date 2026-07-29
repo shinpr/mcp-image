@@ -32,6 +32,11 @@ export type AspectRatio =
 export type ImageSize = '1K' | '2K' | '4K'
 
 /**
+ * Provider-neutral output formats supported by OpenAI and Seedream.
+ */
+export type ImageOutputFormat = 'png' | 'jpeg'
+
+/**
  * Quality presets for image generation
  * - 'fast': Nano Banana 2, fastest generation (default)
  * - 'balanced': Nano Banana 2 with enhanced thinking, better quality

@@ -4,6 +4,7 @@ import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
+import { sanitizeText } from '../utils/logger.js'
 import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
 import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GenerationConfig, TextClient } from './textClient.js'
@@ -55,6 +56,17 @@ class SeedreamTextClientImpl implements TextClient {
       })
       const responseText = response.output_text
 
+      if (response.status === 'incomplete') {
+        const reason = response.incomplete_details?.reason ?? 'unknown reason'
+        return Err(
+          new ImageAPIError(`Seedream text generation response was incomplete: ${reason}`, {
+            provider: 'seedream',
+            stage: 'text generation',
+            suggestion: 'Use the original prompt or increase the prompt generation token limit',
+          })
+        )
+      }
+
       if (!responseText || responseText.trim().length === 0) {
         return Err(
           new ImageAPIError(
@@ -64,7 +76,7 @@ class SeedreamTextClientImpl implements TextClient {
         )
       }
 
-      return Ok(responseText)
+      return Ok(responseText.trim())
     } catch (error) {
       return this.handleError(error, 'text generation')
     }
@@ -193,10 +205,11 @@ class SeedreamTextClientImpl implements TextClient {
 export function createSeedreamTextClient(config: Config): Result<TextClient, ImageAPIError> {
   try {
     return Ok(new SeedreamTextClientImpl(config))
-  } catch {
+  } catch (error) {
+    const errorMessage = sanitizeText(error instanceof Error ? error.message : 'Unknown error')
     return Err(
       new ImageAPIError(
-        'Failed to initialize Seedream text client',
+        `Failed to initialize Seedream text client: ${errorMessage}`,
         'Verify ARK_API_KEY and the installed OpenAI SDK configuration'
       )
     )

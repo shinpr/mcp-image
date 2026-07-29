@@ -8,12 +8,17 @@ import type {
   ImageGenerateParamsNonStreaming,
   ImagesResponse,
 } from 'openai/resources/images'
-import type { ImageQuality } from '../types/mcp.js'
+import type { ImageOutputFormat, ImageQuality } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
-import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
+import {
+  DEFAULT_MIME_TYPE,
+  getMimeTypeForOutputFormat,
+  matchesImageDataMimeType,
+  normalizeMimeType,
+} from '../utils/mimeUtils.js'
 import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
@@ -28,7 +33,6 @@ type OpenAIImageSize =
   | '3840x2160'
   | '2160x3840'
 type OpenAIImageQuality = 'low' | 'medium' | 'high'
-type OpenAIOutputFormat = 'png'
 // The OpenAI guide documents flexible gpt-image-2 resolutions, while SDK types still
 // enumerate the older fixed GPT image sizes. Keep the request cast local to this file.
 type OpenAIImageGenerateRequest = ImageGenerateParamsNonStreaming
@@ -128,7 +132,6 @@ function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIErr
 }
 
 class OpenAIImageClientImpl implements ImageClient {
-  private readonly outputFormat: OpenAIOutputFormat = 'png'
   private readonly modelName = OPENAI_IMAGE_MODEL
 
   constructor(
@@ -147,10 +150,11 @@ class OpenAIImageClientImpl implements ImageClient {
 
       const quality = mapQuality(params.quality ?? this.defaultQuality)
       const size = mapSize(params)
+      const outputFormat: ImageOutputFormat = params.preferredOutputFormat ?? 'png'
 
       const response = hasInputImage(params)
-        ? await this.editImage(params, quality, size)
-        : await this.createImage(params, quality, size)
+        ? await this.editImage(params, quality, size, outputFormat)
+        : await this.createImage(params, quality, size, outputFormat)
 
       const firstImage = response.data?.[0]
       if (!firstImage?.b64_json) {
@@ -165,13 +169,26 @@ class OpenAIImageClientImpl implements ImageClient {
         )
       }
 
+      const imageData = Buffer.from(firstImage.b64_json, 'base64')
+      const mimeType = getMimeTypeForOutputFormat(outputFormat)
+      if (!matchesImageDataMimeType(imageData, mimeType)) {
+        return Err(
+          new ImageAPIError('OpenAI image response did not match the requested output format', {
+            provider: 'openai',
+            model: this.modelName,
+            stage: 'image_response',
+            suggestion: 'Retry the request; the provider returned unexpected image bytes',
+          })
+        )
+      }
+
       return Ok({
-        imageData: Buffer.from(firstImage.b64_json, 'base64'),
+        imageData,
         metadata: {
           model: this.modelName,
           provider: 'openai',
           prompt: params.prompt,
-          mimeType: `image/${this.outputFormat}`,
+          mimeType,
           timestamp: new Date(),
           inputImageProvided: !!params.inputImage,
           ...(firstImage.revised_prompt && { revisedPrompt: firstImage.revised_prompt }),
@@ -185,13 +202,14 @@ class OpenAIImageClientImpl implements ImageClient {
   private async createImage(
     params: ImageApiParams,
     quality: OpenAIImageQuality,
-    size: OpenAIImageSize
+    size: OpenAIImageSize,
+    outputFormat: ImageOutputFormat
   ): Promise<ImagesResponse> {
     const request = {
       model: this.modelName,
       prompt: params.prompt,
       n: 1,
-      output_format: this.outputFormat,
+      output_format: outputFormat,
       quality,
       size,
     }
@@ -202,7 +220,8 @@ class OpenAIImageClientImpl implements ImageClient {
   private async editImage(
     params: ImageEditApiParams,
     quality: OpenAIImageQuality,
-    size: OpenAIImageSize
+    size: OpenAIImageSize,
+    outputFormat: ImageOutputFormat
   ): Promise<ImagesResponse> {
     const mimeType = normalizeMimeType(params.inputImageMimeType ?? DEFAULT_MIME_TYPE)
     const inputFile = await toFile(
@@ -216,7 +235,7 @@ class OpenAIImageClientImpl implements ImageClient {
       prompt: params.prompt,
       image: inputFile,
       n: 1,
-      output_format: this.outputFormat,
+      output_format: outputFormat,
       quality,
       size,
     }

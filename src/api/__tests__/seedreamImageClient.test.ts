@@ -15,6 +15,7 @@ const MAX_DECODED_BYTES = 32 * MIB
 const PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x66, 0x69, 0x78, 0x74, 0x75, 0x72, 0x65,
 ])
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x66, 0x69, 0x78, 0x74, 0x75, 0x72, 0x65])
 const PRIVATE_INPUT_IMAGE = PNG_BYTES.toString('base64')
 const ALL_ASPECT_RATIOS = [
   '1:1',
@@ -286,6 +287,53 @@ describe('seedreamImageClient', () => {
     }
   })
 
+  it('requests and validates JPEG output for generation', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        data: [
+          {
+            b64_json: JPEG_BYTES.toString('base64'),
+            mime_type: 'image/jpeg',
+            output_format: 'jpeg',
+          },
+        ],
+      })
+    )
+
+    const result = await createClient().generateImage({
+      prompt: PRIVATE_PROMPT,
+      preferredOutputFormat: 'jpeg',
+    })
+
+    expect(result.success).toBe(true)
+    expect(readRequest().body.output_format).toBe('jpeg')
+    if (result.success) {
+      expect(result.data.imageData).toEqual(JPEG_BYTES)
+      expect(result.data.metadata.mimeType).toBe('image/jpeg')
+    }
+  })
+
+  it('requests JPEG output for editing', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        data: [{ b64_json: JPEG_BYTES.toString('base64') }],
+      })
+    )
+
+    const result = await createClient().generateImage({
+      prompt: PRIVATE_PROMPT,
+      inputImage: PRIVATE_INPUT_IMAGE,
+      inputImageMimeType: 'image/png',
+      preferredOutputFormat: 'jpeg',
+    })
+
+    expect(result.success).toBe(true)
+    expect(readRequest().body).toMatchObject({
+      output_format: 'jpeg',
+      image: `data:image/png;base64,${PRIVATE_INPUT_IMAGE}`,
+    })
+  })
+
   it.each([
     {
       name: 'Google Search',
@@ -360,6 +408,40 @@ describe('seedreamImageClient', () => {
     expect(rejected.success).toBe(false)
   })
 
+  it('accepts a valid 4 MiB PNG response without overflowing the validation stack', async () => {
+    // Keep this above the former regex stack-overflow threshold (~3.2 MiB decoded on Node 22).
+    const largePng = Buffer.alloc(4 * MIB)
+    PNG_BYTES.copy(largePng)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        data: [{ b64_json: largePng.toString('base64'), mime_type: 'image/png' }],
+      })
+    )
+
+    const result = await createClient().generateImage({ prompt: PRIVATE_PROMPT })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(Buffer.compare(result.data.imageData, largePng)).toBe(0)
+    }
+  })
+
+  it('accepts a valid 4 MiB PNG editing input without overflowing the validation stack', async () => {
+    // Keep this above the former regex stack-overflow threshold (~3.2 MiB decoded on Node 22).
+    const largePng = Buffer.alloc(4 * MIB)
+    PNG_BYTES.copy(largePng)
+
+    const result = await createClient().generateImage({
+      prompt: PRIVATE_PROMPT,
+      inputImage: largePng.toString('base64'),
+      inputImageMimeType: 'image/png',
+    })
+
+    expect(result.success).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readRequest().body.image).toBe(`data:image/png;base64,${largePng.toString('base64')}`)
+  })
+
   it.each([
     {
       name: 'missing data',
@@ -406,8 +488,18 @@ describe('seedreamImageClient', () => {
         }),
     },
     {
-      name: 'malformed base64',
-      response: () => jsonResponse({ data: [{ b64_json: '***', mime_type: 'image/png' }] }),
+      name: 'invalid base64 character after a valid PNG signature',
+      response: () => {
+        const validBase64 = PNG_BYTES.toString('base64')
+        return jsonResponse({
+          data: [
+            {
+              b64_json: `${validBase64.slice(0, -1)}*`,
+              mime_type: 'image/png',
+            },
+          ],
+        })
+      },
     },
     {
       name: 'empty base64',
@@ -593,6 +685,7 @@ describe('seedreamImageClient', () => {
     expect(timeoutSpy).toHaveBeenCalledWith(300000)
     expect(timeoutSpy).not.toHaveBeenCalledWith(1)
     expect(timeoutSpy).not.toHaveBeenCalledWith(30000)
+    expect(readRequest().init.signal).toBe(timeoutSpy.mock.results[0]?.value)
   })
 
   it('rejects missing or whitespace auth during factory preflight', () => {

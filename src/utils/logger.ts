@@ -21,7 +21,6 @@ interface StructuredLogEntry {
 const SENSITIVE_PATTERNS = [
   /GEMINI_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /OPENAI_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
-  /ARK_API_KEY['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /api[_-]?key[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /password[^\s]*['"]?\s*[:=]\s*['"]?([^\s'"]+)/gi,
   /bearer\s+([a-zA-Z0-9\-._~+/]+=*)/gi,

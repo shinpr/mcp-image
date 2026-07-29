@@ -99,7 +99,7 @@ describe('seedreamTextClient', () => {
       topK: 40,
     })
 
-    expect(result).toEqual({ success: true, data: enhancedPrompt })
+    expect(result).toEqual({ success: true, data: enhancedPrompt.trim() })
     expect(transport).toHaveBeenCalledTimes(1)
 
     const [url, init] = transport.mock.calls[0]
@@ -121,6 +121,31 @@ describe('seedreamTextClient', () => {
     expect(Object.hasOwn(body, 'topK')).toBe(false)
     expect(JSON.stringify(body)).not.toContain(DUMMY_API_KEY)
     expect(timeoutSpy).toHaveBeenCalledWith(30000)
+  })
+
+  it('rejects a partial prompt when Responses reports max-output-token truncation', async () => {
+    const transport = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          output_text: 'partial enhanced prompt',
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    )
+    vi.stubGlobal('fetch', transport)
+
+    const result = await createClient().generateText(PRIVATE_PROMPT, { maxTokens: 384 })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(ImageAPIError)
+      expect(result.error.message).toContain('incomplete')
+    }
   })
 
   it('preserves multimodal TextClient input without provider-native prompt fields', async () => {

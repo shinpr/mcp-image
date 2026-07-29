@@ -7,6 +7,8 @@ const mockGenerate = vi.fn()
 const mockEdit = vi.fn()
 const mockOpenAI = vi.fn()
 const mockToFile = vi.fn()
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01])
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x01])
 
 vi.mock('openai', () => ({
   default: class {
@@ -66,7 +68,7 @@ describe('openaiImageClient', () => {
       mockGenerate.mockResolvedValue({
         data: [
           {
-            b64_json: Buffer.from('mock-openai-image-data').toString('base64'),
+            b64_json: PNG_BYTES.toString('base64'),
           },
         ],
       })
@@ -89,7 +91,7 @@ describe('openaiImageClient', () => {
         size: '1024x1024',
       })
       if (result.success) {
-        expect(result.data.imageData).toEqual(Buffer.from('mock-openai-image-data'))
+        expect(result.data.imageData).toEqual(PNG_BYTES)
         expect(result.data.metadata.model).toBe('gpt-image-2')
         expect(result.data.metadata.provider).toBe('openai')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
@@ -101,7 +103,7 @@ describe('openaiImageClient', () => {
       mockEdit.mockResolvedValue({
         data: [
           {
-            b64_json: Buffer.from('mock-openai-edited-image-data').toString('base64'),
+            b64_json: PNG_BYTES.toString('base64'),
           },
         ],
       })
@@ -134,7 +136,7 @@ describe('openaiImageClient', () => {
 
     it('should map balanced quality to medium OpenAI quality', async () => {
       mockGenerate.mockResolvedValue({
-        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+        data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
 
       const clientResult = createOpenAIImageClient(testConfig)
@@ -155,7 +157,7 @@ describe('openaiImageClient', () => {
 
     it('should map quality preset to high OpenAI quality', async () => {
       mockGenerate.mockResolvedValue({
-        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+        data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
 
       const clientResult = createOpenAIImageClient(testConfig)
@@ -176,7 +178,7 @@ describe('openaiImageClient', () => {
 
     it('should map aspect ratio to closest OpenAI size', async () => {
       mockGenerate.mockResolvedValue({
-        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+        data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
 
       const clientResult = createOpenAIImageClient(testConfig)
@@ -197,7 +199,7 @@ describe('openaiImageClient', () => {
 
     it('should fall back to square size when aspect ratio is malformed', async () => {
       mockGenerate.mockResolvedValue({
-        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+        data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
 
       const clientResult = createOpenAIImageClient(testConfig)
@@ -257,9 +259,66 @@ describe('openaiImageClient', () => {
       }
     })
 
+    it('should request and validate JPEG output for generation', async () => {
+      mockGenerate.mockResolvedValue({
+        data: [{ b64_json: JPEG_BYTES.toString('base64') }],
+      })
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate a JPEG image',
+        preferredOutputFormat: 'jpeg',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({ output_format: 'jpeg' }))
+      if (result.success) {
+        expect(result.data.imageData).toEqual(JPEG_BYTES)
+        expect(result.data.metadata.mimeType).toBe('image/jpeg')
+      }
+    })
+
+    it('should request JPEG output for editing', async () => {
+      mockEdit.mockResolvedValue({
+        data: [{ b64_json: JPEG_BYTES.toString('base64') }],
+      })
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Edit as JPEG',
+        inputImage: Buffer.from('input-image-data').toString('base64'),
+        inputImageMimeType: 'image/png',
+        preferredOutputFormat: 'jpeg',
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockEdit).toHaveBeenCalledWith(expect.objectContaining({ output_format: 'jpeg' }))
+    })
+
+    it('should reject bytes that contradict the requested format', async () => {
+      mockGenerate.mockResolvedValue({
+        data: [{ b64_json: JPEG_BYTES.toString('base64') }],
+      })
+      const clientResult = createOpenAIImageClient(testConfig)
+      expect(clientResult.success).toBe(true)
+      if (!clientResult.success) return
+
+      const result = await clientResult.data.generateImage({ prompt: 'Generate PNG' })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ImageAPIError)
+        expect(result.error.context).toMatchObject({ stage: 'image_response' })
+      }
+    })
+
     it('should map 2K imageSize with landscape aspect ratio to a GPT Image 2 size', async () => {
       mockGenerate.mockResolvedValue({
-        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+        data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
 
       const clientResult = createOpenAIImageClient(testConfig)
@@ -282,7 +341,7 @@ describe('openaiImageClient', () => {
 
     it('should map 4K imageSize with portrait aspect ratio to a GPT Image 2 size', async () => {
       mockGenerate.mockResolvedValue({
-        data: [{ b64_json: Buffer.from('mock-openai-image-data').toString('base64') }],
+        data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
 
       const clientResult = createOpenAIImageClient(testConfig)

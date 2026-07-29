@@ -125,6 +125,28 @@ describe('openaiTextClient', () => {
     }
   })
 
+  it('should reject a partial prompt when Responses reports max-output-token truncation', async () => {
+    mockResponsesCreate.mockResolvedValue({
+      output_text: 'partial enhanced prompt',
+      status: 'incomplete',
+      incomplete_details: { reason: 'max_output_tokens' },
+    })
+
+    const clientResult = createOpenAITextClient(testConfig)
+    expect(clientResult.success).toBe(true)
+    if (!clientResult.success) return
+
+    const result = await clientResult.data.generateText('make a product photo', {
+      maxTokens: 1000,
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(ImageAPIError)
+      expect(result.error.message).toContain('incomplete')
+    }
+  })
+
   it('should reject prompts that exceed the 100k character cap', async () => {
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
