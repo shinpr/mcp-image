@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { AspectRatio, GenerateImageParams } from '../../types/mcp'
-import { validateBase64Image, validateGenerateImageParams, validatePrompt } from '../inputValidator'
+import {
+  MAX_IMAGE_SIZE,
+  validateBase64Image,
+  validateGenerateImageParams,
+  validatePrompt,
+} from '../inputValidator'
 
 describe('inputValidator', () => {
   describe('validatePrompt', () => {
@@ -120,9 +125,24 @@ describe('inputValidator', () => {
       }
     })
 
-    it('should return error for image data exceeding 10MB', () => {
-      // Arrange - Create a large base64 string (over 10MB when decoded)
-      const largeBinaryData = Buffer.alloc(11 * 1024 * 1024, 'a') // 11MB
+    it('should return success for image data at exactly 10MB', () => {
+      // Arrange
+      const boundaryBinaryData = Buffer.alloc(MAX_IMAGE_SIZE, 'a')
+      const boundaryBase64 = boundaryBinaryData.toString('base64')
+
+      // Act
+      const result = validateBase64Image(boundaryBase64)
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toHaveLength(MAX_IMAGE_SIZE)
+      }
+    })
+
+    it('should return error for image data exceeding 10MB by one byte', () => {
+      // Arrange
+      const largeBinaryData = Buffer.alloc(MAX_IMAGE_SIZE + 1, 'a')
       const largeBase64 = largeBinaryData.toString('base64')
 
       // Act
@@ -204,6 +224,44 @@ describe('inputValidator', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toEqual(validParams)
+      }
+    })
+
+    it.each([
+      ['undefined', undefined],
+      ['true', true],
+      ['false', false],
+    ])('should accept useGoogleSearch when it is %s', (_name, useGoogleSearch) => {
+      const params: GenerateImageParams = {
+        prompt: 'Generate a beautiful landscape',
+        useGoogleSearch,
+      }
+
+      const result = validateGenerateImageParams(params)
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual(params)
+      }
+    })
+
+    it.each([
+      ['string', 'true'],
+      ['number', 1],
+      ['null', null],
+      ['object', { enabled: true }],
+    ])('should reject useGoogleSearch when it is a %s', (_name, useGoogleSearch) => {
+      const params = {
+        prompt: 'Generate a beautiful landscape',
+        useGoogleSearch,
+      } as unknown as GenerateImageParams
+
+      const result = validateGenerateImageParams(params)
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe('INPUT_VALIDATION_ERROR')
+        expect(result.error.message).toContain('useGoogleSearch must be a boolean value')
       }
     })
   })

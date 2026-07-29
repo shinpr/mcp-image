@@ -18,9 +18,13 @@ describe('StructuredPromptGenerator', () => {
     vi.clearAllMocks()
   })
 
+  function createGenerator(maxTokens = 1000) {
+    return new StructuredPromptGeneratorImpl(mockGeminiTextClient, maxTokens)
+  }
+
   describe('generateStructuredPrompt', () => {
     it('should generate structured prompt successfully', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
       const userPrompt = 'A beautiful sunset'
       const structuredPrompt =
         'A beautiful sunset, dramatic cinematic lighting with golden hour warmth, shot with 85mm lens'
@@ -35,10 +39,26 @@ describe('StructuredPromptGenerator', () => {
         expect(result.data.structuredPrompt).toBe(structuredPrompt)
         expect(result.data.selectedPractices).toContain('Hyper-Specific Details')
       }
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ maxTokens: 1000 })
+      )
+    })
+
+    it('uses the configured prompt-generation token limit', async () => {
+      const generator = createGenerator(384)
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A rainy street')
+
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ maxTokens: 384 })
+      )
     })
 
     it('should handle feature flags correctly', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
       const userPrompt = 'A warrior in the forest'
       const features = {
         maintainCharacterConsistency: true,
@@ -61,7 +81,7 @@ describe('StructuredPromptGenerator', () => {
     })
 
     it('should return error for empty prompt', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
 
       const result = await generator.generateStructuredPrompt('')
 
@@ -73,7 +93,7 @@ describe('StructuredPromptGenerator', () => {
     })
 
     it('should handle Gemini API errors', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
       const userPrompt = 'A test prompt'
       const apiError = new GeminiAPIError('API failed')
 
@@ -88,7 +108,7 @@ describe('StructuredPromptGenerator', () => {
     })
 
     it('should infer selected practices from generated prompt', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
       const userPrompt = 'A portrait'
       const structuredPrompt =
         'A portrait with dramatic lighting, 85mm lens at f/1.4 aperture, maintaining facial features consistency'
@@ -108,7 +128,7 @@ describe('StructuredPromptGenerator', () => {
     })
 
     it('should include purpose context when purpose is provided', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
       const userPrompt = 'Delicious pasta dish'
       const purpose = 'high-end Italian restaurant menu'
 
@@ -127,7 +147,7 @@ describe('StructuredPromptGenerator', () => {
     })
 
     it('should not include purpose context when purpose is not provided', async () => {
-      const generator = new StructuredPromptGeneratorImpl(mockGeminiTextClient)
+      const generator = createGenerator()
       const userPrompt = 'A simple cat'
 
       vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(

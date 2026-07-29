@@ -3,6 +3,7 @@
  * Simplified architecture with direct Gemini integration
  */
 
+import { constants as fsConstants } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -12,16 +13,11 @@ import {
   ListToolsRequestSchema,
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
-// API clients
-import { createGeminiClient } from '../api/geminiClient.js'
-import { createGeminiTextClient } from '../api/geminiTextClient.js'
-import type { ImageClient } from '../api/imageClient.js'
-import { createOpenAIImageClient } from '../api/openaiImageClient.js'
-import { createOpenAITextClient } from '../api/openaiTextClient.js'
+import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
 import type { TextClient } from '../api/textClient.js'
 // Business logic
 import { createFileManager, type FileManager } from '../business/fileManager.js'
-import { validateGenerateImageParams } from '../business/inputValidator.js'
+import { MAX_IMAGE_SIZE, validateGenerateImageParams } from '../business/inputValidator.js'
 import { createResponseBuilder, type ResponseBuilder } from '../business/responseBuilder.js'
 import {
   createStructuredPromptGenerator,
@@ -32,11 +28,16 @@ import {
 import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 
 // Utilities
-import { getConfig } from '../utils/config.js'
+import { type Config, getConfig } from '../utils/config.js'
+import { InputValidationError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import { ensureExtension, getMimeTypeFromExtension } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
 import { ErrorHandler } from './errorHandler.js'
+import {
+  getImageProviderDefinition,
+  type ImageProviderDefinition,
+} from './imageProviderRegistry.js'
 
 /**
  * Default MCP server configuration
@@ -45,6 +46,57 @@ const DEFAULT_CONFIG: MCPServerConfig = {
   name: 'mcp-image-server',
   version: '0.1.0',
   defaultOutputDir: './output',
+}
+
+const INPUT_IMAGE_OPEN_FLAGS =
+  fsConstants.O_RDONLY |
+  (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0) |
+  (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+
+function createInputImageSizeError(actualSize: number): InputValidationError {
+  const sizeInMB = (actualSize / (1024 * 1024)).toFixed(1)
+  const limitInMB = (MAX_IMAGE_SIZE / (1024 * 1024)).toFixed(1)
+  return new InputValidationError(
+    `Image size exceeds ${limitInMB}MB limit. Current size: ${sizeInMB}MB`,
+    `Please compress your image or reduce its resolution to stay below ${limitInMB}MB`
+  )
+}
+
+async function readInputImageWithinLimit(filePath: string): Promise<Buffer> {
+  const fileHandle = await fs.open(filePath, INPUT_IMAGE_OPEN_FLAGS)
+
+  try {
+    const stats = await fileHandle.stat()
+    if (!stats.isFile()) {
+      throw new InputValidationError(
+        'Input image must be a regular file',
+        'Please provide a path to a regular PNG, JPEG, or WebP image file'
+      )
+    }
+    if (stats.size > MAX_IMAGE_SIZE) {
+      throw createInputImageSizeError(stats.size)
+    }
+
+    const boundedBuffer = Buffer.alloc(MAX_IMAGE_SIZE + 1)
+    let observedBytes = 0
+
+    while (observedBytes < boundedBuffer.length) {
+      const readLength = Math.min(64 * 1024, boundedBuffer.length - observedBytes)
+      const { bytesRead } = await fileHandle.read(boundedBuffer, observedBytes, readLength, null)
+      if (bytesRead === 0) {
+        break
+      }
+
+      observedBytes += bytesRead
+      if (observedBytes > MAX_IMAGE_SIZE) {
+        throw createInputImageSizeError(observedBytes)
+      }
+    }
+
+    return boundedBuffer.subarray(0, observedBytes)
+  } finally {
+    await fileHandle.close()
+  }
 }
 
 /**
@@ -189,44 +241,30 @@ export class MCPServerImpl {
   /**
    * Initialize provider clients lazily.
    */
-  private async initializeClients(): Promise<void> {
-    const configResult = getConfig()
-    if (!configResult.success) {
-      throw configResult.error
-    }
-    const config = configResult.data
-
+  private async initializeClients(
+    config: Config,
+    provider: ImageProviderDefinition
+  ): Promise<void> {
     if (this.imageClient && (config.skipPromptEnhancement || this.structuredPromptGenerator)) {
       return
     }
 
     // Initialize Text Client for prompt generation when enhancement is enabled.
     if (!config.skipPromptEnhancement && !this.textClient) {
-      const textClientResult =
-        config.imageProvider === 'openai'
-          ? createOpenAITextClient(config)
-          : createGeminiTextClient(config)
-      if (!textClientResult.success) {
-        throw textClientResult.error
-      }
-      this.textClient = textClientResult.data
+      this.textClient = provider.createTextClient(config)
     }
 
     // Initialize Structured Prompt Generator
     if (!config.skipPromptEnhancement && this.textClient && !this.structuredPromptGenerator) {
-      this.structuredPromptGenerator = createStructuredPromptGenerator(this.textClient)
+      this.structuredPromptGenerator = createStructuredPromptGenerator(
+        this.textClient,
+        provider.promptGeneration.maxTokens
+      )
     }
 
     // Initialize image generation client.
     if (!this.imageClient) {
-      const clientResult =
-        config.imageProvider === 'openai'
-          ? createOpenAIImageClient(config)
-          : createGeminiClient(config)
-      if (!clientResult.success) {
-        throw clientResult.error
-      }
-      this.imageClient = clientResult.data
+      this.imageClient = provider.createImageClient(config)
     }
 
     this.logger.info('mcp-server', 'Image provider clients initialized', {
@@ -251,9 +289,11 @@ export class MCPServerImpl {
       if (!configResult.success) {
         throw configResult.error
       }
+      const config = configResult.data
+      const provider = getImageProviderDefinition(config.imageProvider)
 
       // Initialize clients
-      await this.initializeClients()
+      await this.initializeClients(config, provider)
 
       // Handle input image if provided
       let inputImageData: string | undefined
@@ -267,14 +307,27 @@ export class MCPServerImpl {
         if (!extensionCheck.success) {
           throw extensionCheck.error
         }
-        const imageBuffer = await fs.readFile(sanitizedInputPath.data)
+        const imageBuffer = await readInputImageWithinLimit(sanitizedInputPath.data)
         inputImageData = imageBuffer.toString('base64')
         inputImageMimeType = getMimeTypeFromExtension(path.extname(sanitizedInputPath.data))
       }
 
+      const imageOptions = {
+        ...(inputImageData && { inputImage: inputImageData }),
+        ...(inputImageMimeType && { inputImageMimeType }),
+        ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
+        ...(params.imageSize && { imageSize: params.imageSize }),
+        ...(params.useGoogleSearch !== undefined && {
+          useGoogleSearch: params.useGoogleSearch,
+        }),
+        ...(params.quality !== undefined && { quality: params.quality }),
+      } satisfies Omit<ImageApiParams, 'prompt'>
+
+      provider.validateImageOptions?.(imageOptions, config)
+
       // Generate structured prompt (unless skipped)
       let structuredPrompt = params.prompt
-      if (!configResult.data.skipPromptEnhancement && this.structuredPromptGenerator) {
+      if (!config.skipPromptEnhancement && this.structuredPromptGenerator) {
         const features: FeatureFlags = {}
         if (params.maintainCharacterConsistency !== undefined) {
           features.maintainCharacterConsistency = params.maintainCharacterConsistency
@@ -310,7 +363,7 @@ export class MCPServerImpl {
             error: promptResult.error.message,
           })
         }
-      } else if (configResult.data.skipPromptEnhancement) {
+      } else if (config.skipPromptEnhancement) {
         this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
       }
 
@@ -321,12 +374,7 @@ export class MCPServerImpl {
 
       const generationResult = await this.imageClient.generateImage({
         prompt: structuredPrompt,
-        ...(inputImageData && { inputImage: inputImageData }),
-        ...(inputImageMimeType && { inputImageMimeType }),
-        ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
-        ...(params.imageSize && { imageSize: params.imageSize }),
-        ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
-        ...(params.quality !== undefined && { quality: params.quality }),
+        ...imageOptions,
       })
 
       if (!generationResult.success) {
@@ -339,7 +387,7 @@ export class MCPServerImpl {
         ? this.securityManager.sanitizeFilename(params.fileName)
         : this.fileManager.generateFileName(mimeType)
       const fileName = params.fileName ? ensureExtension(rawFileName, mimeType) : rawFileName
-      const outputPath = path.join(configResult.data.imageOutputDir, fileName)
+      const outputPath = path.join(config.imageOutputDir, fileName)
 
       const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
       if (!sanitizedPath.success) {

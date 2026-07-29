@@ -1,6 +1,6 @@
 /**
  * Structured Prompt Generator
- * Uses Gemini Flash to generate optimized prompts for image generation
+ * Uses the selected provider's text client to generate optimized image prompts
  * Applies 7 best practices and 3 feature perspectives through intelligent selection
  */
 
@@ -39,7 +39,6 @@ Core principles:
 - Maintain clarity while adding richness and specificity
 
 Your output should weave these elements into a single, natural flowing description - not a structured list. Make it vivid, engaging, and unambiguous.`
-
 /**
  * Additional system prompt for image editing mode (when input image is provided)
  */
@@ -85,10 +84,13 @@ export interface StructuredPromptGenerator {
 }
 
 /**
- * Implementation of StructuredPromptGenerator using Gemini Flash
+ * Provider-neutral implementation of StructuredPromptGenerator
  */
 export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator {
-  constructor(private readonly textClient: TextClient) {}
+  constructor(
+    private readonly textClient: TextClient,
+    private readonly maxTokens: number
+  ) {}
 
   async generateStructuredPrompt(
     userPrompt: string,
@@ -119,7 +121,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       // Generate structured prompt via pure API call
       const config = {
         temperature: 0.7,
-        maxTokens: 1000,
+        maxTokens: this.maxTokens,
         systemInstruction,
         ...(inputImageData && { inputImage: inputImageData }),
         ...(inputImageMimeType && { inputImageMimeType }),
@@ -310,6 +312,9 @@ Now transform the user's request with similar attention to detail and creative e
 /**
  * Factory function to create StructuredPromptGenerator
  */
-export function createStructuredPromptGenerator(textClient: TextClient): StructuredPromptGenerator {
-  return new StructuredPromptGeneratorImpl(textClient)
+export function createStructuredPromptGenerator(
+  textClient: TextClient,
+  maxTokens: number
+): StructuredPromptGenerator {
+  return new StructuredPromptGeneratorImpl(textClient, maxTokens)
 }

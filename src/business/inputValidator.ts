@@ -15,7 +15,7 @@ import { SUPPORTED_EXTENSIONS, SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.j
 // Constants for validation limits
 const PROMPT_MIN_LENGTH = 1
 const PROMPT_MAX_LENGTH = 4000
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
+export const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10MB in bytes
 const SUPPORTED_ASPECT_RATIOS: readonly AspectRatio[] = [
   '1:1',
   '1:4',
@@ -208,6 +208,16 @@ export function validateGenerateImageParams(
       new InputValidationError(
         'useWorldKnowledge must be a boolean value',
         'Use true or false for useWorldKnowledge parameter to enable/disable world knowledge integration'
+      )
+    )
+  }
+
+  // Validate useGoogleSearch parameter
+  if (params.useGoogleSearch !== undefined && typeof params.useGoogleSearch !== 'boolean') {
+    return Err(
+      new InputValidationError(
+        'useGoogleSearch must be a boolean value',
+        'Use true or false for useGoogleSearch parameter to enable/disable Google Search grounding'
       )
     )
   }

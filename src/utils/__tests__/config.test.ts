@@ -11,6 +11,7 @@ describe('config', () => {
     process.env.IMAGE_PROVIDER = undefined
     process.env.GEMINI_API_KEY = undefined
     process.env.OPENAI_API_KEY = undefined
+    process.env.ARK_API_KEY = undefined
     process.env.IMAGE_OUTPUT_DIR = undefined
     process.env.IMAGE_QUALITY = undefined
   })
@@ -27,6 +28,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: '',
         openaiApiKey: '',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -51,6 +53,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'short',
         openaiApiKey: '',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -74,6 +77,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: -1000, // Invalid negative timeout
         skipPromptEnhancement: false,
@@ -101,6 +105,7 @@ describe('config', () => {
           imageProvider: 'gemini' as const,
           geminiApiKey: 'valid-api-key-12345',
           openaiApiKey: '',
+          arkApiKey: '',
           imageOutputDir: './output',
           apiTimeout: 30000,
           skipPromptEnhancement: false,
@@ -121,6 +126,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -147,6 +153,7 @@ describe('config', () => {
         imageProvider: 'gemini' as const,
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -169,6 +176,7 @@ describe('config', () => {
         imageProvider: 'openai' as const,
         geminiApiKey: '',
         openaiApiKey: 'test-openai-api-key-12345',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -188,6 +196,7 @@ describe('config', () => {
         imageProvider: 'openai' as const,
         geminiApiKey: '',
         openaiApiKey: '',
+        arkApiKey: '',
         imageOutputDir: './output',
         apiTimeout: 30000,
         skipPromptEnhancement: false,
@@ -203,6 +212,56 @@ describe('config', () => {
         expect(result.error).toBeInstanceOf(ConfigError)
         expect(result.error.message).toContain('OPENAI_API_KEY')
       }
+    })
+
+    it.each(['', '   '])(
+      'should require a trimmed non-empty ARK_API_KEY for the Seedream provider',
+      (arkApiKey) => {
+        // Arrange
+        const config = {
+          imageProvider: 'seedream' as const,
+          geminiApiKey: '',
+          openaiApiKey: '',
+          arkApiKey,
+          imageOutputDir: './output',
+          apiTimeout: 30000,
+          skipPromptEnhancement: false,
+          imageQuality: 'fast' as const,
+        }
+
+        // Act
+        const result = validateConfig(config)
+
+        // Assert
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error).toBeInstanceOf(ConfigError)
+          expect(result.error.message).toContain('ARK_API_KEY')
+          if (arkApiKey.length > 0) {
+            expect(result.error.message).not.toContain(arkApiKey)
+          }
+        }
+      }
+    )
+
+    it('should accept a trimmed non-empty ARK_API_KEY without other provider keys', () => {
+      // Arrange
+      const config = {
+        imageProvider: 'seedream' as const,
+        geminiApiKey: '',
+        openaiApiKey: '',
+        arkApiKey: '  test-ark-key  ',
+        imageOutputDir: './output',
+        apiTimeout: 30000,
+        skipPromptEnhancement: false,
+        imageQuality: 'fast' as const,
+      }
+
+      // Act
+      const result = validateConfig(config)
+
+      // Assert
+      expect(result.success).toBe(true)
     })
   })
 
@@ -251,6 +310,23 @@ describe('config', () => {
       if (result.success) {
         expect(result.data.imageProvider).toBe('openai')
         expect(result.data.openaiApiKey).toBe('test-openai-api-key-12345')
+      }
+    })
+
+    it('should load the exact Seedream provider and ARK_API_KEY from environment', () => {
+      // Arrange
+      process.env.IMAGE_PROVIDER = 'seedream'
+      process.env.ARK_API_KEY = 'test-ark-api-key'
+
+      // Act
+      const result = getConfig()
+
+      // Assert
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.imageProvider).toBe('seedream')
+        expect(result.data.arkApiKey).toBe('test-ark-api-key')
+        expect(result.data.apiTimeout).toBe(30000)
       }
     })
 

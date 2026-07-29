@@ -21,7 +21,7 @@
       "environmentVariables": [
         {
           "name": "IMAGE_PROVIDER",
-          "description": "Image provider to use: 'gemini' (default) or 'openai'",
+          "description": "Image provider to use: 'gemini' (default), 'openai', or 'seedream'",
           "isRequired": false,
           "format": "string",
           "isSecret": false
@@ -41,6 +41,13 @@
           "isSecret": true
         },
         {
+          "name": "ARK_API_KEY",
+          "description": "BytePlus ModelArk AP region API key required when IMAGE_PROVIDER=seedream",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": true
+        },
+        {
           "name": "IMAGE_OUTPUT_DIR",
           "description": "Absolute path to directory where generated images will be saved (defaults to ./output)",
           "isRequired": false,
@@ -49,7 +56,7 @@
         },
         {
           "name": "IMAGE_QUALITY",
-          "description": "Default quality preset: 'fast' (Nano Banana 2, default), 'balanced' (Nano Banana 2 + thinking), 'quality' (Nano Banana Pro)",
+          "description": "Default quality preset: 'fast' (default), 'balanced', or 'quality'",
           "isRequired": false,
           "format": "string",
           "isSecret": false
@@ -88,6 +95,9 @@
     "gemini",
     "openai",
     "gpt-image-2",
+    "byteplus",
+    "modelark",
+    "seedream",
     "nano-banana",
     "nano-banana-2",
     "nano-banana-pro",

@@ -198,6 +198,41 @@ describe('Logger', () => {
       )
     })
 
+    it('should redact Seedream credentials and sensitive request data', () => {
+      // Arrange
+      const sensitiveValues = {
+        arkApiKey: 'ark-dummy-key',
+        authorization: 'bearer-dummy-token',
+        prompt: 'private prompt value',
+        image: 'private-image-value',
+        requestBody: 'private-request-body',
+        responseBody: 'private-response-body',
+      }
+      const message = [
+        `ARK_API_KEY=${sensitiveValues.arkApiKey}`,
+        `Authorization: Bearer ${sensitiveValues.authorization}`,
+        `prompt="${sensitiveValues.prompt}"`,
+        `image="${sensitiveValues.image}"`,
+        `request_body="${sensitiveValues.requestBody}"`,
+      ].join(' ')
+      const error = new Error(`response_body="${sensitiveValues.responseBody}"`)
+
+      // Act
+      logger.error('seedream', message, error, {
+        prompt: sensitiveValues.prompt,
+        image: sensitiveValues.image,
+        rawBody: sensitiveValues.requestBody,
+        authorization: `Bearer ${sensitiveValues.authorization}`,
+      })
+
+      // Assert
+      const logOutput = mockConsoleError.mock.calls[0][0]
+      expect(logOutput).toContain('[REDACTED]')
+      for (const sensitiveValue of Object.values(sensitiveValues)) {
+        expect(logOutput).not.toContain(sensitiveValue)
+      }
+    })
+
     it('should redact URLs in log messages', () => {
       // Arrange
       const message = 'Fetching data from https://api.example.com/v1/data?key=secret'
