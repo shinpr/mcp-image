@@ -274,7 +274,8 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 
 ### Using the BytePlus Seedream provider
 
-Create an API key in the [ModelArk AP region console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey). Restart the MCP server after changing provider settings.
+As of July 29, 2026, Seedream 5.0 Pro is available only in ModelArk AP (`ap-southeast-1`). Create an
+API key in the [ModelArk AP region console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey).
 
 Seedream quality routing is fixed:
 
