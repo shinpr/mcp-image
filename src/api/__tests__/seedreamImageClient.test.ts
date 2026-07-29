@@ -422,7 +422,7 @@ describe('seedreamImageClient', () => {
 
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.imageData).toEqual(largePng)
+      expect(Buffer.compare(result.data.imageData, largePng)).toBe(0)
     }
   })
 
