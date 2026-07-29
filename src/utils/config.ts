@@ -155,7 +155,7 @@ export function getConfig(): Result<Config, ConfigError> {
     imageProvider: (readEnv('IMAGE_PROVIDER') || DEFAULT_CONFIG.imageProvider) as ImageProvider,
     geminiApiKey: readEnv('GEMINI_API_KEY') || '',
     openaiApiKey: readEnv('OPENAI_API_KEY') || '',
-    arkApiKey: readEnv('ARK_API_KEY') || '',
+    arkApiKey: (readEnv('ARK_API_KEY') || '').trim(),
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     apiTimeout: DEFAULT_CONFIG.apiTimeout,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',

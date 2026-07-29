@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Config } from '../../utils/config'
+import { type Config, getConfig } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import { createSeedreamTextClient } from '../seedreamTextClient'
 
 const MODELARK_BASE_URL = 'https://ark.ap-southeast.bytepluses.com/api/v3'
 const DUMMY_API_KEY = 'ark-dummy-seedream-text-key'
+const WRAPPED_DUMMY_API_KEY = ` \t${DUMMY_API_KEY}\n `
 const PRIVATE_PROMPT = 'private-seedream-text-prompt'
 
 const testConfig: Config = {
@@ -39,12 +40,51 @@ function createClient() {
   return clientResult.data
 }
 
+function stubSeedreamEnvironment(): void {
+  vi.stubEnv('IMAGE_PROVIDER', 'seedream')
+  vi.stubEnv('GEMINI_API_KEY', 'gemini-dummy-seedream-text-key')
+  vi.stubEnv('OPENAI_API_KEY', 'openai-dummy-seedream-text-key')
+  vi.stubEnv('ARK_API_KEY', WRAPPED_DUMMY_API_KEY)
+  vi.stubEnv('IMAGE_OUTPUT_DIR', './output')
+  vi.stubEnv('IMAGE_QUALITY', 'fast')
+  vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+  vi.stubEnv('NODE_ENV', 'test')
+}
+
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('seedreamTextClient', () => {
+  it('uses the configuration-normalized environment key in SDK Authorization', async () => {
+    stubSeedreamEnvironment()
+    const configResult = getConfig()
+    expect(configResult.success).toBe(true)
+    if (!configResult.success) {
+      throw configResult.error
+    }
+    expect(configResult.data.arkApiKey).toBe(DUMMY_API_KEY)
+
+    const transport = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(successfulResponse('normalized authorization response'))
+    vi.stubGlobal('fetch', transport)
+    const clientResult = createSeedreamTextClient(configResult.data)
+    expect(clientResult.success).toBe(true)
+    if (!clientResult.success) {
+      throw clientResult.error
+    }
+
+    const result = await clientResult.data.generateText(PRIVATE_PROMPT)
+
+    expect(result).toEqual({ success: true, data: 'normalized authorization response' })
+    expect(transport).toHaveBeenCalledTimes(1)
+    const [, init] = transport.mock.calls[0]
+    expect(new Headers(init?.headers).get('authorization')).toBe(`Bearer ${DUMMY_API_KEY}`)
+  })
+
   it('serializes the pinned Responses request through the installed SDK and returns exact text', async () => {
     const enhancedPrompt = '  fixture enhanced prompt\n'
     const transport = vi.fn<typeof fetch>().mockResolvedValue(successfulResponse(enhancedPrompt))

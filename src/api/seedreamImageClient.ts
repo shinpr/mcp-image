@@ -459,8 +459,7 @@ class SeedreamImageClientImpl implements ImageClient {
 }
 
 export function createSeedreamImageClient(config: Config): Result<ImageClient, ImageAPIError> {
-  const apiKey = config.arkApiKey.trim()
-  if (apiKey.length === 0) {
+  if (config.arkApiKey.trim().length === 0) {
     return Err(
       new ImageAPIError(
         'Failed to initialize Seedream image client',
@@ -474,5 +473,5 @@ export function createSeedreamImageClient(config: Config): Result<ImageClient, I
     return capabilityResult
   }
 
-  return Ok(new SeedreamImageClientImpl(apiKey, config.imageQuality))
+  return Ok(new SeedreamImageClientImpl(config.arkApiKey, config.imageQuality))
 }

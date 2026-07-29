@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Config } from '../../utils/config'
+import { type Config, getConfig } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import type { ImageApiParams, ImageClient } from '../imageClient'
 import { createSeedreamImageClient, validateSeedreamCapabilities } from '../seedreamImageClient'
 
 const API_ENDPOINT = 'https://ark.ap-southeast.bytepluses.com/api/v3/images/generations'
 const DUMMY_API_KEY = 'ark-dummy-seedream-image-key'
+const WRAPPED_DUMMY_API_KEY = ` \t${DUMMY_API_KEY}\n `
 const PRIVATE_PROMPT = 'private-seedream-image-prompt'
 const RAW_BODY_MARKER = 'private-upstream-body-marker'
 const MIB = 1024 * 1024
@@ -93,6 +94,17 @@ function disclosedError(error: ImageAPIError | NetworkError): string {
   })
 }
 
+function stubSeedreamEnvironment(): void {
+  vi.stubEnv('IMAGE_PROVIDER', 'seedream')
+  vi.stubEnv('GEMINI_API_KEY', 'gemini-dummy-seedream-image-key')
+  vi.stubEnv('OPENAI_API_KEY', 'openai-dummy-seedream-image-key')
+  vi.stubEnv('ARK_API_KEY', WRAPPED_DUMMY_API_KEY)
+  vi.stubEnv('IMAGE_OUTPUT_DIR', './output')
+  vi.stubEnv('IMAGE_QUALITY', 'fast')
+  vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+  vi.stubEnv('NODE_ENV', 'test')
+}
+
 beforeEach(() => {
   fetchMock.mockReset()
   fetchMock.mockResolvedValue(successfulResponse())
@@ -102,9 +114,28 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('seedreamImageClient', () => {
+  it('uses the configuration-normalized environment key in direct HTTP Authorization', async () => {
+    stubSeedreamEnvironment()
+    const configResult = getConfig()
+    expect(configResult.success).toBe(true)
+    if (!configResult.success) {
+      throw configResult.error
+    }
+    expect(configResult.data.arkApiKey).toBe(DUMMY_API_KEY)
+
+    const result = await createClient(configResult.data).generateImage({
+      prompt: PRIVATE_PROMPT,
+    })
+
+    expect(result.success).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readRequest().headers.get('authorization')).toBe(`Bearer ${DUMMY_API_KEY}`)
+  })
+
   it.each([
     {
       name: 'fast default',
