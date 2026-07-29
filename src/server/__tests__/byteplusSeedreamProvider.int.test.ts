@@ -1,11 +1,19 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { constants as fsConstants } from 'node:fs'
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ImageClient } from '../../api/imageClient.js'
 import type { FileManager } from '../../business/fileManager.js'
+import { MAX_IMAGE_SIZE } from '../../business/inputValidator.js'
 import type { ResponseBuilder } from '../../business/responseBuilder.js'
 import type { StructuredPromptGenerator } from '../../business/structuredPromptGenerator.js'
 import { createMCPServer } from '../mcpServer.js'
+
+const fileSystem = vi.hoisted(() => ({
+  actualOpen: undefined as typeof import('node:fs/promises').open | undefined,
+  open: vi.fn(),
+}))
 
 const transports = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -20,6 +28,16 @@ const transports = vi.hoisted(() => ({
   openAIResponsesCreate: vi.fn(),
   toFile: vi.fn(),
 }))
+
+vi.mock('node:fs/promises', async (importActual) => {
+  const actual = await importActual<typeof import('node:fs/promises')>()
+  fileSystem.actualOpen = actual.open
+  fileSystem.open.mockImplementation(actual.open)
+  return {
+    ...actual,
+    open: fileSystem.open,
+  }
+})
 
 vi.mock('@google/genai', async (importActual) => {
   const actual = await importActual<typeof import('@google/genai')>()
@@ -112,6 +130,11 @@ let originalEnv: Partial<Record<(typeof TRACKED_ENV)[number], string>>
 const temporaryDirectories = new Set<string>()
 
 function resetTransportDoubles(): void {
+  if (!fileSystem.actualOpen) {
+    throw new Error('node:fs/promises.open test delegate is not initialized')
+  }
+  fileSystem.open.mockReset()
+  fileSystem.open.mockImplementation(fileSystem.actualOpen)
   transports.fetch.mockReset()
   transports.googleConstructor.mockReset()
   transports.googleGenerateContent.mockReset()
@@ -217,6 +240,17 @@ function configureSeedream(
   process.env.IMAGE_OUTPUT_DIR = outputDirectory
   process.env.IMAGE_QUALITY = options.imageQuality ?? 'fast'
   process.env.SKIP_PROMPT_ENHANCEMENT = String(options.skipPromptEnhancement ?? false)
+  process.env.NODE_ENV = 'test'
+}
+
+function configureGemini(outputDirectory: string): void {
+  process.env.IMAGE_PROVIDER = 'gemini'
+  process.env.GEMINI_API_KEY = 'gemini-dummy-integration-key'
+  process.env.OPENAI_API_KEY = 'openai-dummy-integration-key'
+  process.env.ARK_API_KEY = ARK_DUMMY_KEY
+  process.env.IMAGE_OUTPUT_DIR = outputDirectory
+  process.env.IMAGE_QUALITY = 'fast'
+  process.env.SKIP_PROMPT_ENHANCEMENT = 'true'
   process.env.NODE_ENV = 'test'
 }
 
@@ -1026,6 +1060,348 @@ describe('BytePlus Seedream integration', () => {
     }
   })
 
+  // AC: SEC-FILE-BOUND-01, SEC-FILE-TYPE-02, INPUT-SIZE-CONTRACT-04, RESOURCE-CLEANUP-05
+  // Behavior: file-backed input -> opened-handle bounded read -> exact-limit success or contained
+  // validation error with no base64/downstream side effect and guaranteed handle cleanup.
+  // @category: integration
+  // @lane: integration
+  // @dependency: createMCPServer, input validation, Gemini ImageClient, FileManager, ResponseBuilder
+  // @real-dependency: path sanitization and temporary filesystem
+  // @complexity: high
+  // Value Score: 110
+  // Budget justification: this task explicitly requires an independent common file-boundary proof;
+  // it is not a Seedream transport variant covered by the original three annotated integration cases.
+  it('bounds file-backed input before base64 and downstream side effects', async () => {
+    const inputDirectory = await createOutputDirectory()
+    const expectedInputOpenFlags =
+      fsConstants.O_RDONLY |
+      (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0) |
+      (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+    const bufferAllocSpy = vi.spyOn(Buffer, 'alloc')
+    const bufferToStringSpy = vi.spyOn(Buffer.prototype, 'toString')
+
+    resetTransportDoubles()
+    const exactOutputDirectory = await createOutputDirectory()
+    const exactInputPath = join(inputDirectory, 'exact-limit.png')
+    await writeFile(exactInputPath, Buffer.alloc(MAX_IMAGE_SIZE, 0x61))
+    configureGemini(exactOutputDirectory)
+    let exactCloseSpy: ReturnType<typeof vi.spyOn> | undefined
+    fileSystem.open.mockImplementation(async (filePath: string, flags: string | number) => {
+      if (!fileSystem.actualOpen) {
+        throw new Error('node:fs/promises.open test delegate is not initialized')
+      }
+      const handle = await fileSystem.actualOpen(filePath, flags)
+      if (filePath.endsWith('/exact-limit.png')) {
+        exactCloseSpy = vi.spyOn(handle, 'close')
+      }
+      return handle
+    })
+    const exactServer = createMCPServer()
+    const exactInternals = readServerInternals(exactServer)
+    const exactSaveSpy = vi.spyOn(exactInternals.fileManager, 'saveImage')
+    const beforeExactAllocCalls = bufferAllocSpy.mock.calls.length
+
+    expect.soft(await readdir(exactOutputDirectory), 'exact-limit:before').toEqual([])
+    const exactResult = await exactServer.callTool('generate_image', {
+      prompt: ORIGINAL_PROMPT,
+      fileName: 'exact-limit-output.png',
+      inputImagePath: exactInputPath,
+    })
+    const exactAllocSizes = bufferAllocSpy.mock.calls
+      .slice(beforeExactAllocCalls)
+      .map(([size]) => size)
+
+    expect.soft(exactResult.isError, 'exact-limit').toBe(false)
+    expect.soft(fileSystem.open, 'exact-limit').toHaveBeenCalledTimes(1)
+    expect
+      .soft(fileSystem.open, 'exact-limit')
+      .toHaveBeenCalledWith(expect.stringMatching(/\/exact-limit\.png$/), expectedInputOpenFlags)
+    expect.soft(exactCloseSpy, 'exact-limit').toHaveBeenCalledTimes(1)
+    expect.soft(exactAllocSizes, 'exact-limit:allocation').toContain(MAX_IMAGE_SIZE + 1)
+    expect
+      .soft(
+        exactAllocSizes.every((size) => size <= MAX_IMAGE_SIZE + 1),
+        'exact-limit:ceiling'
+      )
+      .toBe(true)
+    expect.soft(transports.openAIResponsesCreate, 'exact-limit:text').not.toHaveBeenCalled()
+    expect.soft(transports.googleGenerateContent, 'exact-limit:image').toHaveBeenCalledTimes(1)
+    expect.soft(exactSaveSpy, 'exact-limit:save').toHaveBeenCalledTimes(1)
+    expect
+      .soft(await readdir(exactOutputDirectory), 'exact-limit:after')
+      .toEqual(['exact-limit-output.png'])
+
+    resetTransportDoubles()
+    const oversizedOutputDirectory = await createOutputDirectory()
+    const oversizedInputPath = join(inputDirectory, 'over-limit.png')
+    await writeFile(oversizedInputPath, Buffer.alloc(MAX_IMAGE_SIZE + 1, 0x62))
+    configureGemini(oversizedOutputDirectory)
+    let oversizedReadSpy: ReturnType<typeof vi.spyOn> | undefined
+    let oversizedCloseSpy: ReturnType<typeof vi.spyOn> | undefined
+    fileSystem.open.mockImplementation(async (filePath: string, flags: string | number) => {
+      if (!fileSystem.actualOpen) {
+        throw new Error('node:fs/promises.open test delegate is not initialized')
+      }
+      const handle = await fileSystem.actualOpen(filePath, flags)
+      if (filePath.endsWith('/over-limit.png')) {
+        oversizedReadSpy = vi.spyOn(handle, 'read')
+        oversizedCloseSpy = vi.spyOn(handle, 'close')
+      }
+      return handle
+    })
+    const oversizedServer = createMCPServer()
+    const oversizedInternals = readServerInternals(oversizedServer)
+    const oversizedSaveSpy = vi.spyOn(oversizedInternals.fileManager, 'saveImage')
+    const beforeOversizedAllocCalls = bufferAllocSpy.mock.calls.length
+    const beforeOversizedBase64Calls = bufferToStringSpy.mock.calls.length
+
+    expect.soft(await readdir(oversizedOutputDirectory), 'over-limit:before').toEqual([])
+    const oversizedResult = await oversizedServer.callTool('generate_image', {
+      prompt: ORIGINAL_PROMPT,
+      fileName: 'over-limit-output.png',
+      inputImagePath: oversizedInputPath,
+    })
+    const oversizedAllocSizes = bufferAllocSpy.mock.calls
+      .slice(beforeOversizedAllocCalls)
+      .map(([size]) => size)
+    const oversizedBase64Calls = bufferToStringSpy.mock.calls
+      .slice(beforeOversizedBase64Calls)
+      .filter(([encoding]) => encoding === 'base64')
+    const oversizedError = (parsePublicResponse(oversizedResult).error ?? {}) as Record<
+      string,
+      unknown
+    >
+
+    expect.soft(oversizedResult.isError, 'over-limit').toBe(true)
+    expect.soft(oversizedError.code, 'over-limit').toBe('INPUT_VALIDATION_ERROR')
+    expect.soft(oversizedError.message, 'over-limit').toContain('10.0MB')
+    expect.soft(fileSystem.open, 'over-limit').toHaveBeenCalledTimes(1)
+    expect.soft(oversizedReadSpy, 'over-limit:read').not.toHaveBeenCalled()
+    expect.soft(oversizedCloseSpy, 'over-limit').toHaveBeenCalledTimes(1)
+    expect.soft(oversizedAllocSizes, 'over-limit:allocation').toEqual([])
+    expect.soft(oversizedBase64Calls, 'over-limit:base64').toEqual([])
+    expect.soft(transports.openAIResponsesCreate, 'over-limit:text').not.toHaveBeenCalled()
+    expect.soft(transports.googleGenerateContent, 'over-limit:image').not.toHaveBeenCalled()
+    expect.soft(oversizedSaveSpy, 'over-limit:save').not.toHaveBeenCalled()
+    expect.soft(await readdir(oversizedOutputDirectory), 'over-limit:after').toEqual([])
+
+    resetTransportDoubles()
+    const growthOutputDirectory = await createOutputDirectory()
+    const growthInputPath = join(inputDirectory, 'growth.png')
+    await writeFile(growthInputPath, Buffer.from('initial-file'))
+    const sanitizedGrowthInputPath = await realpath(growthInputPath)
+    configureGemini(growthOutputDirectory)
+    let growthObservedBytes = 0
+    let growthLargestReadEnd = 0
+    const growthClose = vi.fn(async () => undefined)
+    const growthRead = vi.fn(
+      async (buffer: Buffer, offset: number, length: number, _position: number | null) => {
+        const bytesRead = Math.min(length, MAX_IMAGE_SIZE + 1 - growthObservedBytes)
+        buffer.fill(0x63, offset, offset + bytesRead)
+        growthObservedBytes += bytesRead
+        growthLargestReadEnd = Math.max(growthLargestReadEnd, offset + length)
+        return { buffer, bytesRead }
+      }
+    )
+    const growthHandle = {
+      close: growthClose,
+      read: growthRead,
+      stat: vi.fn(async () => ({
+        isFile: () => true,
+        size: MAX_IMAGE_SIZE,
+      })),
+    }
+    // Mock-boundary rationale: simulate only the external growing-file handle/stat/read sequence;
+    // path selection, bounded reading, MCP orchestration, transports, saves, and other fs access stay real.
+    fileSystem.open.mockImplementation(async (filePath: string, flags: string | number) => {
+      if (filePath === sanitizedGrowthInputPath) {
+        return growthHandle
+      }
+      if (!fileSystem.actualOpen) {
+        throw new Error('node:fs/promises.open test delegate is not initialized')
+      }
+      return fileSystem.actualOpen(filePath, flags)
+    })
+    const growthServer = createMCPServer()
+    const growthInternals = readServerInternals(growthServer)
+    const growthSaveSpy = vi.spyOn(growthInternals.fileManager, 'saveImage')
+    const beforeGrowthAllocCalls = bufferAllocSpy.mock.calls.length
+    const beforeGrowthBase64Calls = bufferToStringSpy.mock.calls.length
+
+    expect.soft(await readdir(growthOutputDirectory), 'growth:before').toEqual([])
+    const growthResult = await growthServer.callTool('generate_image', {
+      prompt: ORIGINAL_PROMPT,
+      fileName: 'growth-output.png',
+      inputImagePath: growthInputPath,
+    })
+    const growthAllocSizes = bufferAllocSpy.mock.calls
+      .slice(beforeGrowthAllocCalls)
+      .map(([size]) => size)
+    const growthBase64Calls = bufferToStringSpy.mock.calls
+      .slice(beforeGrowthBase64Calls)
+      .filter(([encoding]) => encoding === 'base64')
+    const growthError = (parsePublicResponse(growthResult).error ?? {}) as Record<string, unknown>
+
+    expect.soft(growthResult.isError, 'growth').toBe(true)
+    expect.soft(growthError.code, 'growth').toBe('INPUT_VALIDATION_ERROR')
+    expect.soft(growthError.message, 'growth').toContain('10.0MB')
+    expect.soft(fileSystem.open, 'growth').toHaveBeenCalledTimes(1)
+    expect
+      .soft(fileSystem.open, 'growth')
+      .toHaveBeenCalledWith(sanitizedGrowthInputPath, expectedInputOpenFlags)
+    expect.soft(growthHandle.stat, 'growth:stat').toHaveBeenCalledTimes(1)
+    expect.soft(growthRead, 'growth:read').toHaveBeenCalled()
+    expect.soft(growthObservedBytes, 'growth:observed-bytes').toBe(MAX_IMAGE_SIZE + 1)
+    expect
+      .soft(growthLargestReadEnd, 'growth:allocation-ceiling')
+      .toBeLessThanOrEqual(MAX_IMAGE_SIZE + 1)
+    expect.soft(growthAllocSizes, 'growth:allocation').toContain(MAX_IMAGE_SIZE + 1)
+    expect
+      .soft(
+        growthAllocSizes.every((size) => size <= MAX_IMAGE_SIZE + 1),
+        'growth:ceiling'
+      )
+      .toBe(true)
+    expect.soft(growthClose, 'growth:close').toHaveBeenCalledTimes(1)
+    expect.soft(growthBase64Calls, 'growth:base64').toEqual([])
+    expect.soft(transports.openAIResponsesCreate, 'growth:text').not.toHaveBeenCalled()
+    expect.soft(transports.googleGenerateContent, 'growth:image').not.toHaveBeenCalled()
+    expect.soft(growthSaveSpy, 'growth:save').not.toHaveBeenCalled()
+    expect.soft(await readdir(growthOutputDirectory), 'growth:after').toEqual([])
+
+    resetTransportDoubles()
+    const nonRegularOutputDirectory = await createOutputDirectory()
+    const nonRegularInputPath = join(inputDirectory, 'non-regular.png')
+    await mkdir(nonRegularInputPath)
+    configureGemini(nonRegularOutputDirectory)
+    let nonRegularReadSpy: ReturnType<typeof vi.spyOn> | undefined
+    let nonRegularCloseSpy: ReturnType<typeof vi.spyOn> | undefined
+    fileSystem.open.mockImplementation(async (filePath: string, flags: string | number) => {
+      if (!fileSystem.actualOpen) {
+        throw new Error('node:fs/promises.open test delegate is not initialized')
+      }
+      const handle = await fileSystem.actualOpen(filePath, flags)
+      if (filePath.endsWith('/non-regular.png')) {
+        nonRegularReadSpy = vi.spyOn(handle, 'read')
+        nonRegularCloseSpy = vi.spyOn(handle, 'close')
+      }
+      return handle
+    })
+    const nonRegularServer = createMCPServer()
+    const nonRegularInternals = readServerInternals(nonRegularServer)
+    const nonRegularSaveSpy = vi.spyOn(nonRegularInternals.fileManager, 'saveImage')
+    const beforeNonRegularAllocCalls = bufferAllocSpy.mock.calls.length
+    const beforeNonRegularBase64Calls = bufferToStringSpy.mock.calls.length
+
+    expect.soft(await readdir(nonRegularOutputDirectory), 'non-regular:before').toEqual([])
+    const nonRegularResult = await nonRegularServer.callTool('generate_image', {
+      prompt: ORIGINAL_PROMPT,
+      fileName: 'non-regular-output.png',
+      inputImagePath: nonRegularInputPath,
+    })
+    const nonRegularAllocSizes = bufferAllocSpy.mock.calls
+      .slice(beforeNonRegularAllocCalls)
+      .map(([size]) => size)
+    const nonRegularBase64Calls = bufferToStringSpy.mock.calls
+      .slice(beforeNonRegularBase64Calls)
+      .filter(([encoding]) => encoding === 'base64')
+    const nonRegularError = (parsePublicResponse(nonRegularResult).error ?? {}) as Record<
+      string,
+      unknown
+    >
+
+    expect.soft(nonRegularResult.isError, 'non-regular').toBe(true)
+    expect.soft(nonRegularError.code, 'non-regular').toBe('INPUT_VALIDATION_ERROR')
+    expect.soft(fileSystem.open, 'non-regular').toHaveBeenCalledTimes(1)
+    expect.soft(nonRegularReadSpy, 'non-regular:read').not.toHaveBeenCalled()
+    expect.soft(nonRegularCloseSpy, 'non-regular:close').toHaveBeenCalledTimes(1)
+    expect.soft(nonRegularAllocSizes, 'non-regular:allocation').toEqual([])
+    expect.soft(nonRegularBase64Calls, 'non-regular:base64').toEqual([])
+    expect.soft(transports.openAIResponsesCreate, 'non-regular:text').not.toHaveBeenCalled()
+    expect.soft(transports.googleGenerateContent, 'non-regular:image').not.toHaveBeenCalled()
+    expect.soft(nonRegularSaveSpy, 'non-regular:save').not.toHaveBeenCalled()
+    expect.soft(await readdir(nonRegularOutputDirectory), 'non-regular:after').toEqual([])
+
+    // Windows does not provide POSIX named FIFOs; Unix-family CI exercises the real FIFO open.
+    if (process.platform !== 'win32') {
+      resetTransportDoubles()
+      const fifoOutputDirectory = await createOutputDirectory()
+      const fifoInputPath = join(inputDirectory, 'named-pipe.png')
+      await new Promise<void>((resolve, reject) => {
+        execFile('/usr/bin/mkfifo', [fifoInputPath], (error) => {
+          if (error) reject(error)
+          else resolve()
+        })
+      })
+      const sanitizedFifoInputPath = await realpath(fifoInputPath)
+      configureGemini(fifoOutputDirectory)
+      let fifoCloseSpy: ReturnType<typeof vi.spyOn> | undefined
+      fileSystem.open.mockImplementation(async (filePath: string, flags: string | number) => {
+        if (!fileSystem.actualOpen) {
+          throw new Error('node:fs/promises.open test delegate is not initialized')
+        }
+        const handle = await fileSystem.actualOpen(filePath, flags)
+        if (filePath === sanitizedFifoInputPath) {
+          fifoCloseSpy = vi.spyOn(handle, 'close')
+        }
+        return handle
+      })
+      const fifoServer = createMCPServer()
+      const fifoInternals = readServerInternals(fifoServer)
+      const fifoSaveSpy = vi.spyOn(fifoInternals.fileManager, 'saveImage')
+      const beforeFifoAllocCalls = bufferAllocSpy.mock.calls.length
+      const beforeFifoBase64Calls = bufferToStringSpy.mock.calls.length
+
+      expect.soft(await readdir(fifoOutputDirectory), 'fifo:before').toEqual([])
+      const fifoCall = fifoServer.callTool('generate_image', {
+        prompt: ORIGINAL_PROMPT,
+        fileName: 'fifo-output.png',
+        inputImagePath: fifoInputPath,
+      })
+      let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+      const completionState = await Promise.race([
+        fifoCall.then(() => 'completed' as const),
+        new Promise<'deadline'>((resolve) => {
+          deadlineTimer = setTimeout(() => resolve('deadline'), 500)
+        }),
+      ])
+      if (deadlineTimer) {
+        clearTimeout(deadlineTimer)
+      }
+
+      if (completionState === 'deadline') {
+        await Promise.all([
+          fifoCall,
+          writeFile(fifoInputPath, Buffer.from('unblock-old-reader')).catch(() => undefined),
+        ])
+      }
+      const fifoResult = await fifoCall
+      const fifoAllocSizes = bufferAllocSpy.mock.calls
+        .slice(beforeFifoAllocCalls)
+        .map(([size]) => size)
+      const fifoBase64Calls = bufferToStringSpy.mock.calls
+        .slice(beforeFifoBase64Calls)
+        .filter(([encoding]) => encoding === 'base64')
+      const fifoError = (parsePublicResponse(fifoResult).error ?? {}) as Record<string, unknown>
+
+      expect.soft(completionState, 'fifo:deadline').toBe('completed')
+      expect.soft(fifoResult.isError, 'fifo').toBe(true)
+      expect.soft(fifoError.code, 'fifo').toBe('INPUT_VALIDATION_ERROR')
+      expect.soft(fileSystem.open, 'fifo').toHaveBeenCalledTimes(1)
+      expect
+        .soft(fileSystem.open, 'fifo')
+        .toHaveBeenCalledWith(sanitizedFifoInputPath, expectedInputOpenFlags)
+      expect.soft(fifoCloseSpy, 'fifo:close').toHaveBeenCalledTimes(1)
+      expect.soft(fifoAllocSizes, 'fifo:allocation').toEqual([])
+      expect.soft(fifoBase64Calls, 'fifo:base64').toEqual([])
+      expect.soft(transports.openAIResponsesCreate, 'fifo:text').not.toHaveBeenCalled()
+      expect.soft(transports.googleGenerateContent, 'fifo:image').not.toHaveBeenCalled()
+      expect.soft(fifoSaveSpy, 'fifo:save').not.toHaveBeenCalled()
+      expect.soft(await readdir(fifoOutputDirectory), 'fifo:after').toEqual([])
+      await rm(fifoInputPath, { force: true })
+    }
+  })
+
   it('contains Seedream failures before the next side effect without disclosure', async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
     const jsonParseSpy = vi.spyOn(JSON, 'parse')
@@ -1042,6 +1418,7 @@ describe('BytePlus Seedream integration', () => {
       fetchError?: Error
       name: string
       responseFactory?: (responseSentinel: string, imageSentinel: string) => Response
+      sensitiveValues?: string[]
       skipPromptEnhancement?: boolean
     }
 
@@ -1072,6 +1449,45 @@ describe('BytePlus Seedream integration', () => {
         expectedImageCalls: 0,
         expectedParseCalls: 0,
         expectedTextCalls: 0,
+      },
+      {
+        name: 'google-search-string',
+        args: { useGoogleSearch: 'private-invalid-google-search-string' },
+        expectedCode: 'INPUT_VALIDATION_ERROR',
+        expectedDecodeCalls: 0,
+        expectedImageCalls: 0,
+        expectedParseCalls: 0,
+        expectedTextCalls: 0,
+        sensitiveValues: ['private-invalid-google-search-string'],
+      },
+      {
+        name: 'google-search-number',
+        args: { useGoogleSearch: 8675309 },
+        expectedCode: 'INPUT_VALIDATION_ERROR',
+        expectedDecodeCalls: 0,
+        expectedImageCalls: 0,
+        expectedParseCalls: 0,
+        expectedTextCalls: 0,
+        sensitiveValues: ['8675309'],
+      },
+      {
+        name: 'google-search-null',
+        args: { useGoogleSearch: null },
+        expectedCode: 'INPUT_VALIDATION_ERROR',
+        expectedDecodeCalls: 0,
+        expectedImageCalls: 0,
+        expectedParseCalls: 0,
+        expectedTextCalls: 0,
+      },
+      {
+        name: 'google-search-object',
+        args: { useGoogleSearch: { marker: 'private-invalid-google-search-object' } },
+        expectedCode: 'INPUT_VALIDATION_ERROR',
+        expectedDecodeCalls: 0,
+        expectedImageCalls: 0,
+        expectedParseCalls: 0,
+        expectedTextCalls: 0,
+        sensitiveValues: ['private-invalid-google-search-object'],
       },
       {
         name: 'lite-1k',
@@ -1519,6 +1935,7 @@ describe('BytePlus Seedream integration', () => {
         RAW_BODY_MARKER,
         responseSentinel,
         imageSentinel,
+        ...(row.sensitiveValues ?? []),
       ]) {
         expect.soft(exposed, `${row.name}:${sensitiveValue}`).not.toContain(sensitiveValue)
       }

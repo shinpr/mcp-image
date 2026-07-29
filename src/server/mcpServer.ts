@@ -3,6 +3,7 @@
  * Simplified architecture with direct Gemini integration
  */
 
+import { constants as fsConstants } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
@@ -26,7 +27,7 @@ import { createSeedreamTextClient } from '../api/seedreamTextClient.js'
 import type { TextClient } from '../api/textClient.js'
 // Business logic
 import { createFileManager, type FileManager } from '../business/fileManager.js'
-import { validateGenerateImageParams } from '../business/inputValidator.js'
+import { MAX_IMAGE_SIZE, validateGenerateImageParams } from '../business/inputValidator.js'
 import { createResponseBuilder, type ResponseBuilder } from '../business/responseBuilder.js'
 import {
   createStructuredPromptGenerator,
@@ -38,6 +39,7 @@ import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 
 // Utilities
 import { getConfig } from '../utils/config.js'
+import { InputValidationError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import { ensureExtension, getMimeTypeFromExtension } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
@@ -50,6 +52,57 @@ const DEFAULT_CONFIG: MCPServerConfig = {
   name: 'mcp-image-server',
   version: '0.1.0',
   defaultOutputDir: './output',
+}
+
+const INPUT_IMAGE_OPEN_FLAGS =
+  fsConstants.O_RDONLY |
+  (typeof fsConstants.O_NONBLOCK === 'number' ? fsConstants.O_NONBLOCK : 0) |
+  (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+
+function createInputImageSizeError(actualSize: number): InputValidationError {
+  const sizeInMB = (actualSize / (1024 * 1024)).toFixed(1)
+  const limitInMB = (MAX_IMAGE_SIZE / (1024 * 1024)).toFixed(1)
+  return new InputValidationError(
+    `Image size exceeds ${limitInMB}MB limit. Current size: ${sizeInMB}MB`,
+    `Please compress your image or reduce its resolution to stay below ${limitInMB}MB`
+  )
+}
+
+async function readInputImageWithinLimit(filePath: string): Promise<Buffer> {
+  const fileHandle = await fs.open(filePath, INPUT_IMAGE_OPEN_FLAGS)
+
+  try {
+    const stats = await fileHandle.stat()
+    if (!stats.isFile()) {
+      throw new InputValidationError(
+        'Input image must be a regular file',
+        'Please provide a path to a regular PNG, JPEG, or WebP image file'
+      )
+    }
+    if (stats.size > MAX_IMAGE_SIZE) {
+      throw createInputImageSizeError(stats.size)
+    }
+
+    const boundedBuffer = Buffer.alloc(MAX_IMAGE_SIZE + 1)
+    let observedBytes = 0
+
+    while (observedBytes < boundedBuffer.length) {
+      const readLength = Math.min(64 * 1024, boundedBuffer.length - observedBytes)
+      const { bytesRead } = await fileHandle.read(boundedBuffer, observedBytes, readLength, null)
+      if (bytesRead === 0) {
+        break
+      }
+
+      observedBytes += bytesRead
+      if (observedBytes > MAX_IMAGE_SIZE) {
+        throw createInputImageSizeError(observedBytes)
+      }
+    }
+
+    return boundedBuffer.subarray(0, observedBytes)
+  } finally {
+    await fileHandle.close()
+  }
 }
 
 /**
@@ -276,7 +329,7 @@ export class MCPServerImpl {
         if (!extensionCheck.success) {
           throw extensionCheck.error
         }
-        const imageBuffer = await fs.readFile(sanitizedInputPath.data)
+        const imageBuffer = await readInputImageWithinLimit(sanitizedInputPath.data)
         inputImageData = imageBuffer.toString('base64')
         inputImageMimeType = getMimeTypeFromExtension(path.extname(sanitizedInputPath.data))
       }
