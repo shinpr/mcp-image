@@ -1,8 +1,9 @@
-import type { AspectRatio, ImageQuality, ImageSize } from '../types/mcp.js'
+import type { AspectRatio, ImageOutputFormat, ImageQuality, ImageSize } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
+import { getMimeTypeForOutputFormat, matchesImageDataMimeType } from '../utils/mimeUtils.js'
 import { isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
@@ -10,8 +11,6 @@ const SEEDREAM_IMAGE_ENDPOINT = 'https://ark.ap-southeast.bytepluses.com/api/v3/
 const SEEDREAM_IMAGE_TIMEOUT_MS = 300000
 const MAX_RESPONSE_BYTES = 48 * 1024 * 1024
 const MAX_DECODED_BYTES = 32 * 1024 * 1024
-const PNG_MIME_TYPE = 'image/png'
-const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
 
 const ASPECT_RATIOS: readonly AspectRatio[] = [
   '1:1',
@@ -81,7 +80,7 @@ type SeedreamImageWireRequest = Readonly<{
   image?: string
   size: ImageSize
   response_format: 'b64_json'
-  output_format: 'png'
+  output_format: ImageOutputFormat
   stream: false
   watermark: false
   optimize_prompt_options: Readonly<{ mode: 'fast' | 'standard' }>
@@ -101,7 +100,8 @@ function responseContractError(): ImageAPIError {
   return new ImageAPIError('Invalid response from Seedream image provider', {
     provider: 'seedream',
     stage: 'image_response',
-    suggestion: 'Retry the request; the provider response did not satisfy the PNG contract',
+    suggestion:
+      'Retry the request; the provider response did not satisfy the requested image format',
   })
 }
 
@@ -190,7 +190,7 @@ function buildWireRequest(
       }),
     size: resolved.resolution,
     response_format: 'b64_json',
-    output_format: 'png',
+    output_format: params.preferredOutputFormat ?? 'png',
     stream: false,
     watermark: false,
     optimize_prompt_options: { mode: resolved.route.promptOptimizationMode },
@@ -262,7 +262,10 @@ function calculateDecodedSize(base64: string): number {
   return (base64.length / 4) * 3 - padding
 }
 
-function parseImagePayload(payload: unknown): Result<Buffer, ImageAPIError> {
+function parseImagePayload(
+  payload: unknown,
+  outputFormat: ImageOutputFormat
+): Result<Buffer, ImageAPIError> {
   if (!isRecord(payload) || !Array.isArray(payload['data']) || payload['data'].length !== 1) {
     return Err(responseContractError())
   }
@@ -283,12 +286,13 @@ function parseImagePayload(payload: unknown): Result<Buffer, ImageAPIError> {
   }
 
   const imageData = Buffer.from(image['b64_json'], 'base64')
+  const expectedMimeType = getMimeTypeForOutputFormat(outputFormat)
   if (
     imageData.length === 0 ||
     imageData.length > MAX_DECODED_BYTES ||
-    !imageData.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC) ||
-    (hasOwn(image, 'mime_type') && image['mime_type'] !== PNG_MIME_TYPE) ||
-    (hasOwn(image, 'output_format') && image['output_format'] !== 'png')
+    !matchesImageDataMimeType(imageData, expectedMimeType) ||
+    (hasOwn(image, 'mime_type') && image['mime_type'] !== expectedMimeType) ||
+    (hasOwn(image, 'output_format') && image['output_format'] !== outputFormat)
   ) {
     return Err(responseContractError())
   }
@@ -333,7 +337,7 @@ class SeedreamImageClientImpl implements ImageClient {
         return payloadResult
       }
 
-      const imageResult = parseImagePayload(payloadResult.data)
+      const imageResult = parseImagePayload(payloadResult.data, request.output_format)
       if (!imageResult.success) {
         return imageResult
       }
@@ -344,7 +348,7 @@ class SeedreamImageClientImpl implements ImageClient {
           model: resolvedResult.data.route.model,
           provider: 'seedream',
           prompt: request.prompt,
-          mimeType: PNG_MIME_TYPE,
+          mimeType: getMimeTypeForOutputFormat(request.output_format),
           timestamp: new Date(),
           inputImageProvided: params.inputImage !== undefined,
         },

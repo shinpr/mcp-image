@@ -31,19 +31,22 @@ vi.mock('../../api/openaiImageClient', () => {
   return {
     createOpenAIImageClient: vi.fn().mockImplementation(() => {
       const mockClient = {
-        generateImage: vi.fn().mockResolvedValue({
-          success: true,
-          data: {
-            imageData: Buffer.from('mock-openai-image-data', 'utf-8'),
-            metadata: {
-              model: 'gpt-image-2',
-              provider: 'openai',
-              prompt: 'test prompt',
-              mimeType: 'image/png',
-              timestamp: new Date(),
-              inputImageProvided: false,
+        generateImage: vi.fn().mockImplementation((params) => {
+          const mimeType = params.preferredOutputFormat === 'jpeg' ? 'image/jpeg' : 'image/png'
+          return Promise.resolve({
+            success: true,
+            data: {
+              imageData: Buffer.from('mock-openai-image-data', 'utf-8'),
+              metadata: {
+                model: 'gpt-image-2',
+                provider: 'openai',
+                prompt: 'test prompt',
+                mimeType,
+                timestamp: new Date(),
+                inputImageProvided: false,
+              },
             },
-          },
+          })
         }),
       }
       return { success: true, data: mockClient }
@@ -268,7 +271,8 @@ describe('MCP Server', () => {
     expect(schema.properties).toHaveProperty('fileName')
     expect(schema.properties?.fileName).toEqual({
       type: 'string',
-      description: 'Custom file name for the output image. Auto-generated if not specified.',
+      description:
+        'Custom .png, .jpg, or .jpeg output filename. OpenAI and Seedream use its extension as the output format; no extension defaults to PNG.',
     })
     expect(schema.required).toContain('prompt')
   })
@@ -474,6 +478,44 @@ describe('MCP Server', () => {
       })
     )
     expect(createOpenAITextClient).toHaveBeenCalled()
+  })
+
+  it('should pass JPEG preference from fileName to the selected provider', async () => {
+    process.env.IMAGE_PROVIDER = 'openai'
+    process.env.GEMINI_API_KEY = undefined
+    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
+    const mcpServer = createMCPServer()
+
+    const result = await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: 'requested.JPEG',
+    })
+
+    expect(result.isError).toBe(false)
+    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
+    const imageClient = (createOpenAIImageClient as ReturnType<typeof vi.fn>).mock.results[0].value
+      .data
+    expect(imageClient.generateImage).toHaveBeenCalledWith(
+      expect.objectContaining({ preferredOutputFormat: 'jpeg' })
+    )
+  })
+
+  it('should reject unsupported output extensions before provider initialization', async () => {
+    const mcpServer = createMCPServer()
+
+    const result = await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: 'requested.webp',
+    })
+
+    expect(result.isError).toBe(true)
+    const responseData = JSON.parse(result.content[0].text)
+    expect(responseData.error).toMatchObject({
+      code: 'INPUT_VALIDATION_ERROR',
+      message: 'Unsupported output image format',
+    })
+    const { createGeminiClient } = await import('../../api/geminiClient')
+    expect(createGeminiClient).not.toHaveBeenCalled()
   })
 })
 

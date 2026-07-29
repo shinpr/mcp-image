@@ -49,7 +49,7 @@ The prompt optimizer uses a **Subject–Context–Style** framework (powered by 
   - World knowledge for photorealistic depictions of historical figures, landmarks, and factual scenarios
   - Prompt-level blending guidance for composite scenes
   - Purpose-aware generation (e.g., "cookbook cover" produces different results than "social media post")
-- **Multiple Output Formats**: PNG, JPEG, and WebP support where the selected provider supports them; Seedream output is PNG.
+- **Multiple Output Formats**: OpenAI and Seedream support PNG/JPEG selection through the output filename.
 
 ## Agent Skill: Image Generation Prompt Guide
 
@@ -359,7 +359,7 @@ The server uses a two-stage process with separate models for each stage:
 | `prompt` | string | ✅ | Text description or editing instruction |
 | `quality` | string | - | Quality preset: `fast` (default), `balanced`, `quality`. Overrides `IMAGE_QUALITY` env var for this request |
 | `inputImagePath` | string | - | Absolute path to input image for image-to-image editing |
-| `fileName` | string | - | Custom filename for output (auto-generated if not specified) |
+| `fileName` | string | - | `.png`, `.jpg`, or `.jpeg` output filename. OpenAI/Seedream use its extension as the output format; no extension defaults to PNG |
 | `aspectRatio` | string | - | `1:1` (default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `1:8`, `4:1`, `8:1` |
 | `imageSize` | string | - | `1K`, `2K`, `4K`. Leave unspecified for standard quality |
 | `blendImages` | boolean | - | Enable multi-image blending for combining multiple visual elements naturally |

@@ -15,6 +15,7 @@ const MAX_DECODED_BYTES = 32 * MIB
 const PNG_BYTES = Buffer.from([
   0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x66, 0x69, 0x78, 0x74, 0x75, 0x72, 0x65,
 ])
+const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x66, 0x69, 0x78, 0x74, 0x75, 0x72, 0x65])
 const PRIVATE_INPUT_IMAGE = PNG_BYTES.toString('base64')
 const ALL_ASPECT_RATIOS = [
   '1:1',
@@ -284,6 +285,53 @@ describe('seedreamImageClient', () => {
     if (result.success) {
       expect(result.data.metadata.inputImageProvided).toBe(true)
     }
+  })
+
+  it('requests and validates JPEG output for generation', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        data: [
+          {
+            b64_json: JPEG_BYTES.toString('base64'),
+            mime_type: 'image/jpeg',
+            output_format: 'jpeg',
+          },
+        ],
+      })
+    )
+
+    const result = await createClient().generateImage({
+      prompt: PRIVATE_PROMPT,
+      preferredOutputFormat: 'jpeg',
+    })
+
+    expect(result.success).toBe(true)
+    expect(readRequest().body.output_format).toBe('jpeg')
+    if (result.success) {
+      expect(result.data.imageData).toEqual(JPEG_BYTES)
+      expect(result.data.metadata.mimeType).toBe('image/jpeg')
+    }
+  })
+
+  it('requests JPEG output for editing', async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        data: [{ b64_json: JPEG_BYTES.toString('base64') }],
+      })
+    )
+
+    const result = await createClient().generateImage({
+      prompt: PRIVATE_PROMPT,
+      inputImage: PRIVATE_INPUT_IMAGE,
+      inputImageMimeType: 'image/png',
+      preferredOutputFormat: 'jpeg',
+    })
+
+    expect(result.success).toBe(true)
+    expect(readRequest().body).toMatchObject({
+      output_format: 'jpeg',
+      image: `data:image/png;base64,${PRIVATE_INPUT_IMAGE}`,
+    })
   })
 
   it.each([

@@ -31,7 +31,11 @@ import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 import { type Config, getConfig } from '../utils/config.js'
 import { InputValidationError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
-import { ensureExtension, getMimeTypeFromExtension } from '../utils/mimeUtils.js'
+import {
+  ensureExtension,
+  getMimeTypeFromExtension,
+  resolvePreferredOutputFormat,
+} from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
 import { ErrorHandler } from './errorHandler.js'
 import {
@@ -151,7 +155,7 @@ export class MCPServerImpl {
               fileName: {
                 type: 'string' as const,
                 description:
-                  'Custom file name for the output image. Auto-generated if not specified.',
+                  'Custom .png, .jpg, or .jpeg output filename. OpenAI and Seedream use its extension as the output format; no extension defaults to PNG.',
               },
               inputImagePath: {
                 type: 'string' as const,
@@ -284,6 +288,17 @@ export class MCPServerImpl {
         throw validationResult.error
       }
 
+      const sanitizedFileName = params.fileName
+        ? this.securityManager.sanitizeFilename(params.fileName)
+        : undefined
+      const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
+      if (!preferredOutputFormat) {
+        throw new InputValidationError(
+          'Unsupported output image format',
+          'Use a .png, .jpg, or .jpeg file name, or omit the extension for PNG output'
+        )
+      }
+
       // Get configuration
       const configResult = getConfig()
       if (!configResult.success) {
@@ -320,6 +335,7 @@ export class MCPServerImpl {
         ...(params.useGoogleSearch !== undefined && {
           useGoogleSearch: params.useGoogleSearch,
         }),
+        preferredOutputFormat,
         ...(params.quality !== undefined && { quality: params.quality }),
       } satisfies Omit<ImageApiParams, 'prompt'>
 
@@ -383,9 +399,7 @@ export class MCPServerImpl {
 
       // Save image file
       const mimeType = generationResult.data.metadata.mimeType
-      const rawFileName = params.fileName
-        ? this.securityManager.sanitizeFilename(params.fileName)
-        : this.fileManager.generateFileName(mimeType)
+      const rawFileName = sanitizedFileName ?? this.fileManager.generateFileName(mimeType)
       const fileName = params.fileName ? ensureExtension(rawFileName, mimeType) : rawFileName
       const outputPath = path.join(config.imageOutputDir, fileName)
 

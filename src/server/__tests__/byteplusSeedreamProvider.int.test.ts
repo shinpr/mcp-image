@@ -209,6 +209,10 @@ function createPngFixture(sentinel: string): Buffer {
   ])
 }
 
+function createJpegFixture(sentinel: string): Buffer {
+  return Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from(sentinel)])
+}
+
 function countOccurrences(value: string, needle: string): number {
   return value.split(needle).length - 1
 }
@@ -483,7 +487,7 @@ afterEach(async () => {
 // AC: "AC-08 When image を呼ぶと、system は AP `POST /images/generations` に Bearer auth、
 // selected model/provider-local ratio suffix付きprompt/optional single image/effective resolution
 // token、`response_format=b64_json`,
-// `output_format=png`, `stream=false`, `watermark=false` とroute別の
+// default `output_format=png`, `stream=false`, `watermark=false` とroute別の
 // `optimize_prompt_options.mode=fast|standard` を送り、
 // `sequential_image_generation` は送らない。"
 // AC: "AC-10 When 成功したら、既存 sanitized save/file URI と `structuredContent` 非存在を維持し、
@@ -541,7 +545,7 @@ afterEach(async () => {
 //   exact WxH or applies ratio-specific rounding.
 // - Fast route: select `dola-seedream-5-0-pro-260628` with native fast optimization.
 // - Every route omits the `sequential_image_generation` property entirely.
-// - Every image request includes `response_format='b64_json'`, `output_format='png'`, stream=false,
+// - Every PNG matrix request includes `response_format='b64_json'`, `output_format='png'`, stream=false,
 //   watermark=false, the route-specific optimize_prompt_options.mode, captured Bearer auth, and
 //   only the optional single-image field allowed by preflight.
 // - False prompt flags add no enhancement instruction; true prompt-only flags/purpose affect only
@@ -1059,6 +1063,48 @@ describe('BytePlus Seedream integration', () => {
         expect.soft(publicAndLogs, `${row.name}:${sensitiveValue}`).not.toContain(sensitiveValue)
       }
     }
+  })
+
+  it('propagates .jpg through Seedream JPEG wire, bytes, save, and public resource', async () => {
+    resetTransportDoubles()
+    const outputDirectory = await createOutputDirectory()
+    const fileName = 'seedream-native-output.jpg'
+    const expectedBytes = createJpegFixture('seedream-jpeg-integration')
+    configureSeedream(outputDirectory, { skipPromptEnhancement: true })
+    transports.fetch.mockResolvedValue(
+      createJsonResponse({
+        data: [
+          {
+            b64_json: expectedBytes.toString('base64'),
+            mime_type: 'image/jpeg',
+            output_format: 'jpeg',
+          },
+        ],
+      })
+    )
+
+    const result = await createMCPServer().callTool('generate_image', {
+      prompt: ORIGINAL_PROMPT,
+      fileName,
+      quality: 'fast',
+    })
+
+    expect.soft(result.isError).toBe(false)
+    expect.soft(observeLastImageRequest().body).toMatchObject({
+      output_format: 'jpeg',
+      response_format: 'b64_json',
+    })
+    expect.soft(await readFile(join(outputDirectory, fileName))).toEqual(expectedBytes)
+    expect.soft(parsePublicResponse(result)).toMatchObject({
+      type: 'resource',
+      resource: {
+        name: fileName,
+        mimeType: 'image/jpeg',
+      },
+      metadata: {
+        provider: 'seedream',
+      },
+    })
   })
 
   // AC: SEC-FILE-BOUND-01, SEC-FILE-TYPE-02, INPUT-SIZE-CONTRACT-04, RESOURCE-CLEANUP-05

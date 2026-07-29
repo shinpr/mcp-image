@@ -8,8 +8,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   ensureExtension,
   getExtensionFromMimeType,
+  getMimeTypeForOutputFormat,
   getMimeTypeFromExtension,
+  matchesImageDataMimeType,
   normalizeMimeType,
+  resolvePreferredOutputFormat,
   SUPPORTED_EXTENSIONS,
   SUPPORTED_MIME_TYPES,
 } from '../mimeUtils'
@@ -209,6 +212,36 @@ describe('mimeUtils', () => {
 
       // Assert
       expect(result).toBe('artwork.webp')
+    })
+  })
+
+  describe('output format preference', () => {
+    it.each([
+      [undefined, 'png'],
+      ['', 'png'],
+      ['photo', 'png'],
+      ['photo.png', 'png'],
+      ['photo.PNG', 'png'],
+      ['photo.jpg', 'jpeg'],
+      ['photo.JPEG', 'jpeg'],
+      ['photo.webp', undefined],
+    ] as const)('resolves %s to %s', (fileName, expected) => {
+      expect(resolvePreferredOutputFormat(fileName)).toBe(expected)
+    })
+
+    it('maps output formats to their exact MIME types', () => {
+      expect(getMimeTypeForOutputFormat('png')).toBe('image/png')
+      expect(getMimeTypeForOutputFormat('jpeg')).toBe('image/jpeg')
+    })
+
+    it('matches PNG and JPEG signatures', () => {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0])
+
+      expect(matchesImageDataMimeType(png, 'image/png')).toBe(true)
+      expect(matchesImageDataMimeType(jpeg, 'image/jpeg')).toBe(true)
+      expect(matchesImageDataMimeType(png, 'image/jpeg')).toBe(false)
+      expect(matchesImageDataMimeType(Buffer.from('not-an-image'), 'image/png')).toBe(false)
     })
   })
 

@@ -1,4 +1,4 @@
-import type { AspectRatio, ImageQuality, ImageSize } from '../types/mcp.js'
+import type { AspectRatio, ImageOutputFormat, ImageQuality, ImageSize } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import type { GeminiAPIError, ImageAPIError, NetworkError } from '../utils/errors.js'
 
@@ -27,6 +27,7 @@ export interface ImageApiParams {
   aspectRatio?: AspectRatio
   imageSize?: ImageSize
   useGoogleSearch?: boolean
+  preferredOutputFormat?: ImageOutputFormat
   quality?: ImageQuality
 }
 

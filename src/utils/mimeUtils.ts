@@ -4,6 +4,7 @@
  */
 
 import * as path from 'node:path'
+import type { ImageOutputFormat } from '../types/mcp.js'
 import { Logger } from './logger.js'
 
 const logger = new Logger()
@@ -35,6 +36,8 @@ const EXTENSION_TO_MIME: ReadonlyMap<string, string> = new Map([
 
 export const DEFAULT_MIME_TYPE = 'image/png'
 const DEFAULT_EXTENSION = '.png'
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const JPEG_SIGNATURE = Buffer.from([0xff, 0xd8, 0xff])
 
 /**
  * All supported MIME types for image processing.
@@ -91,6 +94,36 @@ export function normalizeMimeType(mimeType: string): string {
   }
   logger.warn('mimeUtils', `Unknown MIME type, normalizing to ${DEFAULT_MIME_TYPE}`, { mimeType })
   return DEFAULT_MIME_TYPE
+}
+
+export function resolvePreferredOutputFormat(fileName?: string): ImageOutputFormat | undefined {
+  if (!fileName) {
+    return 'png'
+  }
+
+  const extension = path.extname(fileName).toLowerCase()
+  if (!extension || extension === '.png') {
+    return 'png'
+  }
+  if (extension === '.jpg' || extension === '.jpeg') {
+    return 'jpeg'
+  }
+  return undefined
+}
+
+export function getMimeTypeForOutputFormat(format: ImageOutputFormat): 'image/png' | 'image/jpeg' {
+  return format === 'jpeg' ? 'image/jpeg' : 'image/png'
+}
+
+export function matchesImageDataMimeType(
+  imageData: Buffer,
+  mimeType: 'image/png' | 'image/jpeg'
+): boolean {
+  const signature = mimeType === 'image/png' ? PNG_SIGNATURE : JPEG_SIGNATURE
+  return (
+    imageData.length >= signature.length &&
+    imageData.subarray(0, signature.length).equals(signature)
+  )
 }
 
 /**
