@@ -299,7 +299,7 @@ Seedream quality routing is fixed:
 
 | Public preset | Seedream route | Native image optimizer | Supported `imageSize` | Default when omitted |
 |---------------|----------------|------------------------|-----------------------|----------------------|
-| `fast` | Seedream 5.0 Lite | `standard` | `2K`, `4K` | `2K` |
+| `fast` | Seedream 5.0 Pro | `fast` | `1K`, `2K` | `1K` |
 | `balanced` | Seedream 5.0 Pro | `standard` | `1K`, `2K` | `1K` |
 | `quality` | Seedream 5.0 Pro | `standard` | `1K`, `2K` | `1K` |
 
@@ -311,9 +311,7 @@ Prompt enhancement uses the same ModelArk Responses path for `fast`, `balanced`,
 
 Seedream does not support Google Search. A request with `useGoogleSearch=true` fails capability validation before prompt-enhancement or image-provider requests. Native multi-image/output, streaming, layers, online search, and provider/model/value fallback are not part of the Seedream integration.
 
-Seedream direct image requests use a fixed `180000` ms timeout. This timeout is not configurable and is independent of the existing `30000` ms `apiTimeout` default. Seedream text requests retain their separate `30000` ms default, and other providers' timeout behavior is unchanged.
-
-The authorized one-call Method 1 validation probe passed with sanitized evidence: request count 1; retries 0; one Lite `2K` request using the `16:9` suffix; HTTP 200; decoded PNG dimensions 2848 × 1600; duration 27,602 ms; relative-ratio error 0.125% against `16:9`; sanitized error category none. This was a one-time billable gate, not a permanent paid test or a visual-quality evaluation.
+Seedream direct image requests use a fixed `300000` ms timeout. This timeout is not configurable and is independent of the existing `30000` ms `apiTimeout` default. Seedream text requests retain their separate `30000` ms default, and other providers' timeout behavior is unchanged.
 
 ### Using the OpenAI provider
 
@@ -435,12 +433,13 @@ The server uses a two-stage process with separate models for each stage:
 
 - In Gemini mode, the `fast` preset typically takes ~30–40 seconds including prompt optimization
 - In Gemini mode, `balanced` uses additional thinking and `quality` selects Nano Banana Pro
-- In Seedream mode, use the route table above; `balanced` and `quality` both select Pro `standard`
+- In Seedream mode, use the route table above; all tiers use Pro, with `fast` selecting native `fast`
+  optimization and `balanced`/`quality` selecting `standard`
 - High-resolution (2K/4K): Processing time varies by provider and route
 - Simple prompts work great — the optimizer automatically adds professional details
 - Complex prompts are preserved and further enhanced
 - Consider `useWorldKnowledge` for historical or factual subjects
-- Use `imageSize: "4K"` when text clarity and fine details are critical
+- Use `imageSize: "4K"` when the selected provider supports it; Seedream accepts `1K` and `2K`
 
 ## Usage Notes
 

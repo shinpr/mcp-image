@@ -7,7 +7,7 @@ import { isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
 const SEEDREAM_IMAGE_ENDPOINT = 'https://ark.ap-southeast.bytepluses.com/api/v3/images/generations'
-const SEEDREAM_IMAGE_TIMEOUT_MS = 180000
+const SEEDREAM_IMAGE_TIMEOUT_MS = 300000
 const MAX_RESPONSE_BYTES = 48 * 1024 * 1024
 const MAX_DECODED_BYTES = 32 * 1024 * 1024
 const PNG_MIME_TYPE = 'image/png'
@@ -34,30 +34,30 @@ const SUPPORTED_INPUT_MIME_TYPES = ['image/png', 'image/jpeg'] as const
 
 const SEEDREAM_ROUTES = {
   fast: {
-    model: 'seedream-5-0-260128',
-    defaultResolution: '2K',
-    allowedResolutions: ['2K', '4K'],
-    sequentialImageGeneration: true,
+    model: 'dola-seedream-5-0-pro-260628',
+    promptOptimizationMode: 'fast',
+    defaultResolution: '1K',
+    allowedResolutions: ['1K', '2K'],
   },
   balanced: {
     model: 'dola-seedream-5-0-pro-260628',
+    promptOptimizationMode: 'standard',
     defaultResolution: '1K',
     allowedResolutions: ['1K', '2K'],
-    sequentialImageGeneration: false,
   },
   quality: {
     model: 'dola-seedream-5-0-pro-260628',
+    promptOptimizationMode: 'standard',
     defaultResolution: '1K',
     allowedResolutions: ['1K', '2K'],
-    sequentialImageGeneration: false,
   },
 } as const satisfies Record<
   ImageQuality,
   {
     model: string
+    promptOptimizationMode: 'fast' | 'standard'
     defaultResolution: ImageSize
     allowedResolutions: readonly ImageSize[]
-    sequentialImageGeneration: boolean
   }
 >
 
@@ -75,7 +75,8 @@ type ResolvedCapabilities = Readonly<{
   route: SeedreamRoute
 }>
 
-type SeedreamImageWireRequestBase = Readonly<{
+type SeedreamImageWireRequest = Readonly<{
+  model: 'dola-seedream-5-0-pro-260628'
   prompt: string
   image?: string
   size: ImageSize
@@ -83,22 +84,8 @@ type SeedreamImageWireRequestBase = Readonly<{
   output_format: 'png'
   stream: false
   watermark: false
-  optimize_prompt_options: Readonly<{ mode: 'standard' }>
+  optimize_prompt_options: Readonly<{ mode: 'fast' | 'standard' }>
 }>
-
-type SeedreamLiteImageWireRequest = SeedreamImageWireRequestBase &
-  Readonly<{
-    model: 'seedream-5-0-260128'
-    sequential_image_generation: 'disabled'
-  }>
-
-type SeedreamProImageWireRequest = SeedreamImageWireRequestBase &
-  Readonly<{
-    model: 'dola-seedream-5-0-pro-260628'
-    sequential_image_generation?: never
-  }>
-
-type SeedreamImageWireRequest = SeedreamLiteImageWireRequest | SeedreamProImageWireRequest
 
 function capabilityError(message: string): Result<never, ImageAPIError> {
   return Err(
@@ -195,6 +182,7 @@ function buildWireRequest(
   resolved: ResolvedCapabilities
 ): SeedreamImageWireRequest {
   const base = {
+    model: resolved.route.model,
     prompt: appendAspectRatio(params.prompt, resolved.aspectRatio),
     ...(params.inputImage &&
       params.inputImageMimeType && {
@@ -205,21 +193,10 @@ function buildWireRequest(
     output_format: 'png',
     stream: false,
     watermark: false,
-    optimize_prompt_options: { mode: 'standard' },
+    optimize_prompt_options: { mode: resolved.route.promptOptimizationMode },
   } as const
 
-  if (resolved.route.sequentialImageGeneration) {
-    return {
-      ...base,
-      model: 'seedream-5-0-260128',
-      sequential_image_generation: 'disabled',
-    }
-  }
-
-  return {
-    ...base,
-    model: 'dola-seedream-5-0-pro-260628',
-  }
+  return base
 }
 
 async function cancelBody(body: ReadableStream<Uint8Array> | null): Promise<void> {
@@ -310,7 +287,8 @@ function parseImagePayload(payload: unknown): Result<Buffer, ImageAPIError> {
     imageData.length === 0 ||
     imageData.length > MAX_DECODED_BYTES ||
     !imageData.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC) ||
-    image['mime_type'] !== PNG_MIME_TYPE
+    (hasOwn(image, 'mime_type') && image['mime_type'] !== PNG_MIME_TYPE) ||
+    (hasOwn(image, 'output_format') && image['output_format'] !== 'png')
   ) {
     return Err(responseContractError())
   }

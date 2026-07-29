@@ -190,7 +190,8 @@ function createSuccessfulImageResponse(imageBytes: Buffer, responseSentinel: str
       data: [
         {
           b64_json: imageBytes.toString('base64'),
-          mime_type: 'image/png',
+          size: '1024x1024',
+          output_format: 'png',
         },
       ],
     }),
@@ -478,13 +479,13 @@ afterEach(async () => {
 // `thinking={type:'disabled'}` を含め、`extra_body` を含めない。"
 // AC: "AC-07 When routing すると、system は
 // `effectiveQuality=request.quality??capturedConfig.imageQuality` を先に決め、request quality を常に優先し、
-// fast→Lite standard、balanced|quality→Pro standard を選ぶ。"
+// fast→Pro fast、balanced|quality→Pro standard を選ぶ。"
 // AC: "AC-08 When image を呼ぶと、system は AP `POST /images/generations` に Bearer auth、
 // selected model/provider-local ratio suffix付きprompt/optional single image/effective resolution
 // token、`response_format=b64_json`,
-// `output_format=png`, `stream=false`, `watermark=false`,
-// `optimize_prompt_options.mode=standard` を送る。Lite では
-// `sequential_image_generation=disabled` を送り、Pro では同 field を送らない。"
+// `output_format=png`, `stream=false`, `watermark=false` とroute別の
+// `optimize_prompt_options.mode=fast|standard` を送り、
+// `sequential_image_generation` は送らない。"
 // AC: "AC-10 When 成功したら、既存 sanitized save/file URI と `structuredContent` 非存在を維持し、
 // internal `metadata.mimeType=image/png`、public metadata に prompt なしとする。"
 // AC: "AC-15 When request を解決すると、system は
@@ -538,15 +539,14 @@ afterEach(async () => {
 //   `Output aspect ratio: 1:1.` suffix.
 // - Every public aspect ratio is accepted through the same suffix rule; the request never constructs
 //   exact WxH or applies ratio-specific rounding.
-// - Fast route: select `seedream-5-0-260128`; include
-//   `sequential_image_generation='disabled'`.
-// - Pro route: omit the `sequential_image_generation` property entirely.
+// - Fast route: select `dola-seedream-5-0-pro-260628` with native fast optimization.
+// - Every route omits the `sequential_image_generation` property entirely.
 // - Every image request includes `response_format='b64_json'`, `output_format='png'`, stream=false,
-//   watermark=false, optimize_prompt_options.mode='standard', captured Bearer auth, and only the
-//   optional single-image field allowed by preflight.
+//   watermark=false, the route-specific optimize_prompt_options.mode, captured Bearer auth, and
+//   only the optional single-image field allowed by preflight.
 // - False prompt flags add no enhancement instruction; true prompt-only flags/purpose affect only
 //   the one text enhancement input and never add native image wire fields.
-// - Seedream image HTTP uses an AbortSignal derived from the provider-local fixed 180000 ms without
+// - Seedream image HTTP uses an AbortSignal derived from the provider-local fixed 300000 ms without
 //   changing existing apiTimeout=30000.
 // Verification items:
 // - Preflight occurs before any text or image transport call.
@@ -554,7 +554,8 @@ afterEach(async () => {
 // - Effective quality is selected before model, model before default resolution, and resolution
 //   before aspect/default suffix construction.
 // - Wire field values, model-specific field absence/presence, endpoint, and auth header are exact.
-// - The fixed valid response is exactly one strict base64 PNG with image/png metadata.
+// - The fixed valid response is exactly one strict base64 PNG; response format metadata is optional
+//   and must agree with PNG when present.
 // - Saved bytes equal the decoded fixture Buffer; the output path is sanitized.
 // - Public response contains the sanitized file URI and image/png MIME.
 // - Public response has no `structuredContent` property and no prompt field/value.
@@ -574,11 +575,12 @@ afterEach(async () => {
 // then preflight は enhancement 前に失敗し text/image external request count は共に 0 となる。"
 // AC: "AC-09 If exactly one `data[0].b64_json` PNG でない（missing/extra images、URL-only、
 // stream event、不正/空 base64、stream-read中にbody>48MiB、decode前にdecoded>32MiB、
-// PNG magic/`image/png`不一致）、またはtimeout/abortなら、then normalized errorを返しfileを作らない。"
+// PNG magic不一致、または存在するformat metadataがPNGと矛盾）、またはtimeout/abortなら、
+// then normalized errorを返しfileを作らない。"
 // AC: "AC-12 When 4xx/5xx/timeout/network error なら、既存 taxonomy へ秘密/prompt なしで正規化する。"
-// AC: "AC-16 When resolution がLite routeの2K/4KまたはPro routeの1K/2Kなら許可する。
-// それ以外はtext/image calls 0でrejectする。公開14 aspect ratioは全て同じMethod 1 ruleで送る。"
-// AC: "AC-19 When Seedream image requestを開始すると、systemはprovider-local固定`180000` msから
+// AC: "AC-16 When resolution が全routeでProの1K/2Kなら許可する。
+// 4Kを含むそれ以外はtext/image calls 0でrejectする。公開14 aspect ratioは同じMethod 1 ruleで送る。"
+// AC: "AC-19 When Seedream image requestを開始すると、systemはprovider-local固定`300000` msから
 // AbortSignalを構成する。timeout到達時はnormalized timeout errorを返してfileを作らない。"
 // Claim: every failure is contained at its owning stage, returns the existing normalized taxonomy,
 // and cannot create a file or expose ARK_API_KEY, Authorization, prompt, image, or raw wire bodies.
@@ -612,12 +614,12 @@ afterEach(async () => {
 // credentials, Authorization, prompt, image data, and request/response bodies.
 // Failure boundary rows:
 // - Missing and empty ARK_API_KEY -> ConfigError; text=0, image=0, save=0.
-// - useGoogleSearch=true, unsupported input-image combination, Lite+1K, and Pro+4K ->
+// - useGoogleSearch=true, unsupported input-image combination, and any quality+4K ->
 //   preflight error; text=0, image=0, save=0; no coercion/fallback.
 // - Missing data, extra images, URL-only data, stream event, malformed base64, empty base64,
 //   chunked response crossing 48 MiB, pre-decode size crossing 32 MiB, non-PNG magic, and MIME
-//   other than image/png -> normalized image contract error; save=0 for every row.
-// - Abort/timeout -> AbortSignal is derived from fixed 180000 ms; normalized timeout
+//   metadata contradicting PNG -> normalized image contract error; save=0 for every row.
+// - Abort/timeout -> AbortSignal is derived from fixed 300000 ms; normalized timeout
 //   error is returned and save=0.
 // - Representative 4xx, 5xx, and network failure -> existing ImageAPIError/NetworkError taxonomy;
 //   no provider/model/value fallback and save=0.
@@ -762,9 +764,9 @@ describe('BytePlus Seedream integration', () => {
     type SupportedRow = {
       args: Record<string, unknown>
       expectedAspectRatio: (typeof ALL_ASPECT_RATIOS)[number]
-      expectedModel: 'seedream-5-0-260128' | 'dola-seedream-5-0-pro-260628'
+      expectedModel: 'dola-seedream-5-0-pro-260628'
       expectedQuality: 'fast' | 'balanced' | 'quality'
-      expectedResolution: '1K' | '2K' | '4K'
+      expectedResolution: '1K' | '2K'
       inputImage?: boolean
       name: string
       skipPromptEnhancement?: boolean
@@ -776,9 +778,9 @@ describe('BytePlus Seedream integration', () => {
         name: 'prompt-baseline',
         args: {},
         expectedAspectRatio: '1:1',
-        expectedModel: 'seedream-5-0-260128',
+        expectedModel: 'dola-seedream-5-0-pro-260628',
         expectedQuality: 'fast',
-        expectedResolution: '2K',
+        expectedResolution: '1K',
       },
       {
         name: 'enhancement-failure-original-fallback',
@@ -802,9 +804,9 @@ describe('BytePlus Seedream integration', () => {
         name: 'fast-route',
         args: { quality: 'fast' },
         expectedAspectRatio: '1:1',
-        expectedModel: 'seedream-5-0-260128',
+        expectedModel: 'dola-seedream-5-0-pro-260628',
         expectedQuality: 'fast',
-        expectedResolution: '2K',
+        expectedResolution: '1K',
       },
       {
         name: 'balanced-route',
@@ -836,7 +838,7 @@ describe('BytePlus Seedream integration', () => {
           name: `aspect-${aspectRatio}`,
           args: { aspectRatio, imageSize: '2K', quality: 'fast' },
           expectedAspectRatio: aspectRatio,
-          expectedModel: 'seedream-5-0-260128',
+          expectedModel: 'dola-seedream-5-0-pro-260628',
           expectedQuality: 'fast',
           expectedResolution: '2K',
         })
@@ -851,9 +853,9 @@ describe('BytePlus Seedream integration', () => {
           name: `false-${flag}`,
           args: { [flag]: false },
           expectedAspectRatio: '1:1',
-          expectedModel: 'seedream-5-0-260128',
+          expectedModel: 'dola-seedream-5-0-pro-260628',
           expectedQuality: 'fast',
-          expectedResolution: '2K',
+          expectedResolution: '1K',
         })
       ),
       ...[
@@ -866,9 +868,9 @@ describe('BytePlus Seedream integration', () => {
           name: `prompt-only-${String(flag)}`,
           args: { [String(flag)]: value },
           expectedAspectRatio: '1:1',
-          expectedModel: 'seedream-5-0-260128',
+          expectedModel: 'dola-seedream-5-0-pro-260628',
           expectedQuality: 'fast',
-          expectedResolution: '2K',
+          expectedResolution: '1K',
         })
       ),
     ]
@@ -954,10 +956,9 @@ describe('BytePlus Seedream integration', () => {
         output_format: 'png',
         stream: false,
         watermark: false,
-        optimize_prompt_options: { mode: 'standard' },
-        ...(row.expectedModel === 'seedream-5-0-260128' && {
-          sequential_image_generation: 'disabled',
-        }),
+        optimize_prompt_options: {
+          mode: row.expectedQuality === 'fast' ? 'fast' : 'standard',
+        },
         ...(inputImageBytes && {
           image: `data:image/png;base64,${inputImageBytes.toString('base64')}`,
         }),
@@ -975,7 +976,7 @@ describe('BytePlus Seedream integration', () => {
       expect.soft(imageRequest.headers.get('authorization'), row.name).toBe(AUTHORIZATION_VALUE)
       expect.soft(Object.keys(imageRequest.body).sort(), row.name).toEqual(expectedImageKeys)
       expect.soft(imageRequest.body, row.name).toEqual(expectedImageRequest)
-      expect.soft(rowTimeouts, row.name).toContain(180000)
+      expect.soft(rowTimeouts, row.name).toContain(300000)
       expect.soft(row.args.quality ?? 'fast', row.name).toBe(row.expectedQuality)
       expect.soft(parseCount, row.name).toBe(1)
       expect.soft(decodeCount, row.name).toBe(1)
@@ -998,7 +999,7 @@ describe('BytePlus Seedream integration', () => {
           ])
         expect.soft(textRequest.model, row.name).toBe('seed-2-0-lite-260428')
         expect.soft(textRequest.thinking, row.name).toEqual({ type: 'disabled' })
-        expect.soft(textRequest.max_output_tokens, row.name).toBe(1000)
+        expect.soft(textRequest.max_output_tokens, row.name).toBe(384)
         expect.soft(textRequest.temperature, row.name).toBe(0.7)
         expect.soft(textRequest.top_p, row.name).toBe(0.95)
         expect.soft(typeof textRequest.instructions, row.name).toBe('string')
@@ -1490,8 +1491,8 @@ describe('BytePlus Seedream integration', () => {
         sensitiveValues: ['private-invalid-google-search-object'],
       },
       {
-        name: 'lite-1k',
-        args: { imageSize: '1K', quality: 'fast' },
+        name: 'fast-pro-4k',
+        args: { imageSize: '4K', quality: 'fast' },
         expectedCode: 'IMAGE_API_ERROR',
         expectedDecodeCalls: 0,
         expectedImageCalls: 0,
@@ -1915,9 +1916,9 @@ describe('BytePlus Seedream integration', () => {
         .toEqual([])
 
       if (row.expectedImageCalls === 0) {
-        expect.soft(rowTimeouts, row.name).not.toContain(180000)
+        expect.soft(rowTimeouts, row.name).not.toContain(300000)
       } else {
-        expect.soft(rowTimeouts, row.name).toContain(180000)
+        expect.soft(rowTimeouts, row.name).toContain(300000)
       }
       if (row.name === 'url-only') {
         expect.soft(transports.fetch, row.name).toHaveBeenCalledTimes(1)

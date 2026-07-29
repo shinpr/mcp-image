@@ -13,17 +13,7 @@ import {
   ListToolsRequestSchema,
   type ListToolsResult,
 } from '@modelcontextprotocol/sdk/types.js'
-// API clients
-import { createGeminiClient } from '../api/geminiClient.js'
-import { createGeminiTextClient } from '../api/geminiTextClient.js'
 import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
-import { createOpenAIImageClient } from '../api/openaiImageClient.js'
-import { createOpenAITextClient } from '../api/openaiTextClient.js'
-import {
-  createSeedreamImageClient,
-  validateSeedreamCapabilities,
-} from '../api/seedreamImageClient.js'
-import { createSeedreamTextClient } from '../api/seedreamTextClient.js'
 import type { TextClient } from '../api/textClient.js'
 // Business logic
 import { createFileManager, type FileManager } from '../business/fileManager.js'
@@ -38,12 +28,16 @@ import {
 import type { GenerateImageParams, MCPServerConfig } from '../types/mcp.js'
 
 // Utilities
-import { getConfig } from '../utils/config.js'
+import { type Config, getConfig } from '../utils/config.js'
 import { InputValidationError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import { ensureExtension, getMimeTypeFromExtension } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
 import { ErrorHandler } from './errorHandler.js'
+import {
+  getImageProviderDefinition,
+  type ImageProviderDefinition,
+} from './imageProviderRegistry.js'
 
 /**
  * Default MCP server configuration
@@ -247,48 +241,30 @@ export class MCPServerImpl {
   /**
    * Initialize provider clients lazily.
    */
-  private async initializeClients(): Promise<void> {
-    const configResult = getConfig()
-    if (!configResult.success) {
-      throw configResult.error
-    }
-    const config = configResult.data
-
+  private async initializeClients(
+    config: Config,
+    provider: ImageProviderDefinition
+  ): Promise<void> {
     if (this.imageClient && (config.skipPromptEnhancement || this.structuredPromptGenerator)) {
       return
     }
 
     // Initialize Text Client for prompt generation when enhancement is enabled.
     if (!config.skipPromptEnhancement && !this.textClient) {
-      const textClientResult =
-        config.imageProvider === 'openai'
-          ? createOpenAITextClient(config)
-          : config.imageProvider === 'seedream'
-            ? createSeedreamTextClient(config)
-            : createGeminiTextClient(config)
-      if (!textClientResult.success) {
-        throw textClientResult.error
-      }
-      this.textClient = textClientResult.data
+      this.textClient = provider.createTextClient(config)
     }
 
     // Initialize Structured Prompt Generator
     if (!config.skipPromptEnhancement && this.textClient && !this.structuredPromptGenerator) {
-      this.structuredPromptGenerator = createStructuredPromptGenerator(this.textClient)
+      this.structuredPromptGenerator = createStructuredPromptGenerator(
+        this.textClient,
+        provider.promptGeneration.maxTokens
+      )
     }
 
     // Initialize image generation client.
     if (!this.imageClient) {
-      const clientResult =
-        config.imageProvider === 'openai'
-          ? createOpenAIImageClient(config)
-          : config.imageProvider === 'seedream'
-            ? createSeedreamImageClient(config)
-            : createGeminiClient(config)
-      if (!clientResult.success) {
-        throw clientResult.error
-      }
-      this.imageClient = clientResult.data
+      this.imageClient = provider.createImageClient(config)
     }
 
     this.logger.info('mcp-server', 'Image provider clients initialized', {
@@ -313,9 +289,11 @@ export class MCPServerImpl {
       if (!configResult.success) {
         throw configResult.error
       }
+      const config = configResult.data
+      const provider = getImageProviderDefinition(config.imageProvider)
 
       // Initialize clients
-      await this.initializeClients()
+      await this.initializeClients(config, provider)
 
       // Handle input image if provided
       let inputImageData: string | undefined
@@ -345,19 +323,11 @@ export class MCPServerImpl {
         ...(params.quality !== undefined && { quality: params.quality }),
       } satisfies Omit<ImageApiParams, 'prompt'>
 
-      if (configResult.data.imageProvider === 'seedream') {
-        const capabilityResult = validateSeedreamCapabilities(
-          imageOptions,
-          configResult.data.imageQuality
-        )
-        if (!capabilityResult.success) {
-          throw capabilityResult.error
-        }
-      }
+      provider.validateImageOptions?.(imageOptions, config)
 
       // Generate structured prompt (unless skipped)
       let structuredPrompt = params.prompt
-      if (!configResult.data.skipPromptEnhancement && this.structuredPromptGenerator) {
+      if (!config.skipPromptEnhancement && this.structuredPromptGenerator) {
         const features: FeatureFlags = {}
         if (params.maintainCharacterConsistency !== undefined) {
           features.maintainCharacterConsistency = params.maintainCharacterConsistency
@@ -393,7 +363,7 @@ export class MCPServerImpl {
             error: promptResult.error.message,
           })
         }
-      } else if (configResult.data.skipPromptEnhancement) {
+      } else if (config.skipPromptEnhancement) {
         this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
       }
 
@@ -417,7 +387,7 @@ export class MCPServerImpl {
         ? this.securityManager.sanitizeFilename(params.fileName)
         : this.fileManager.generateFileName(mimeType)
       const fileName = params.fileName ? ensureExtension(rawFileName, mimeType) : rawFileName
-      const outputPath = path.join(configResult.data.imageOutputDir, fileName)
+      const outputPath = path.join(config.imageOutputDir, fileName)
 
       const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
       if (!sanitizedPath.success) {

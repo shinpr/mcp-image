@@ -48,7 +48,13 @@ const fetchMock = vi.fn<typeof fetch>()
 
 function successfulResponse(bytes = PNG_BYTES): Response {
   return jsonResponse({
-    data: [{ b64_json: bytes.toString('base64'), mime_type: 'image/png' }],
+    data: [
+      {
+        b64_json: bytes.toString('base64'),
+        size: '1024x1024',
+        output_format: 'png',
+      },
+    ],
   })
 }
 
@@ -141,17 +147,9 @@ describe('seedreamImageClient', () => {
       name: 'fast default',
       quality: 'fast' as const,
       imageSize: undefined,
-      model: 'seedream-5-0-260128',
-      size: '2K',
-      sequential: true,
-    },
-    {
-      name: 'fast 4K override',
-      quality: 'fast' as const,
-      imageSize: '4K' as const,
-      model: 'seedream-5-0-260128',
-      size: '4K',
-      sequential: true,
+      model: 'dola-seedream-5-0-pro-260628',
+      size: '1K',
+      optimizer: 'fast' as const,
     },
     {
       name: 'balanced default',
@@ -159,7 +157,7 @@ describe('seedreamImageClient', () => {
       imageSize: undefined,
       model: 'dola-seedream-5-0-pro-260628',
       size: '1K',
-      sequential: false,
+      optimizer: 'standard' as const,
     },
     {
       name: 'balanced 2K override',
@@ -167,7 +165,7 @@ describe('seedreamImageClient', () => {
       imageSize: '2K' as const,
       model: 'dola-seedream-5-0-pro-260628',
       size: '2K',
-      sequential: false,
+      optimizer: 'standard' as const,
     },
     {
       name: 'quality default',
@@ -175,7 +173,7 @@ describe('seedreamImageClient', () => {
       imageSize: undefined,
       model: 'dola-seedream-5-0-pro-260628',
       size: '1K',
-      sequential: false,
+      optimizer: 'standard' as const,
     },
     {
       name: 'quality 2K override',
@@ -183,7 +181,7 @@ describe('seedreamImageClient', () => {
       imageSize: '2K' as const,
       model: 'dola-seedream-5-0-pro-260628',
       size: '2K',
-      sequential: false,
+      optimizer: 'standard' as const,
     },
   ])('routes and serializes the exact $name request', async (row) => {
     const result = await createClient().generateImage({
@@ -204,8 +202,7 @@ describe('seedreamImageClient', () => {
       output_format: 'png',
       stream: false,
       watermark: false,
-      optimize_prompt_options: { mode: 'standard' },
-      ...(row.sequential && { sequential_image_generation: 'disabled' }),
+      optimize_prompt_options: { mode: row.optimizer },
     }
 
     expect(request.url).toBe(API_ENDPOINT)
@@ -213,7 +210,7 @@ describe('seedreamImageClient', () => {
     expect(request.headers.get('authorization')).toBe(`Bearer ${DUMMY_API_KEY}`)
     expect(request.headers.get('content-type')).toBe('application/json')
     expect(request.body).toEqual(expectedBody)
-    expect(Object.hasOwn(request.body, 'sequential_image_generation')).toBe(row.sequential)
+    expect(Object.hasOwn(request.body, 'sequential_image_generation')).toBe(false)
     expect(Object.hasOwn(request.body, 'reasoning_effort')).toBe(false)
     expect(Object.hasOwn(request.body, 'thinking')).toBe(false)
 
@@ -295,8 +292,8 @@ describe('seedreamImageClient', () => {
       params: { useGoogleSearch: true },
     },
     {
-      name: 'Lite 1K',
-      params: { quality: 'fast', imageSize: '1K' },
+      name: 'fast Pro 4K',
+      params: { quality: 'fast', imageSize: '4K' },
     },
     {
       name: 'balanced Pro 4K',
@@ -433,6 +430,13 @@ describe('seedreamImageClient', () => {
       response: () =>
         jsonResponse({
           data: [{ b64_json: PNG_BYTES.toString('base64'), mime_type: 'image/jpeg' }],
+        }),
+    },
+    {
+      name: 'non-PNG output format',
+      response: () =>
+        jsonResponse({
+          data: [{ b64_json: PNG_BYTES.toString('base64'), output_format: 'jpeg' }],
         }),
     },
   ])('rejects $name without returning image bytes', async ({ response }) => {
@@ -576,7 +580,7 @@ describe('seedreamImageClient', () => {
     ).toHaveLength(0)
   })
 
-  it('constructs the image AbortSignal from the fixed 180000 ms timeout only', async () => {
+  it('constructs the image AbortSignal from the fixed 300000 ms timeout only', async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
 
     const result = await createClient({
@@ -586,7 +590,7 @@ describe('seedreamImageClient', () => {
 
     expect(result.success).toBe(true)
     expect(timeoutSpy).toHaveBeenCalledTimes(1)
-    expect(timeoutSpy).toHaveBeenCalledWith(180000)
+    expect(timeoutSpy).toHaveBeenCalledWith(300000)
     expect(timeoutSpy).not.toHaveBeenCalledWith(1)
     expect(timeoutSpy).not.toHaveBeenCalledWith(30000)
   })
