@@ -98,11 +98,11 @@ export function normalizeMimeType(mimeType: string): string {
 
 export function resolvePreferredOutputFormat(fileName?: string): ImageOutputFormat | undefined {
   if (!fileName) {
-    return 'png'
+    return undefined
   }
 
   const extension = path.extname(fileName).toLowerCase()
-  if (!extension || extension === '.png') {
+  if (extension === '.png') {
     return 'png'
   }
   if (extension === '.jpg' || extension === '.jpeg') {
@@ -128,19 +128,25 @@ export function matchesImageDataMimeType(
 
 /**
  * Ensure a filename has an appropriate file extension based on MIME type.
- * - If the filename already has an extension (any extension), it is preserved as-is.
- * - If the filename has no extension, one is appended based on the MIME type.
+ * - A recognized extension is preserved only when it matches the actual MIME type.
+ * - A recognized mismatched extension is replaced with the actual canonical extension.
+ * - Missing or unrecognized extensions are completed without discarding the caller's basename.
  *
  * @param fileName - The filename, with or without extension
- * @param mimeType - The MIME type to derive the extension from
+ * @param mimeType - The actual MIME type to derive the extension from
  * @returns The filename with an appropriate extension
  */
-export function ensureExtension(fileName: string, mimeType: string): string {
-  const ext = path.extname(fileName)
-  if (ext) {
+export function reconcileFileNameExtension(fileName: string, mimeType: string): string {
+  const originalExtension = path.extname(fileName)
+  const normalizedExtension = originalExtension.toLowerCase()
+  const extensionMimeType = EXTENSION_TO_MIME.get(normalizedExtension)
+  if (extensionMimeType === mimeType) {
     return fileName
   }
 
   const newExt = getExtensionFromMimeType(mimeType)
+  if (extensionMimeType) {
+    return `${fileName.slice(0, -originalExtension.length)}${newExt}`
+  }
   return `${fileName}${newExt}`
 }

@@ -408,6 +408,40 @@ describe('seedreamImageClient', () => {
     expect(rejected.success).toBe(false)
   })
 
+  it('accepts a valid 4 MiB PNG response without overflowing the validation stack', async () => {
+    // Keep this above the former regex stack-overflow threshold (~3.2 MiB decoded on Node 22).
+    const largePng = Buffer.alloc(4 * MIB)
+    PNG_BYTES.copy(largePng)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        data: [{ b64_json: largePng.toString('base64'), mime_type: 'image/png' }],
+      })
+    )
+
+    const result = await createClient().generateImage({ prompt: PRIVATE_PROMPT })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.imageData).toEqual(largePng)
+    }
+  })
+
+  it('accepts a valid 4 MiB PNG editing input without overflowing the validation stack', async () => {
+    // Keep this above the former regex stack-overflow threshold (~3.2 MiB decoded on Node 22).
+    const largePng = Buffer.alloc(4 * MIB)
+    PNG_BYTES.copy(largePng)
+
+    const result = await createClient().generateImage({
+      prompt: PRIVATE_PROMPT,
+      inputImage: largePng.toString('base64'),
+      inputImageMimeType: 'image/png',
+    })
+
+    expect(result.success).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(readRequest().body.image).toBe(`data:image/png;base64,${largePng.toString('base64')}`)
+  })
+
   it.each([
     {
       name: 'missing data',
@@ -454,8 +488,18 @@ describe('seedreamImageClient', () => {
         }),
     },
     {
-      name: 'malformed base64',
-      response: () => jsonResponse({ data: [{ b64_json: '***', mime_type: 'image/png' }] }),
+      name: 'invalid base64 character after a valid PNG signature',
+      response: () => {
+        const validBase64 = PNG_BYTES.toString('base64')
+        return jsonResponse({
+          data: [
+            {
+              b64_json: `${validBase64.slice(0, -1)}*`,
+              mime_type: 'image/png',
+            },
+          ],
+        })
+      },
     },
     {
       name: 'empty base64',
@@ -641,6 +685,7 @@ describe('seedreamImageClient', () => {
     expect(timeoutSpy).toHaveBeenCalledWith(300000)
     expect(timeoutSpy).not.toHaveBeenCalledWith(1)
     expect(timeoutSpy).not.toHaveBeenCalledWith(30000)
+    expect(readRequest().init.signal).toBe(timeoutSpy.mock.results[0]?.value)
   })
 
   it('rejects missing or whitespace auth during factory preflight', () => {

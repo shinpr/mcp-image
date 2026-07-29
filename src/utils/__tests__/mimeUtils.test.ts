@@ -6,12 +6,12 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  ensureExtension,
   getExtensionFromMimeType,
   getMimeTypeForOutputFormat,
   getMimeTypeFromExtension,
   matchesImageDataMimeType,
   normalizeMimeType,
+  reconcileFileNameExtension,
   resolvePreferredOutputFormat,
   SUPPORTED_EXTENSIONS,
   SUPPORTED_MIME_TYPES,
@@ -173,10 +173,10 @@ describe('mimeUtils', () => {
     })
   })
 
-  describe('ensureExtension', () => {
+  describe('reconcileFileNameExtension', () => {
     it('should add extension when filename has none', () => {
       // Act
-      const result = ensureExtension('photo', 'image/jpeg')
+      const result = reconcileFileNameExtension('photo', 'image/jpeg')
 
       // Assert
       expect(result).toBe('photo.jpg')
@@ -184,23 +184,32 @@ describe('mimeUtils', () => {
 
     it('should preserve existing correct extension', () => {
       // Act
-      const result = ensureExtension('photo.jpg', 'image/jpeg')
+      const result = reconcileFileNameExtension('photo.jpg', 'image/jpeg')
 
       // Assert
       expect(result).toBe('photo.jpg')
     })
 
-    it('should preserve existing extension even if different from MIME type', () => {
+    it('should replace a recognized extension when it does not match the actual MIME type', () => {
       // Act
-      const result = ensureExtension('photo.png', 'image/jpeg')
+      const result = reconcileFileNameExtension('photo.png', 'image/jpeg')
 
       // Assert
-      expect(result).toBe('photo.png')
+      expect(result).toBe('photo.jpg')
+    })
+
+    it('should treat an unrecognized dotted suffix as part of the basename', () => {
+      expect(reconcileFileNameExtension('banner.v2', 'image/png')).toBe('banner.v2.png')
+    })
+
+    it('should preserve or replace uppercase extensions based on the actual MIME type', () => {
+      expect(reconcileFileNameExtension('photo.JPG', 'image/jpeg')).toBe('photo.JPG')
+      expect(reconcileFileNameExtension('photo.PNG', 'image/jpeg')).toBe('photo.jpg')
     })
 
     it('should add extension for image/png when filename has no extension', () => {
       // Act
-      const result = ensureExtension('screenshot', 'image/png')
+      const result = reconcileFileNameExtension('screenshot', 'image/png')
 
       // Assert
       expect(result).toBe('screenshot.png')
@@ -208,7 +217,7 @@ describe('mimeUtils', () => {
 
     it('should add extension for image/webp when filename has no extension', () => {
       // Act
-      const result = ensureExtension('artwork', 'image/webp')
+      const result = reconcileFileNameExtension('artwork', 'image/webp')
 
       // Assert
       expect(result).toBe('artwork.webp')
@@ -217,9 +226,12 @@ describe('mimeUtils', () => {
 
   describe('output format preference', () => {
     it.each([
-      [undefined, 'png'],
-      ['', 'png'],
-      ['photo', 'png'],
+      [undefined, undefined],
+      ['', undefined],
+      ['photo', undefined],
+      ['banner.v2', undefined],
+      ['my.photo', undefined],
+      ['2026.07.29-banner', undefined],
       ['photo.png', 'png'],
       ['photo.PNG', 'png'],
       ['photo.jpg', 'jpeg'],

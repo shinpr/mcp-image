@@ -13,6 +13,10 @@ import type { GenerationConfig, TextClient } from './textClient.js'
 
 interface OpenAITextResponse {
   output_text?: string
+  status?: 'completed' | 'failed' | 'in_progress' | 'cancelled' | 'queued' | 'incomplete'
+  incomplete_details?: {
+    reason?: 'max_output_tokens' | 'content_filter'
+  } | null
   output?: Array<{
     content?: Array<{
       type?: string
@@ -56,6 +60,17 @@ class OpenAITextClientImpl implements TextClient {
         },
         { signal: AbortSignal.timeout(timeout) }
       )) as OpenAITextResponse
+
+      if (response.status === 'incomplete') {
+        const reason = response.incomplete_details?.reason ?? 'unknown reason'
+        return Err(
+          new ImageAPIError(`OpenAI text generation response was incomplete: ${reason}`, {
+            provider: 'openai',
+            stage: 'text generation',
+            suggestion: 'Use the original prompt or increase the prompt generation token limit',
+          })
+        )
+      }
 
       const responseText = this.extractResponseText(response)
       if (!responseText || responseText.trim().length === 0) {

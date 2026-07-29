@@ -1,13 +1,10 @@
 import { execFile } from 'node:child_process'
 import { constants as fsConstants } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ImageClient } from '../../api/imageClient.js'
-import type { FileManager } from '../../business/fileManager.js'
 import { MAX_IMAGE_SIZE } from '../../business/inputValidator.js'
-import type { ResponseBuilder } from '../../business/responseBuilder.js'
-import type { StructuredPromptGenerator } from '../../business/structuredPromptGenerator.js'
 import { createMCPServer } from '../mcpServer.js'
 
 const fileSystem = vi.hoisted(() => ({
@@ -225,7 +222,7 @@ function createJsonResponse(payload: unknown, status = 200): Response {
 }
 
 async function createOutputDirectory(): Promise<string> {
-  const directory = await mkdtemp('/tmp/mcp-image-seedream-')
+  const directory = await mkdtemp(join(tmpdir(), 'mcp-image-seedream-'))
   temporaryDirectories.add(directory)
   return directory
 }
@@ -268,22 +265,6 @@ function parsePublicResponse(
   }
 
   return JSON.parse(firstContent.text) as Record<string, unknown>
-}
-
-function readServerInternals(server: ReturnType<typeof createMCPServer>): {
-  fileManager: FileManager
-  imageClient: ImageClient | null
-  responseBuilder: ResponseBuilder
-  structuredPromptGenerator: StructuredPromptGenerator | null
-  textClient: object | null
-} {
-  return server as unknown as {
-    fileManager: FileManager
-    imageClient: ImageClient | null
-    responseBuilder: ResponseBuilder
-    structuredPromptGenerator: StructuredPromptGenerator | null
-    textClient: object | null
-  }
 }
 
 function observeLastImageRequest(): {
@@ -642,106 +623,73 @@ afterEach(async () => {
 // diagnostics; this integration case proves those failures cannot escape into files or responses.
 
 describe('BytePlus Seedream integration', () => {
-  it('selects Seedream clients through the existing lazy initialization branches', async () => {
+  it('routes Seedream requests and reuses the prompt client through public effects', async () => {
     const skipOutput = await createOutputDirectory()
     configureSeedream(skipOutput, { skipPromptEnhancement: true })
     const skippedServer = createMCPServer()
-    const skippedBefore = readServerInternals(skippedServer)
-    const skippedSave = vi.spyOn(skippedBefore.fileManager, 'saveImage')
-    const skippedSuccess = vi.spyOn(skippedBefore.responseBuilder, 'buildSuccessResponse')
 
     expect(await readdir(skipOutput)).toEqual([])
-    expect.soft(skippedBefore.textClient).toBeNull()
-    expect.soft(skippedBefore.imageClient).toBeNull()
-    expect.soft(skippedBefore.structuredPromptGenerator).toBeNull()
 
     const skippedFirst = await skippedServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'skip-first.png',
     })
-    const skippedAfterFirst = readServerInternals(skippedServer)
     const skippedSecond = await skippedServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'skip-second.png',
     })
-    const skippedAfterSecond = readServerInternals(skippedServer)
 
     expect.soft(transports.googleConstructor).not.toHaveBeenCalled()
     expect.soft(transports.openAIConstructorOptions).toHaveLength(0)
     expect.soft(transports.openAIResponsesCreate).not.toHaveBeenCalled()
     expect.soft(transports.fetch).toHaveBeenCalledTimes(2)
-    expect.soft(skippedAfterFirst.textClient).toBeNull()
-    expect.soft(skippedAfterFirst.structuredPromptGenerator).toBeNull()
-    expect.soft(skippedAfterFirst.imageClient).not.toBeNull()
-    expect.soft(skippedAfterSecond.imageClient).toBe(skippedAfterFirst.imageClient)
-    expect.soft(skippedSave).toHaveBeenCalledTimes(2)
-    expect.soft(skippedSuccess).toHaveBeenCalledTimes(2)
     expect.soft(skippedFirst.isError).toBe(false)
     expect.soft(skippedSecond.isError).toBe(false)
-    expect.soft(await readdir(skipOutput)).toHaveLength(2)
+    expect.soft((await readdir(skipOutput)).sort()).toEqual(['skip-first.png', 'skip-second.png'])
 
     resetTransportDoubles()
     const cachedOutput = await createOutputDirectory()
     configureSeedream(cachedOutput)
     const cachedServer = createMCPServer()
-    const cachedBefore = readServerInternals(cachedServer)
-    const cachedSave = vi.spyOn(cachedBefore.fileManager, 'saveImage')
-    const cachedSuccess = vi.spyOn(cachedBefore.responseBuilder, 'buildSuccessResponse')
 
     expect(await readdir(cachedOutput)).toEqual([])
-    expect.soft(cachedBefore.textClient).toBeNull()
-    expect.soft(cachedBefore.imageClient).toBeNull()
-    expect.soft(cachedBefore.structuredPromptGenerator).toBeNull()
 
     const cachedFirst = await cachedServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'cache-first.png',
     })
-    const cachedAfterFirst = readServerInternals(cachedServer)
     const cachedSecond = await cachedServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'cache-second.png',
     })
-    const cachedAfterSecond = readServerInternals(cachedServer)
 
     expect.soft(transports.googleConstructor).not.toHaveBeenCalled()
-    expect.soft(transports.openAIConstructorOptions).toHaveLength(1)
+    expect.soft(transports.openAIConstructorOptions).toEqual([
+      {
+        apiKey: ARK_DUMMY_KEY,
+        baseURL: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+      },
+    ])
     expect.soft(transports.openAIResponsesCreate).toHaveBeenCalledTimes(2)
     expect.soft(transports.fetch).toHaveBeenCalledTimes(2)
-    expect.soft(cachedAfterFirst.textClient).not.toBeNull()
-    expect.soft(cachedAfterFirst.imageClient).not.toBeNull()
-    expect.soft(cachedAfterFirst.structuredPromptGenerator).not.toBeNull()
-    expect.soft(cachedAfterSecond.textClient).toBe(cachedAfterFirst.textClient)
-    expect.soft(cachedAfterSecond.imageClient).toBe(cachedAfterFirst.imageClient)
-    expect
-      .soft(cachedAfterSecond.structuredPromptGenerator)
-      .toBe(cachedAfterFirst.structuredPromptGenerator)
-    expect.soft(cachedSave).toHaveBeenCalledTimes(2)
-    expect.soft(cachedSuccess).toHaveBeenCalledTimes(2)
     expect.soft(cachedFirst.isError).toBe(false)
     expect.soft(cachedSecond.isError).toBe(false)
-    expect.soft(await readdir(cachedOutput)).toHaveLength(2)
+    expect
+      .soft((await readdir(cachedOutput)).sort())
+      .toEqual(['cache-first.png', 'cache-second.png'])
 
     resetTransportDoubles()
     const failureOutput = await createOutputDirectory()
     configureSeedream(failureOutput)
     transports.openAIConstructorError = new Error('synthetic Seedream factory failure')
     const failedServer = createMCPServer()
-    const failedBefore = readServerInternals(failedServer)
-    const failedSave = vi.spyOn(failedBefore.fileManager, 'saveImage')
-    const failedSuccess = vi.spyOn(failedBefore.responseBuilder, 'buildSuccessResponse')
-    const failedError = vi.spyOn(failedBefore.responseBuilder, 'buildErrorResponse')
 
     expect(await readdir(failureOutput)).toEqual([])
-    expect.soft(failedBefore.textClient).toBeNull()
-    expect.soft(failedBefore.imageClient).toBeNull()
-    expect.soft(failedBefore.structuredPromptGenerator).toBeNull()
 
     const failed = await failedServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'must-not-exist.png',
     })
-    const failedAfter = readServerInternals(failedServer)
     const failedPublicResponse = parsePublicResponse(failed)
     const failureExposure = `${JSON.stringify(failedPublicResponse)}\n${capturedLogs()}`
 
@@ -750,12 +698,9 @@ describe('BytePlus Seedream integration', () => {
     expect.soft(transports.openAIConstructorOptions).toHaveLength(1)
     expect.soft(transports.openAIResponsesCreate).not.toHaveBeenCalled()
     expect.soft(transports.fetch).not.toHaveBeenCalled()
-    expect.soft(failedAfter.textClient).toBeNull()
-    expect.soft(failedAfter.imageClient).toBeNull()
-    expect.soft(failedAfter.structuredPromptGenerator).toBeNull()
-    expect.soft(failedSave).not.toHaveBeenCalled()
-    expect.soft(failedSuccess).not.toHaveBeenCalled()
-    expect.soft(failedError).toHaveBeenCalledTimes(1)
+    expect
+      .soft((failedPublicResponse.error as { message?: string } | undefined)?.message)
+      .toContain('synthetic Seedream factory failure')
     expect.soft(await readdir(failureOutput)).toEqual([])
     expect.soft(failureExposure).not.toContain(ARK_DUMMY_KEY)
     expect.soft(failureExposure).not.toContain(ORIGINAL_PROMPT)
@@ -917,9 +862,6 @@ describe('BytePlus Seedream integration', () => {
       }
 
       const server = createMCPServer()
-      const internals = readServerInternals(server)
-      const saveSpy = vi.spyOn(internals.fileManager, 'saveImage')
-      const successSpy = vi.spyOn(internals.responseBuilder, 'buildSuccessResponse')
       const beforeTimeoutCalls = timeoutSpy.mock.calls.length
       const beforeParseCalls = jsonParseSpy.mock.calls.length
       const beforeDecodeCalls = bufferFromSpy.mock.calls.length
@@ -950,8 +892,6 @@ describe('BytePlus Seedream integration', () => {
       const rowTimeouts = timeoutSpy.mock.calls
         .slice(beforeTimeoutCalls)
         .map(([timeout]) => timeout)
-      const capturedGeneration = successSpy.mock.calls.at(0)?.[0]
-
       const expectedImageRequest = {
         model: row.expectedModel,
         prompt: finalPrompt,
@@ -981,11 +921,8 @@ describe('BytePlus Seedream integration', () => {
       expect.soft(Object.keys(imageRequest.body).sort(), row.name).toEqual(expectedImageKeys)
       expect.soft(imageRequest.body, row.name).toEqual(expectedImageRequest)
       expect.soft(rowTimeouts, row.name).toContain(300000)
-      expect.soft(row.args.quality ?? 'fast', row.name).toBe(row.expectedQuality)
       expect.soft(parseCount, row.name).toBe(1)
       expect.soft(decodeCount, row.name).toBe(1)
-      expect.soft(saveSpy, row.name).toHaveBeenCalledTimes(1)
-      expect.soft(successSpy, row.name).toHaveBeenCalledTimes(1)
 
       if (row.skipPromptEnhancement) {
         expect.soft(textRequest, row.name).toEqual({})
@@ -1042,12 +979,6 @@ describe('BytePlus Seedream integration', () => {
         }
       }
 
-      expect.soft(capturedGeneration?.metadata.prompt, row.name).toBe(finalPrompt)
-      expect.soft(capturedGeneration?.metadata.mimeType, row.name).toBe('image/png')
-      expect.soft(capturedGeneration?.imageData, row.name).toEqual(expectedImageBytes)
-      expect
-        .soft(saveSpy, row.name)
-        .toHaveBeenCalledWith(expectedImageBytes, join(outputDirectory, fileName))
       await assertSavedPng(result, outputDirectory, fileName, expectedImageBytes, row.expectedModel)
 
       const publicAndLogs = `${JSON.stringify(parsePublicResponse(result))}\n${capturedLogs()}`
@@ -1144,8 +1075,6 @@ describe('BytePlus Seedream integration', () => {
       return handle
     })
     const exactServer = createMCPServer()
-    const exactInternals = readServerInternals(exactServer)
-    const exactSaveSpy = vi.spyOn(exactInternals.fileManager, 'saveImage')
     const beforeExactAllocCalls = bufferAllocSpy.mock.calls.length
 
     expect.soft(await readdir(exactOutputDirectory), 'exact-limit:before').toEqual([])
@@ -1173,7 +1102,6 @@ describe('BytePlus Seedream integration', () => {
       .toBe(true)
     expect.soft(transports.openAIResponsesCreate, 'exact-limit:text').not.toHaveBeenCalled()
     expect.soft(transports.googleGenerateContent, 'exact-limit:image').toHaveBeenCalledTimes(1)
-    expect.soft(exactSaveSpy, 'exact-limit:save').toHaveBeenCalledTimes(1)
     expect
       .soft(await readdir(exactOutputDirectory), 'exact-limit:after')
       .toEqual(['exact-limit-output.png'])
@@ -1197,8 +1125,6 @@ describe('BytePlus Seedream integration', () => {
       return handle
     })
     const oversizedServer = createMCPServer()
-    const oversizedInternals = readServerInternals(oversizedServer)
-    const oversizedSaveSpy = vi.spyOn(oversizedInternals.fileManager, 'saveImage')
     const beforeOversizedAllocCalls = bufferAllocSpy.mock.calls.length
     const beforeOversizedBase64Calls = bufferToStringSpy.mock.calls.length
 
@@ -1229,7 +1155,6 @@ describe('BytePlus Seedream integration', () => {
     expect.soft(oversizedBase64Calls, 'over-limit:base64').toEqual([])
     expect.soft(transports.openAIResponsesCreate, 'over-limit:text').not.toHaveBeenCalled()
     expect.soft(transports.googleGenerateContent, 'over-limit:image').not.toHaveBeenCalled()
-    expect.soft(oversizedSaveSpy, 'over-limit:save').not.toHaveBeenCalled()
     expect.soft(await readdir(oversizedOutputDirectory), 'over-limit:after').toEqual([])
 
     resetTransportDoubles()
@@ -1270,8 +1195,6 @@ describe('BytePlus Seedream integration', () => {
       return fileSystem.actualOpen(filePath, flags)
     })
     const growthServer = createMCPServer()
-    const growthInternals = readServerInternals(growthServer)
-    const growthSaveSpy = vi.spyOn(growthInternals.fileManager, 'saveImage')
     const beforeGrowthAllocCalls = bufferAllocSpy.mock.calls.length
     const beforeGrowthBase64Calls = bufferToStringSpy.mock.calls.length
 
@@ -1313,7 +1236,6 @@ describe('BytePlus Seedream integration', () => {
     expect.soft(growthBase64Calls, 'growth:base64').toEqual([])
     expect.soft(transports.openAIResponsesCreate, 'growth:text').not.toHaveBeenCalled()
     expect.soft(transports.googleGenerateContent, 'growth:image').not.toHaveBeenCalled()
-    expect.soft(growthSaveSpy, 'growth:save').not.toHaveBeenCalled()
     expect.soft(await readdir(growthOutputDirectory), 'growth:after').toEqual([])
 
     resetTransportDoubles()
@@ -1335,8 +1257,6 @@ describe('BytePlus Seedream integration', () => {
       return handle
     })
     const nonRegularServer = createMCPServer()
-    const nonRegularInternals = readServerInternals(nonRegularServer)
-    const nonRegularSaveSpy = vi.spyOn(nonRegularInternals.fileManager, 'saveImage')
     const beforeNonRegularAllocCalls = bufferAllocSpy.mock.calls.length
     const beforeNonRegularBase64Calls = bufferToStringSpy.mock.calls.length
 
@@ -1366,7 +1286,6 @@ describe('BytePlus Seedream integration', () => {
     expect.soft(nonRegularBase64Calls, 'non-regular:base64').toEqual([])
     expect.soft(transports.openAIResponsesCreate, 'non-regular:text').not.toHaveBeenCalled()
     expect.soft(transports.googleGenerateContent, 'non-regular:image').not.toHaveBeenCalled()
-    expect.soft(nonRegularSaveSpy, 'non-regular:save').not.toHaveBeenCalled()
     expect.soft(await readdir(nonRegularOutputDirectory), 'non-regular:after').toEqual([])
 
     // Windows does not provide POSIX named FIFOs; Unix-family CI exercises the real FIFO open.
@@ -1394,8 +1313,6 @@ describe('BytePlus Seedream integration', () => {
         return handle
       })
       const fifoServer = createMCPServer()
-      const fifoInternals = readServerInternals(fifoServer)
-      const fifoSaveSpy = vi.spyOn(fifoInternals.fileManager, 'saveImage')
       const beforeFifoAllocCalls = bufferAllocSpy.mock.calls.length
       const beforeFifoBase64Calls = bufferToStringSpy.mock.calls.length
 
@@ -1443,7 +1360,6 @@ describe('BytePlus Seedream integration', () => {
       expect.soft(fifoBase64Calls, 'fifo:base64').toEqual([])
       expect.soft(transports.openAIResponsesCreate, 'fifo:text').not.toHaveBeenCalled()
       expect.soft(transports.googleGenerateContent, 'fifo:image').not.toHaveBeenCalled()
-      expect.soft(fifoSaveSpy, 'fifo:save').not.toHaveBeenCalled()
       expect.soft(await readdir(fifoOutputDirectory), 'fifo:after').toEqual([])
       await rm(fifoInputPath, { force: true })
     }
@@ -1640,11 +1556,18 @@ describe('BytePlus Seedream integration', () => {
         expectedParseCalls: 1,
         expectedTextCalls: 0,
         skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse({
+        responseFactory: (responseSentinel, imageSentinel) => {
+          const validBase64 = createPngFixture(imageSentinel).toString('base64')
+          return createJsonResponse({
             response_sentinel: responseSentinel,
-            data: [{ b64_json: `***${imageSentinel}`, mime_type: 'image/png' }],
-          }),
+            data: [
+              {
+                b64_json: `${validBase64.slice(0, -1)}*`,
+                mime_type: 'image/png',
+              },
+            ],
+          })
+        },
       },
       {
         name: 'empty-base64',
@@ -1869,10 +1792,6 @@ describe('BytePlus Seedream integration', () => {
       const beforeFiles = await readdir(outputDirectory)
       const beforeTimeoutCalls = timeoutSpy.mock.calls.length
       const server = createMCPServer()
-      const internals = readServerInternals(server)
-      const saveSpy = vi.spyOn(internals.fileManager, 'saveImage')
-      const successSpy = vi.spyOn(internals.responseBuilder, 'buildSuccessResponse')
-      const errorSpy = vi.spyOn(internals.responseBuilder, 'buildErrorResponse')
       const beforeParseCalls = jsonParseSpy.mock.calls.length
       const beforeDecodeCalls = bufferFromSpy.mock.calls.length
       const result = await server.callTool('generate_image', args)
@@ -1881,6 +1800,7 @@ describe('BytePlus Seedream integration', () => {
         .slice(beforeParseCalls)
         .filter(([value]) => typeof value === 'string' && value.includes(responseSentinel)).length
       const pngBase64 = createPngFixture(imageSentinel).toString('base64')
+      const malformedBase64 = `${pngBase64.slice(0, -1)}*`
       const nonPngBase64 = Buffer.from(`not-a-png:${imageSentinel}`).toString('base64')
       const oversizedBase64Length = Math.ceil(((32 * 1024 * 1024 + 1) * 4) / 3)
       const decodeCount = bufferFromSpy.mock.calls
@@ -1894,7 +1814,7 @@ describe('BytePlus Seedream integration', () => {
             return value === pngBase64
           }
           if (row.name === 'malformed-base64') {
-            return value === `***${imageSentinel}`
+            return value === malformedBase64
           }
           if (row.name === 'empty-base64') {
             return value === ''
@@ -1951,9 +1871,6 @@ describe('BytePlus Seedream integration', () => {
       expect.soft(transports.fetch, row.name).toHaveBeenCalledTimes(row.expectedImageCalls)
       expect.soft(parseCount, row.name).toBe(row.expectedParseCalls)
       expect.soft(decodeCount, row.name).toBe(row.expectedDecodeCalls)
-      expect.soft(saveSpy, row.name).not.toHaveBeenCalled()
-      expect.soft(successSpy, row.name).not.toHaveBeenCalled()
-      expect.soft(errorSpy, row.name).toHaveBeenCalledTimes(1)
       expect
         .soft(
           afterFiles.filter((file) => file !== 'unsupported.gif'),

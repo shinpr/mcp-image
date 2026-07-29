@@ -8,12 +8,12 @@ describe('config', () => {
   beforeEach(() => {
     // Mock process.env for each test
     process.env = { ...originalEnv }
-    process.env.IMAGE_PROVIDER = undefined
-    process.env.GEMINI_API_KEY = undefined
-    process.env.OPENAI_API_KEY = undefined
-    process.env.ARK_API_KEY = undefined
-    process.env.IMAGE_OUTPUT_DIR = undefined
-    process.env.IMAGE_QUALITY = undefined
+    delete process.env.IMAGE_PROVIDER
+    delete process.env.GEMINI_API_KEY
+    delete process.env.OPENAI_API_KEY
+    delete process.env.ARK_API_KEY
+    delete process.env.IMAGE_OUTPUT_DIR
+    delete process.env.IMAGE_QUALITY
   })
 
   afterEach(() => {
@@ -327,6 +327,18 @@ describe('config', () => {
         expect(result.data.imageProvider).toBe('seedream')
         expect(result.data.arkApiKey).toBe('test-ark-api-key')
         expect(result.data.apiTimeout).toBe(30000)
+      }
+    })
+
+    it('should trim ARK_API_KEY while loading Seedream environment config', () => {
+      process.env.IMAGE_PROVIDER = 'seedream'
+      process.env.ARK_API_KEY = ' \ttest-ark-api-key\n '
+
+      const result = getConfig()
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.arkApiKey).toBe('test-ark-api-key')
       }
     })
 

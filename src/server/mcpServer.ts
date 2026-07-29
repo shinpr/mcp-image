@@ -32,9 +32,10 @@ import { type Config, getConfig } from '../utils/config.js'
 import { InputValidationError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import {
-  ensureExtension,
   getMimeTypeFromExtension,
+  reconcileFileNameExtension,
   resolvePreferredOutputFormat,
+  SUPPORTED_EXTENSIONS,
 } from '../utils/mimeUtils.js'
 import { SecurityManager } from '../utils/security.js'
 import { ErrorHandler } from './errorHandler.js'
@@ -143,48 +144,50 @@ export class MCPServerImpl {
       tools: [
         {
           name: 'generate_image',
-          description: 'Generate image with specified prompt and optional parameters',
+          description:
+            'Generate a new image from a text prompt or edit an existing image using inputImagePath. Saves the result and returns a file resource.',
           inputSchema: {
             type: 'object' as const,
             properties: {
               prompt: {
                 type: 'string' as const,
                 description:
-                  'The prompt for image generation (English recommended for optimal structured prompt enhancement)',
+                  'Describe the image to generate or the edit to apply. Include the subject, context, and visual style; English is recommended for prompt enhancement.',
               },
               fileName: {
                 type: 'string' as const,
                 description:
-                  'Custom .png, .jpg, or .jpeg output filename. OpenAI and Seedream use its extension as the output format; no extension defaults to PNG.',
+                  'Use .png, .jpg, or .jpeg to request that output format from OpenAI or Seedream. Other or absent suffixes use the provider default; the saved filename is corrected to the actual image extension.',
               },
               inputImagePath: {
                 type: 'string' as const,
                 description:
-                  'Optional absolute path to source image for image-to-image generation. Use when generating variations, style transfers, or similar images based on an existing image (must be an absolute path)',
+                  'Provide an absolute path to a source image when editing, creating a variation, or transferring style.',
               },
               blendImages: {
                 type: 'boolean' as const,
                 description:
-                  'Enable multi-image blending for combining multiple visual elements naturally. Use when prompt mentions multiple subjects or composite scenes',
+                  'Enable when the prompt combines multiple visual elements that need coherent spatial relationships, lighting, or composition.',
               },
               maintainCharacterConsistency: {
                 type: 'boolean' as const,
                 description:
-                  'Maintain character appearance consistency. Enable when generating same character in different poses/scenes',
+                  'Enable when the same character must retain a recognizable appearance across poses or scenes.',
               },
               useWorldKnowledge: {
                 type: 'boolean' as const,
                 description:
-                  'Use real-world knowledge for accurate context. Enable for historical figures, landmarks, or factual scenarios',
+                  'Enable when accurate real-world details matter, such as historical figures, landmarks, cultures, or factual settings.',
               },
               useGoogleSearch: {
                 type: 'boolean' as const,
                 description:
-                  "Enable Google Search grounding to access real-time web information for factually accurate image generation. Use when prompt requires current or time-sensitive data that may have changed since the model's knowledge cutoff. Leave disabled for creative, fictional, historical, or timeless content.",
+                  'Enable when using Gemini and the image requires current or time-sensitive web information. With OpenAI or Seedream, omit this option or set it to false.',
               },
               aspectRatio: {
                 type: 'string' as const,
-                description: 'Aspect ratio for the generated image',
+                description:
+                  'Set the requested output aspect ratio. Omit to use the provider default.',
                 enum: [
                   '1:1',
                   '1:4',
@@ -205,18 +208,18 @@ export class MCPServerImpl {
               imageSize: {
                 type: 'string' as const,
                 description:
-                  'Image resolution for high-quality output. Specify "1K", "2K", or "4K" when you need specific resolution. Leave unspecified for standard quality.',
+                  "Set the requested output size to 1K, 2K, or 4K. Omit to use the selected provider and quality preset's default. With Seedream, use 1K or 2K.",
                 enum: ['1K', '2K', '4K'],
               },
               purpose: {
                 type: 'string' as const,
                 description:
-                  'Intended use for the image (e.g., cookbook cover, social media post, presentation slide). Influences lighting, composition, and detail level to match the context.',
+                  "Describe the image's intended use, such as a cookbook cover, social media post, or presentation slide, so prompt enhancement can adapt composition and detail.",
               },
               quality: {
                 type: 'string' as const,
                 description:
-                  'Quality preset controlling speed/fidelity tradeoff. Only specify when the user explicitly requests a specific quality level; omit to use the server\'s configured default. "fast": best for drafts and rapid iteration. "balanced": better detail and coherence, moderate latency. "quality": highest fidelity, use for final deliverables where quality matters most.',
+                  'Set only when the user requests a quality level; otherwise omit to use the server default. fast prioritizes speed, balanced trades speed for detail, and quality prioritizes fidelity.',
                 enum: ['fast', 'balanced', 'quality'],
               },
             },
@@ -292,12 +295,6 @@ export class MCPServerImpl {
         ? this.securityManager.sanitizeFilename(params.fileName)
         : undefined
       const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
-      if (!preferredOutputFormat) {
-        throw new InputValidationError(
-          'Unsupported output image format',
-          'Use a .png, .jpg, or .jpeg file name, or omit the extension for PNG output'
-        )
-      }
 
       // Get configuration
       const configResult = getConfig()
@@ -335,7 +332,7 @@ export class MCPServerImpl {
         ...(params.useGoogleSearch !== undefined && {
           useGoogleSearch: params.useGoogleSearch,
         }),
-        preferredOutputFormat,
+        ...(preferredOutputFormat && { preferredOutputFormat }),
         ...(params.quality !== undefined && { quality: params.quality }),
       } satisfies Omit<ImageApiParams, 'prompt'>
 
@@ -400,7 +397,25 @@ export class MCPServerImpl {
       // Save image file
       const mimeType = generationResult.data.metadata.mimeType
       const rawFileName = sanitizedFileName ?? this.fileManager.generateFileName(mimeType)
-      const fileName = params.fileName ? ensureExtension(rawFileName, mimeType) : rawFileName
+      const fileName = params.fileName
+        ? reconcileFileNameExtension(rawFileName, mimeType)
+        : rawFileName
+      const requestedExtension = path.extname(rawFileName)
+      if (
+        sanitizedFileName &&
+        fileName !== rawFileName &&
+        SUPPORTED_EXTENSIONS.includes(requestedExtension.toLowerCase())
+      ) {
+        this.logger.warn(
+          'mcp-server',
+          'Output filename extension corrected to match generated MIME type',
+          {
+            requestedExtension,
+            savedExtension: path.extname(fileName),
+            mimeType,
+          }
+        )
+      }
       const outputPath = path.join(config.imageOutputDir, fileName)
 
       const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
@@ -470,6 +485,7 @@ export class MCPServerImpl {
         const result = await this.callTool(name, args)
         const response: CallToolResult = {
           content: result.content,
+          isError: result.isError,
         }
         if (result.structuredContent) {
           response.structuredContent = result.structuredContent as { [x: string]: unknown }

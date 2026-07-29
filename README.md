@@ -287,7 +287,7 @@ Seedream quality routing is fixed:
 
 All supported aspect ratios use BytePlus Method 1, so final pixel dimensions are model-selected.
 Seedream rejects `imageSize: "4K"` and `useGoogleSearch: true`. Image requests have a fixed
-300-second timeout.
+300-second timeout. Seedream image editing accepts PNG and JPEG input images only.
 
 ### Using the OpenAI provider
 
@@ -359,7 +359,7 @@ The server uses a two-stage process with separate models for each stage:
 | `prompt` | string | ✅ | Text description or editing instruction |
 | `quality` | string | - | Quality preset: `fast` (default), `balanced`, `quality`. Overrides `IMAGE_QUALITY` env var for this request |
 | `inputImagePath` | string | - | Absolute path to input image for image-to-image editing |
-| `fileName` | string | - | `.png`, `.jpg`, or `.jpeg` output filename. OpenAI/Seedream use its extension as the output format; no extension defaults to PNG |
+| `fileName` | string | - | `.png`, `.jpg`, or `.jpeg` selects that output format for OpenAI/Seedream. Other or absent suffixes use the provider default, and the saved name is corrected to the actual image extension |
 | `aspectRatio` | string | - | `1:1` (default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `1:8`, `4:1`, `8:1` |
 | `imageSize` | string | - | `1K`, `2K`, `4K`. Leave unspecified for standard quality |
 | `blendImages` | boolean | - | Enable multi-image blending for combining multiple visual elements naturally |

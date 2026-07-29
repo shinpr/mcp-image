@@ -106,11 +106,33 @@ function responseContractError(): ImageAPIError {
 }
 
 function isStrictBase64(value: string): boolean {
-  return (
-    value.length > 0 &&
-    value.length % 4 === 0 &&
-    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)
-  )
+  if (value.length === 0 || value.length % 4 !== 0) {
+    return false
+  }
+
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  const contentLength = value.length - padding
+
+  for (let index = 0; index < contentLength; index += 1) {
+    const code = value.charCodeAt(index)
+    const isBase64Character =
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      (code >= 0x30 && code <= 0x39) ||
+      code === 0x2b ||
+      code === 0x2f
+    if (!isBase64Character) {
+      return false
+    }
+  }
+
+  for (let index = contentLength; index < value.length; index += 1) {
+    if (value.charCodeAt(index) !== 0x3d) {
+      return false
+    }
+  }
+
+  return true
 }
 
 function hasOwn(record: object, key: PropertyKey): boolean {
@@ -275,17 +297,17 @@ function parseImagePayload(
     !isRecord(image) ||
     hasOwn(image, 'url') ||
     hasOwn(image, 'stream') ||
-    typeof image['b64_json'] !== 'string' ||
-    !isStrictBase64(image['b64_json'])
+    typeof image['b64_json'] !== 'string'
   ) {
     return Err(responseContractError())
   }
 
-  if (calculateDecodedSize(image['b64_json']) > MAX_DECODED_BYTES) {
+  const base64Image = image['b64_json']
+  if (calculateDecodedSize(base64Image) > MAX_DECODED_BYTES || !isStrictBase64(base64Image)) {
     return Err(responseContractError())
   }
 
-  const imageData = Buffer.from(image['b64_json'], 'base64')
+  const imageData = Buffer.from(base64Image, 'base64')
   const expectedMimeType = getMimeTypeForOutputFormat(outputFormat)
   if (
     imageData.length === 0 ||
