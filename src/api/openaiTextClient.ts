@@ -25,7 +25,7 @@ interface OpenAITextResponse {
   }>
 }
 
-const OPENAI_TEXT_MODEL = 'gpt-4o-mini'
+const OPENAI_TEXT_MODEL = 'gpt-5.4-nano'
 
 class OpenAITextClientImpl implements TextClient {
   private readonly client: OpenAI
@@ -180,7 +180,7 @@ class OpenAITextClientImpl implements TextClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Ensure gpt-4o-mini is available to your OpenAI account'
+      return `Ensure ${OPENAI_TEXT_MODEL} is available to your OpenAI account`
     }
 
     return 'Check OpenAI API configuration and try again'

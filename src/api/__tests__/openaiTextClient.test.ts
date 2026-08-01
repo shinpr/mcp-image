@@ -58,7 +58,7 @@ describe('openaiTextClient', () => {
     expect(result.success).toBe(true)
     expect(mockResponsesCreate).toHaveBeenCalledWith(
       {
-        model: 'gpt-4o-mini',
+        model: 'gpt-5.4-nano',
         input: 'make a product photo',
         instructions: 'Enhance image prompts',
         max_output_tokens: 1000,
