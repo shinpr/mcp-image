@@ -6,38 +6,60 @@
 [![npm downloads](https://img.shields.io/npm/dm/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An MCP server that turns simple text prompts into high-quality images. Unlike a simple API wrapper, this server automatically enhances your prompt and configures sensible defaults for generation — you don't need to learn prompt engineering or tune settings. Just describe what you want.
+An MCP server that turns a plain description of what you need into a finished image file. You say what the image is *for* (a recipe page, a menu, an app card) and the server writes the photographic prompt for it: subject and materials, lighting, camera angle, palette. Then it generates the image and returns the saved file as an MCP resource. You don't need to know the vocabulary.
 
 ## How It Works
 
 ```
-You: "cat on a roof"
+You: "a roast chicken for a recipe page, partway through
+      carving so you can see how juicy it is"
         ↓
-  Your AI assistant infers context
-  (purpose, style, mood, resolution...)
+  Your AI assistant passes your request through
         ↓
-  MCP optimizes your prompt
-  (adds lighting, composition, atmosphere, artistic details)
+  MCP writes the photographic prompt for it
+  (chosen for what the image is for: subject, lighting, camera, palette)
         ↓
   Image generation with smart defaults
   (grounding, consistency, resolution — all configured automatically)
         ↓
-  High-quality image, zero effort
+  Saved file, returned as an MCP resource
 ```
 
 Your AI assistant interprets your intent — the style, purpose, and context behind your request. The MCP focuses on output quality by refining the prompt to meet a structured visual clarity standard and selecting appropriate generation settings. You just describe what you want.
 
 The prompt optimizer uses a **Subject–Context–Style** framework (powered by Gemini 2.5 Flash by default, OpenAI Responses when `IMAGE_PROVIDER=openai`, or ModelArk Responses when `IMAGE_PROVIDER=seedream`) to fill in missing visual details — subject characteristics, environment, lighting, camera work — while preserving your original intent. It doesn't blindly add details: prompts that already meet the quality standard are left largely intact.
 
-**Example — what the optimizer does to a short prompt:**
+**Example**
 
-> **Input:** "cat on a roof"
+> **You write:**
+> "a photo of a roast chicken dinner for a recipe site. it should look like it was actually cooked, and it should be partway through being carved so you can tell how juicy it is"
 >
-> **After optimization:** "A sleek, midnight black cat, perched with poised elegance on the apex of a weathered, terracotta tile roof. Its emerald eyes, narrowed slightly, reflect the warm glow of a setting sun. Each individual tile is distinct, showing subtle variations in color and texture, with patches of moss clinging to the crevices. The cat's fur is sharply defined, catching the golden hour light, highlighting its sleek contours. In the background, the silhouettes of distant, old-world city buildings with ornate spires are softly blurred, bathed in a gradient of fiery orange, soft pink, and deep violet twilight. A gentle, ethereal mist begins to rise from the alleyways below, adding a touch of mystery. The composition is a medium shot, taken from a slightly low angle, emphasizing the cat's commanding presence against the vast sky. Photorealistic style, captured with a prime lens, wide aperture to create a beautiful bokeh, enhancing the depth of field."
+> **What the server sends to the image model:**
+> "...a beautifully roasted whole chicken, **golden-brown and glistening**, resting on a rustic wooden cutting board. One leg is partially carved, revealing **tender, succulent white meat and rich, glistening juices pooling** around the carving knife ... **shallow depth of field** to keep the focus sharply on the carved chicken."
+
+![Roast chicken, generated with prompt optimization](assets/roast-chicken-optimized.jpg)
+
+*Gemini provider, default `fast` preset.*
+
+What carried through:
+
+- `for a recipe site` → one subject, with everything else kept subordinate
+- `actually cooked` → juices spread across the board, uneven browning
+- `partway through being carved` → the cut face, with slices laid beside it
+- `how juicy it is` → close framing and shallow depth of field on the cut
+
+<details>
+<summary>The same request and settings, without prompt optimization</summary>
+
+![The same request with prompt optimization disabled](assets/roast-chicken-plain.jpg)
+
+Set `SKIP_PROMPT_ENHANCEMENT=true` to send your prompt through unchanged.
+
+</details>
 
 ## Features
 
-- **Built-in Prompt Optimization**: Your simple prompt is automatically enriched with photographic and artistic details — lighting, composition, atmosphere — using the selected provider's text path. No prompt engineering skills required.
+- **Built-in Prompt Optimization**: Your request is rewritten into photographic terms (lighting, composition, camera, palette) using the selected provider's text path, so what you asked for carries into the image. You don't need to know the vocabulary.
 - **Optional Image Providers**: Set `IMAGE_PROVIDER=openai` for OpenAI GPT Image or `IMAGE_PROVIDER=seedream` for BytePlus Seedream through ModelArk.
 - **Three Quality Presets**: Select `fast`, `balanced`, or `quality`; each provider maps these values to its own supported model route. [See Quality Presets](#quality-presets).
 - **Image Editing**: Transform existing images with natural language instructions (image-to-image) while preserving original style and visual consistency.
@@ -277,6 +299,8 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and 
 As of July 29, 2026, Seedream 5.0 Pro is available only in ModelArk AP (`ap-southeast-1`). Create an
 API key in the [ModelArk AP region console](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey).
 
+mcp-image uses `seed-2-0-lite-260428` for prompt enhancement and Seedream 5.0 Pro for image generation. These model choices are fixed by the server and are not configurable through environment variables.
+
 Seedream quality routing is fixed:
 
 | Public preset | Seedream route | Native image optimizer | Supported `imageSize` | Default when omitted |
@@ -291,7 +315,7 @@ Seedream rejects `imageSize: "4K"` and `useGoogleSearch: true`. Image requests h
 
 ### Using the OpenAI provider
 
-Set `IMAGE_PROVIDER=openai` to use OpenAI for both prompt enhancement and image generation. mcp-image currently uses `gpt-4o-mini` for prompt enhancement and `gpt-image-2` for image generation. These model choices are fixed by the server and are not configurable through environment variables.
+Set `IMAGE_PROVIDER=openai` to use OpenAI for both prompt enhancement and image generation. mcp-image currently uses `gpt-5.4-nano` for prompt enhancement and `gpt-image-2` for image generation. These model choices are fixed by the server and are not configurable through environment variables.
 
 OpenAI may require organization verification before allowing access to `gpt-image-2`. If image generation fails with a 403 permission or verification error, check your organization settings: https://platform.openai.com/settings/organization/general
 
@@ -300,7 +324,7 @@ OpenAI provider behavior:
 - Supports text-to-image and image-to-image generation.
 - Supports `aspectRatio`, mapped to the closest supported OpenAI image size.
 - Supports `imageSize` values `1K`, `2K`, and `4K`.
-- Maps `quality` as `fast -> low`, `balanced -> medium`, and `quality -> high`.
+- Maps `quality` as `fast -> low`, `balanced -> medium`, and `quality -> high`. For anything beyond simple subjects, `balanced` or `quality` is recommended.
 - Does not support `useGoogleSearch`; that option is only available with the Gemini provider.
 
 Prompt enhancement uses a separate OpenAI Responses API call. Set `SKIP_PROMPT_ENHANCEMENT=true` to send prompts directly to the image model.
@@ -349,7 +373,7 @@ Your prompt is automatically enhanced with rich details about lighting, material
 ### `generate_image` Tool
 
 The server uses a two-stage process with separate models for each stage:
-1. **Prompt Optimization** (Gemini 2.5 Flash by default, `gpt-4o-mini` via OpenAI Responses in OpenAI mode, or the pinned ModelArk Responses text model in Seedream mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
+1. **Prompt Optimization** (Gemini 2.5 Flash by default, `gpt-5.4-nano` via OpenAI Responses in OpenAI mode, or `seed-2-0-lite-260428` via ModelArk Responses in Seedream mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
 2. **Image Generation** (Nano Banana 2/Pro by default, `gpt-image-2` in OpenAI mode, or Seedream 5.0 Pro in Seedream mode): Creates the final image. Provider-specific quality mappings are described above.
 
 #### Parameters
@@ -412,8 +436,8 @@ The server uses a two-stage process with separate models for each stage:
 - In Seedream mode, use the route table above; all tiers use Pro, with `fast` selecting native `fast`
   optimization and `balanced`/`quality` selecting `standard`
 - High-resolution (2K/4K): Processing time varies by provider and route
-- Simple prompts work great — the optimizer automatically adds professional details
-- Complex prompts are preserved and further enhanced
+- Say what the image is for; the optimizer supplies the photographic terms it implies
+- Details you specify yourself are carried through rather than rewritten
 - Consider `useWorldKnowledge` for historical or factual subjects
 - Use `imageSize: "4K"` when the selected provider supports it; Seedream accepts `1K` and `2K`
 
@@ -427,7 +451,7 @@ The server uses a two-stage process with separate models for each stage:
   - `balanced` uses additional thinking tokens (slightly higher cost than `fast`)
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
-- The prompt optimization step adds minimal cost while significantly improving output quality
+- The prompt optimization step adds minimal cost and keeps the intent of your request in the generated image
 
 ## License
 
