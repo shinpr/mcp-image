@@ -73,44 +73,6 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to send your prompt through unchanged.
   - Purpose-aware generation (e.g., "cookbook cover" produces different results than "social media post")
 - **Multiple Output Formats**: OpenAI and Seedream support PNG/JPEG selection through the output filename.
 
-## Agent Skill: Image Generation Prompt Guide
-
-This project also provides a standalone **[Agent Skill](https://agentskills.io)** (`SKILL.md`) that teaches AI assistants to write better image generation prompts — no MCP server or API key required.
-
-> **Note:** This skill does not generate images itself. It teaches your AI assistant to write better prompts for tools that already have built-in image generation (e.g., Cursor's native image generation).
-
-Based on the **Subject-Context-Style** framework, covering prompt structure, visual details (lighting, textures, camera angles), advanced techniques (character consistency, composition), and image editing. Works with any image model (Gemini, GPT Image, Flux, Stable Diffusion, Midjourney, etc.).
-
-### Install
-
-```bash
-npx mcp-image skills install --path <target-directory>
-```
-
-The skill will be placed at `<path>/image-generation/SKILL.md`. Specify the skills directory for your AI tool:
-
-```bash
-# Cursor
-npx mcp-image skills install --path ~/.cursor/skills
-
-# Codex
-npx mcp-image skills install --path ~/.codex/skills
-
-# Claude Code
-npx mcp-image skills install --path ~/.claude/skills
-```
-
-### When to Use the Skill vs the MCP Server
-
-| | MCP Server | Agent Skill |
-|---|---|---|
-| **Use when** | Your AI tool does not have built-in image generation | Your AI tool already generates images natively |
-| **Requires** | API key for the selected image provider | Nothing |
-| **What it does** | Generates images through the selected provider with automatic prompt optimization | Teaches the AI to write better prompts |
-| **Works with** | MCP-compatible tools (Cursor, Claude Code, Codex, etc.) | Any tool supporting the [Agent Skills](https://agentskills.io) open standard |
-
----
-
 ## Prerequisites
 
 - **Node.js** 22 or higher
@@ -452,6 +414,20 @@ The server uses a two-stage process with separate models for each stage:
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
 - The prompt optimization step adds minimal cost and keeps the intent of your request in the generated image
+
+## Standalone Agent Skill: Image Generation Prompt Guide
+
+This project also provides a standalone **[Agent Skill](https://agentskills.io)** (`SKILL.md`) for a separate workflow from the MCP server. It helps AI assistants write better image generation prompts when you generate images directly with a tool that already provides image generation. It does not configure or call this MCP server, and it does not require an API key.
+
+The skill is based on the **Subject-Context-Style** framework and covers prompt structure, visual details (lighting, textures, camera angles), advanced techniques (character consistency, composition), and image editing. It works with any image model (Gemini, GPT Image, Flux, Stable Diffusion, Midjourney, and others).
+
+### Install
+
+```bash
+npx mcp-image skills install --path <skills-directory>
+```
+
+The skill will be placed at `<skills-directory>/image-generation/SKILL.md`. For example: `~/.cursor/skills` (Cursor), `~/.codex/skills` (Codex), or `~/.claude/skills` (Claude Code).
 
 ## License
 
