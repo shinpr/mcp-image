@@ -1,7 +1,7 @@
 {
   "name": "mcp-image",
   "mcpName": "io.github.shinpr/mcp-image",
-  "version": "0.12.1",
+  "version": "0.12.2",
   "description": "MCP server for AI image generation",
   "type": "module",
   "main": "dist/index.js",
@@ -66,19 +66,19 @@
     "test:safe": "npm test && npm run cleanup:processes"
   },
   "dependencies": {
-    "@google/genai": "^2.13.0",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "openai": "^6.49.0"
+    "@google/genai": "^2.15.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "openai": "^7.3.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.5",
-    "@types/node": "^22.20.1",
+    "@biomejs/biome": "^2.5.6",
+    "@types/node": "^26.1.2",
     "@vitest/coverage-v8": "^4.1.10",
     "@vitest/ui": "^4.1.10",
-    "dpdm": "^4.2.0",
+    "dpdm": "^4.3.0",
     "husky": "^9.1.7",
-    "knip": "^6.29.0",
-    "lint-staged": "^17.2.0",
+    "knip": "^6.31.0",
+    "lint-staged": "^17.3.0",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
