@@ -6,7 +6,7 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "mcp-image": "./dist/index.js"
+    "mcp-image": "dist/index.js"
   },
   "keywords": [
     "mcp",
@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shinpr/mcp-image.git"
+    "url": "git+https://github.com/shinpr/mcp-image.git"
   },
   "files": [
     "dist/**/*",
