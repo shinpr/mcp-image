@@ -1,12 +1,12 @@
 # MCP Image Generator 🍌
 
-> AI image generation and editing MCP server for Cursor, Claude Code, Codex, and any MCP-compatible tool — powered by Google Gemini, OpenAI GPT Image, or BytePlus Seedream.
+> Generate and edit images from Cursor, Claude Code, Codex, or any MCP-compatible tool. Supports Google Gemini, OpenAI GPT Image, and BytePlus Seedream.
 
 [![npm version](https://badge.fury.io/js/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-An MCP server that turns a plain description of what you need into a finished image file. You say what the image is *for* (a recipe page, a menu, an app card) and the server writes the photographic prompt for it: subject and materials, lighting, camera angle, palette. Then it generates the image and returns the saved file as an MCP resource. You don't need to know the vocabulary.
+This MCP server turns a plain-language request into an image file. It adds relevant photographic details such as lighting, camera angle, materials, and palette, then returns the saved image as an MCP resource.
 
 ## How It Works
 
@@ -14,20 +14,20 @@ An MCP server that turns a plain description of what you need into a finished im
 You: "a roast chicken for a recipe page, partway through
       carving so you can see how juicy it is"
         ↓
-  Your AI assistant passes your request through
+  Your AI assistant sends the request to mcp-image
         ↓
-  MCP writes the photographic prompt for it
-  (chosen for what the image is for: subject, lighting, camera, palette)
+  Prompt enhancement adds relevant photographic details
+  (subject, lighting, camera, and palette)
         ↓
-  Image generation with smart defaults
-  (grounding, consistency, resolution — all configured automatically)
+  The selected provider generates the image
+  (using the configured grounding, consistency, and resolution options)
         ↓
   Saved file, returned as an MCP resource
 ```
 
-Your AI assistant interprets your intent — the style, purpose, and context behind your request. The MCP focuses on output quality by refining the prompt to meet a structured visual clarity standard and selecting appropriate generation settings. You just describe what you want.
+Your AI assistant supplies the style, purpose, and context from your request. mcp-image fills in missing visual details and selects the generation settings.
 
-The prompt optimizer uses a **Subject–Context–Style** framework (powered by Gemini 2.5 Flash by default, OpenAI Responses when `IMAGE_PROVIDER=openai`, or ModelArk Responses when `IMAGE_PROVIDER=seedream`) to fill in missing visual details — subject characteristics, environment, lighting, camera work — while preserving your original intent. It doesn't blindly add details: prompts that already meet the quality standard are left largely intact.
+The prompt optimizer uses a **Subject–Context–Style** framework. It runs on Gemini 2.5 Flash by default, OpenAI Responses when `IMAGE_PROVIDER=openai`, or ModelArk Responses when `IMAGE_PROVIDER=seedream`. It adds missing details about the subject, environment, lighting, and camera work while keeping the details already present in the request. Detailed prompts receive fewer changes.
 
 **Example**
 
@@ -59,19 +59,19 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to send your prompt through unchanged.
 
 ## Features
 
-- **Built-in Prompt Optimization**: Your request is rewritten into photographic terms (lighting, composition, camera, palette) using the selected provider's text path, so what you asked for carries into the image. You don't need to know the vocabulary.
-- **Optional Image Providers**: Set `IMAGE_PROVIDER=openai` for OpenAI GPT Image or `IMAGE_PROVIDER=seedream` for BytePlus Seedream through ModelArk.
-- **Three Quality Presets**: Select `fast`, `balanced`, or `quality`; each provider maps these values to its own supported model route. [See Quality Presets](#quality-presets).
-- **Image Editing**: Transform existing images with natural language instructions (image-to-image) while preserving original style and visual consistency.
-- **High-Resolution Output**: Up to a 4K resolution token, depending on the selected provider and quality route.
-- **Flexible Aspect Ratios**: From square (1:1) to ultra-wide (21:9) and ultra-tall (1:8) formats.
-- **Character Consistency**: Maintain consistent character appearance across multiple generations — ideal for storyboards, product shots, and visual series.
-- **Advanced Capabilities**:
+- **Prompt enhancement**: Adds lighting, composition, camera, and palette details using the selected provider's text model.
+- **Image providers**: Set `IMAGE_PROVIDER=openai` for OpenAI GPT Image or `IMAGE_PROVIDER=seedream` for BytePlus Seedream through ModelArk.
+- **Quality presets**: Select `fast`, `balanced`, or `quality`. Each provider maps these values to a supported model route. [See Quality Presets](#quality-presets).
+- **Image editing**: Edit an existing image with natural-language instructions while retaining its style and visual details.
+- **Resolution controls**: Request up to 4K, depending on the provider and quality route.
+- **Aspect ratios**: Supports formats from square (1:1) to ultra-wide (21:9) and ultra-tall (1:8).
+- **Character consistency**: Keep a character's appearance consistent across storyboards, product shots, or a series of images.
+- **Provider-specific options**:
   - Google Search grounding for real-time factual accuracy with the Gemini provider
   - World knowledge for photorealistic depictions of historical figures, landmarks, and factual scenarios
   - Prompt-level blending guidance for composite scenes
   - Purpose-aware generation (e.g., "cookbook cover" produces different results than "social media post")
-- **Multiple Output Formats**: OpenAI and Seedream support PNG/JPEG selection through the output filename.
+- **Output formats**: OpenAI and Seedream support PNG or JPEG selection through the output filename.
 
 ## Prerequisites
 
@@ -95,7 +95,7 @@ IMAGE_PROVIDER=openai
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-OpenAI mode requires organization verification — see [Using the OpenAI provider](#using-the-openai-provider) below for setup details and feature differences.
+OpenAI mode requires organization verification. See [Using the OpenAI provider](#using-the-openai-provider) for setup details and feature differences.
 
 To use BytePlus Seedream instead, create an API key in the ModelArk AP region and set:
 
@@ -201,16 +201,16 @@ claude mcp add mcp-image --scope user \
   -- node /absolute/path/to/mcp-image/dist/index.js
 ```
 
-⚠️ **Security Note**: Never commit your API key to version control. Keep it secure and use environment-specific configuration.
+**Security:** Never commit API keys to version control. Use environment-specific configuration.
 
-📁 **Path Requirements**:
+**Path requirements:**
 - `IMAGE_OUTPUT_DIR` must be an absolute path (e.g., `/Users/username/images`, not `./images`)
 - Defaults to `./output` in the current working directory if not specified
 - Directory will be created automatically if it doesn't exist
 
 ## Quality Presets
 
-Choose the right balance of speed, quality, and cost:
+The presets trade off speed, quality, and cost:
 
 | Preset | Model | Best for | Speed |
 |--------|-------|----------|-------|
@@ -226,7 +226,7 @@ IMAGE_QUALITY=balanced   # Enhanced thinking for better quality
 IMAGE_QUALITY=quality    # Maximum quality output
 ```
 
-To override per-request, just tell your AI assistant (e.g., "generate in high quality" or "use balanced quality"). The assistant will pass the appropriate `quality` parameter automatically.
+To override the preset for one request, tell your AI assistant to "generate in high quality" or "use balanced quality." The assistant passes the corresponding `quality` parameter.
 
 **Codex:**
 ```toml
@@ -245,7 +245,7 @@ claude mcp add mcp-image --env GEMINI_API_KEY=your-api-key --env IMAGE_QUALITY=b
 
 ### Skip Prompt Enhancement
 
-Set `SKIP_PROMPT_ENHANCEMENT=true` to disable automatic prompt optimization and send your prompts directly to the image generator. Useful when you need full control over the exact prompt wording.
+Set `SKIP_PROMPT_ENHANCEMENT=true` to send prompts directly to the image generator. Use this when the exact prompt wording needs to remain unchanged.
 
 ### Provider Configuration
 
@@ -293,7 +293,7 @@ Prompt enhancement uses a separate OpenAI Responses API call. Set `SKIP_PROMPT_E
 
 ## Usage Examples
 
-Once configured, just describe what you want in natural language:
+Once configured, describe the image in natural language:
 
 ### Basic Image Generation
 
@@ -301,7 +301,7 @@ Once configured, just describe what you want in natural language:
 "Generate a serene mountain landscape at sunset with a lake reflection"
 ```
 
-Your prompt is automatically enhanced with rich details about lighting, materials, composition, and atmosphere.
+Prompt enhancement fills in relevant details about lighting, materials, composition, and atmosphere.
 
 ### Image Editing
 
@@ -310,7 +310,7 @@ Your prompt is automatically enhanced with rich details about lighting, material
 (with inputImagePath: "/path/to/image.jpg")
 ```
 
-### Advanced Features
+### Generation Options
 
 **Character Consistency:**
 ```
@@ -334,7 +334,8 @@ Your prompt is automatically enhanced with rich details about lighting, material
 
 ### `generate_image` Tool
 
-The server uses a two-stage process with separate models for each stage:
+The server uses a separate model for each of its two stages:
+
 1. **Prompt Optimization** (Gemini 2.5 Flash by default, `gpt-5.4-nano` via OpenAI Responses in OpenAI mode, or `seed-2-0-lite-260428` via ModelArk Responses in Seedream mode): Refines your prompt using the Subject–Context–Style framework. Skippable via `SKIP_PROMPT_ENHANCEMENT`.
 2. **Image Generation** (Nano Banana 2/Pro by default, `gpt-image-2` in OpenAI mode, or Seedream 5.0 Pro in Seedream mode): Creates the final image. Provider-specific quality mappings are described above.
 
@@ -408,8 +409,8 @@ The server uses a two-stage process with separate models for each stage:
 - This MCP server uses the paid Gemini API:
   - **Prompt optimization**: Gemini 2.5 Flash (minimal token usage)
   - **Image generation**: Model depends on quality preset
-    - `fast` / `balanced`: Nano Banana 2 — Gemini 3.1 Flash Image (lower cost)
-    - `quality`: Nano Banana Pro — Gemini 3 Pro Image (higher cost)
+    - `fast` / `balanced`: Nano Banana 2 (Gemini 3.1 Flash Image, lower cost)
+    - `quality`: Nano Banana Pro (Gemini 3 Pro Image, higher cost)
   - `balanced` uses additional thinking tokens (slightly higher cost than `fast`)
 - Check current pricing and rate limits at [Google AI Studio](https://aistudio.google.com/)
 - Monitor your API usage to avoid unexpected charges
@@ -417,9 +418,9 @@ The server uses a two-stage process with separate models for each stage:
 
 ## Standalone Agent Skill: Image Generation Prompt Guide
 
-This project also provides a standalone **[Agent Skill](https://agentskills.io)** (`SKILL.md`) for a separate workflow from the MCP server. It helps AI assistants write better image generation prompts when you generate images directly with a tool that already provides image generation. It does not configure or call this MCP server, and it does not require an API key.
+This project also includes a standalone **[Agent Skill](https://agentskills.io)** (`SKILL.md`). Use it to help an AI assistant write prompts for a tool that already supports image generation. The skill is separate from the MCP server, does not call it, and does not require an API key.
 
-The skill is based on the **Subject-Context-Style** framework and covers prompt structure, visual details (lighting, textures, camera angles), advanced techniques (character consistency, composition), and image editing. It works with any image model (Gemini, GPT Image, Flux, Stable Diffusion, Midjourney, and others).
+The skill covers the **Subject-Context-Style** framework, lighting, textures, camera angles, character consistency, composition, and image editing. It works with Gemini, GPT Image, Flux, Stable Diffusion, Midjourney, and other image models.
 
 ### Install
 
