@@ -1,7 +1,12 @@
 import { existsSync } from 'node:fs'
 import { extname } from 'node:path'
 import type { GenerateImageParams } from '../types/mcp.js'
-import { ASPECT_RATIO_VALUES, IMAGE_PROVIDER_VALUES, IMAGE_QUALITY_VALUES } from '../types/mcp.js'
+import {
+  ASPECT_RATIO_VALUES,
+  IMAGE_PROVIDER_VALUES,
+  IMAGE_QUALITY_VALUES,
+  IMAGE_SIZE_VALUES,
+} from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { InputValidationError } from '../utils/errors.js'
@@ -18,7 +23,15 @@ function formatFileSize(bytes: number): string {
   return (bytes / (1024 * 1024)).toFixed(1)
 }
 
-export function validatePrompt(prompt: string): Result<string, InputValidationError> {
+export function validatePrompt(prompt: unknown): Result<string, InputValidationError> {
+  if (typeof prompt !== 'string') {
+    return Err(
+      new InputValidationError(
+        'Prompt must be a non-empty string',
+        'Please provide a descriptive prompt for image generation.'
+      )
+    )
+  }
   if (prompt.length < PROMPT_MIN_LENGTH || prompt.length > PROMPT_MAX_LENGTH) {
     return Err(
       new InputValidationError(
@@ -26,6 +39,15 @@ export function validatePrompt(prompt: string): Result<string, InputValidationEr
         prompt.length === 0
           ? 'Please provide a descriptive prompt for image generation.'
           : `Please shorten your prompt by ${prompt.length - PROMPT_MAX_LENGTH} characters.`
+      )
+    )
+  }
+
+  if (prompt.trim().length === 0) {
+    return Err(
+      new InputValidationError(
+        'Prompt must be a non-empty string',
+        'Please provide a descriptive prompt for image generation.'
       )
     )
   }
@@ -116,8 +138,39 @@ function validateImagePath(imagePath?: string): Result<string | undefined, Input
 }
 
 export function validateGenerateImageParams(
-  params: GenerateImageParams
+  input: unknown
 ): Result<GenerateImageParams, InputValidationError> {
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
+    return Err(
+      new InputValidationError(
+        'Tool arguments must be an object',
+        'Provide an object containing a prompt and optional image parameters'
+      )
+    )
+  }
+  for (const field of [
+    'fileName',
+    'inputImagePath',
+    'purpose',
+    'inputImage',
+    'inputImageMimeType',
+    'aspectRatio',
+    'imageSize',
+    'quality',
+    'provider',
+  ] as const) {
+    const value = (input as Record<string, unknown>)[field]
+    if (value !== undefined && typeof value !== 'string') {
+      return Err(
+        new InputValidationError(
+          `${field} must be a string`,
+          `Provide a string for ${field} or omit it`
+        )
+      )
+    }
+  }
+  // The remaining required string, boolean, and enum fields are checked below.
+  const params = input as GenerateImageParams
   const promptResult = validatePrompt(params.prompt)
   if (!promptResult.success) {
     return Err(promptResult.error)
@@ -174,7 +227,16 @@ export function validateGenerateImageParams(
     }
   }
 
-  if (params.aspectRatio && !SUPPORTED_ASPECT_RATIOS.includes(params.aspectRatio)) {
+  if (params.imageSize !== undefined && !IMAGE_SIZE_VALUES.includes(params.imageSize)) {
+    return Err(
+      new InputValidationError(
+        `Invalid image size: ${params.imageSize}`,
+        `Use one of: ${IMAGE_SIZE_VALUES.join(', ')}`
+      )
+    )
+  }
+
+  if (params.aspectRatio !== undefined && !SUPPORTED_ASPECT_RATIOS.includes(params.aspectRatio)) {
     return Err(
       new InputValidationError(
         `Invalid aspect ratio: ${params.aspectRatio}. Supported values: ${SUPPORTED_ASPECT_RATIOS.join(', ')}`,

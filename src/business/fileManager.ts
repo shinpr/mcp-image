@@ -126,7 +126,18 @@ export async function saveImage(
       return Err(dirResult.error)
     }
 
-    await fs.writeFile(outputPath, imageData)
+    const fileHandle = await fs.open(
+      outputPath,
+      fsConstants.O_WRONLY |
+        fsConstants.O_CREAT |
+        fsConstants.O_TRUNC |
+        (typeof fsConstants.O_NOFOLLOW === 'number' ? fsConstants.O_NOFOLLOW : 0)
+    )
+    try {
+      await fileHandle.writeFile(imageData)
+    } finally {
+      await fileHandle.close()
+    }
     return Ok(outputPath)
   } catch (error) {
     return Err(

@@ -5,6 +5,7 @@ import type {
   ImagesResponse,
 } from 'openai/resources/images'
 import type { ImageOutputFormat, ImageQuality } from '../types/mcp.js'
+import { ASPECT_RATIO_VALUES } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
@@ -18,16 +19,7 @@ import {
 import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
-type OpenAIImageSize =
-  | '1024x1024'
-  | '1536x1024'
-  | '1024x1536'
-  | '2048x2048'
-  | '2048x1152'
-  | '1152x2048'
-  | '2880x2880'
-  | '3840x2160'
-  | '2160x3840'
+type OpenAIImageSize = `${number}x${number}`
 type OpenAIImageQuality = 'low' | 'medium' | 'high'
 // The OpenAI guide documents flexible gpt-image-2 resolutions, while SDK types still
 // enumerate the older fixed GPT image sizes. Keep the request cast local to this file.
@@ -46,55 +38,16 @@ function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   }
 }
 
-function getOrientation(params: ImageApiParams): 'square' | 'landscape' | 'portrait' {
-  if (!params.aspectRatio) {
-    return 'square'
-  }
-
-  const [widthRaw, heightRaw] = params.aspectRatio.split(':')
-  const width = Number(widthRaw)
-  const height = Number(heightRaw)
-
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width === height) {
-    return 'square'
-  }
-
-  return width > height ? 'landscape' : 'portrait'
-}
-
 function mapSize(params: ImageApiParams): OpenAIImageSize {
-  const orientation = getOrientation(params)
-
-  if (params.imageSize === '2K') {
-    switch (orientation) {
-      case 'landscape':
-        return '2048x1152'
-      case 'portrait':
-        return '1152x2048'
-      case 'square':
-        return '2048x2048'
-    }
-  }
-
-  if (params.imageSize === '4K') {
-    switch (orientation) {
-      case 'landscape':
-        return '3840x2160'
-      case 'portrait':
-        return '2160x3840'
-      case 'square':
-        return '2880x2880'
-    }
-  }
-
-  switch (orientation) {
-    case 'landscape':
-      return '1536x1024'
-    case 'portrait':
-      return '1024x1536'
-    case 'square':
-      return '1024x1024'
-  }
+  const [width = 1, height = 1] = (params.aspectRatio ?? '1:1').split(':').map(Number)
+  const ratio = Math.max(width, height) / Math.min(width, height)
+  const requestedEdge =
+    params.imageSize === '4K' ? 3840 : params.imageSize === '2K' ? 2048 : ratio === 1 ? 1024 : 1536
+  // GPT Image 2: 16px increments, at most 3840px per edge and 8,294,400 pixels.
+  // Flooring keeps the pixel cap intact even for near-square 4K requests.
+  const longEdge = Math.floor(Math.min(requestedEdge, Math.sqrt(8_294_400 * ratio)) / 16) * 16
+  const shortEdge = Math.floor(longEdge / ratio / 16) * 16
+  return width >= height ? `${longEdge}x${shortEdge}` : `${shortEdge}x${longEdge}`
 }
 
 function mimeTypeToExtension(mimeType: string): string {
@@ -114,7 +67,9 @@ function hasInputImage(params: ImageApiParams): params is ImageEditApiParams {
   return typeof params.inputImage === 'string' && params.inputImage.length > 0
 }
 
-function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIError> {
+export function validateOpenAIOptions(
+  params: Pick<ImageApiParams, 'useGoogleSearch' | 'aspectRatio'>
+): Result<true, ImageAPIError> {
   if (params.useGoogleSearch) {
     return Err(
       new ImageAPIError(
@@ -122,6 +77,21 @@ function validateOpenAIOptions(params: ImageApiParams): Result<true, ImageAPIErr
         'Disable useGoogleSearch or use IMAGE_PROVIDER=gemini for Google Search grounding'
       )
     )
+  }
+
+  if (params.aspectRatio !== undefined) {
+    const [width = 0, height = 0] = params.aspectRatio.split(':').map(Number)
+    if (
+      !ASPECT_RATIO_VALUES.includes(params.aspectRatio) ||
+      Math.max(width, height) / Math.min(width, height) > 3
+    ) {
+      return Err(
+        new ImageAPIError(
+          'Unsupported OpenAI image aspect ratio',
+          'Use a supported aspect ratio between 1:3 and 3:1'
+        )
+      )
+    }
   }
 
   return Ok(true)
@@ -210,7 +180,9 @@ class OpenAIImageClientImpl implements ImageClient {
       size,
     }
 
-    return await this.client.images.generate(request as unknown as OpenAIImageGenerateRequest)
+    return await this.client.images.generate(request as unknown as OpenAIImageGenerateRequest, {
+      ...(params.signal && { signal: params.signal }),
+    })
   }
 
   private async editImage(
@@ -236,7 +208,9 @@ class OpenAIImageClientImpl implements ImageClient {
       size,
     }
 
-    return await this.client.images.edit(request as unknown as OpenAIImageEditRequest)
+    return await this.client.images.edit(request as unknown as OpenAIImageEditRequest, {
+      ...(params.signal && { signal: params.signal }),
+    })
   }
 
   private handleError(error: unknown, prompt: string): Result<never, ImageAPIError | NetworkError> {

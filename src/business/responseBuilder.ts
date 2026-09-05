@@ -1,4 +1,5 @@
 import * as path from 'node:path'
+import { pathToFileURL } from 'node:url'
 import type { GeneratedImageResult } from '../api/imageClient.js'
 import type { McpToolResponse, ResourceContent } from '../types/mcp.js'
 import { BaseError } from '../utils/errors.js'
@@ -30,10 +31,8 @@ const SAFE_CONTEXT_KEYS = ['provider', 'stage', 'statusCode'] as const
  * inclusion in caller-visible error responses. The upstream API message is
  * passed through the logger's redaction patterns before exposure.
  */
-function buildPublicDetails(
-  context: Record<string, unknown> | undefined
-): Record<string, unknown> | undefined {
-  if (!context) return undefined
+function buildPublicDetails(error: BaseError): Record<string, unknown> | undefined {
+  const context = error.context ?? {}
 
   const details: Record<string, unknown> = {}
 
@@ -41,6 +40,12 @@ function buildPublicDetails(
     if (context[key] !== undefined) {
       details[key] = context[key]
     }
+  }
+
+  const statusCode =
+    context['statusCode'] ?? Reflect.get(error, 'statusCode') ?? context['upstreamStatus']
+  if (typeof statusCode === 'number') {
+    details['statusCode'] = statusCode
   }
 
   if (typeof context['upstreamMessage'] === 'string') {
@@ -73,7 +78,7 @@ function convertErrorToStructured(
   }
 
   if (error instanceof BaseError) {
-    const details = buildPublicDetails(error.context)
+    const details = buildPublicDetails(error)
     return {
       ...baseError,
       code: error.code,
@@ -101,7 +106,7 @@ export function buildSuccessResponse(
   const resourceContent: ResourceContent = {
     type: 'resource',
     resource: {
-      uri: `file://${filePath}`,
+      uri: pathToFileURL(filePath).href,
       name: fileName,
       mimeType,
     },

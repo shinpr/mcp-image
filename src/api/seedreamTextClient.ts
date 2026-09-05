@@ -54,8 +54,9 @@ class SeedreamTextClientImpl implements TextClient {
     }
 
     try {
+      const timeoutSignal = AbortSignal.timeout(config.timeout ?? DEFAULT_TEXT_TIMEOUT)
       const response = await this.client.responses.create(request, {
-        signal: AbortSignal.timeout(config.timeout ?? DEFAULT_TEXT_TIMEOUT),
+        signal: config.signal ? AbortSignal.any([config.signal, timeoutSignal]) : timeoutSignal,
       })
       const responseText = response.output_text
 

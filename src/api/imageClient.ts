@@ -16,6 +16,7 @@ export interface ImageGenerationMetadata {
 
 export interface ImageApiParams {
   prompt: string
+  signal?: AbortSignal
   inputImage?: string
   inputImageMimeType?: string
   aspectRatio?: AspectRatio

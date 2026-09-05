@@ -38,9 +38,11 @@ interface GeminiAIInstance {
       }
     }): Promise<{
       text: string
+      candidates?: Array<{ finishReason?: string }>
       response?: {
         text?: () => string
         candidates?: Array<{
+          finishReason?: string
           content: {
             parts: Array<{ text: string }>
           }
@@ -84,6 +86,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
 
   private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
+      const timeoutSignal = AbortSignal.timeout(config.timeout || 15000)
       let contents:
         | string
         | Array<{
@@ -125,9 +128,16 @@ class GeminiTextClientImpl implements GeminiTextClient {
           thinkingConfig: {
             thinkingBudget: 0,
           },
-          abortSignal: AbortSignal.timeout(config.timeout || 15000),
+          abortSignal: config.signal
+            ? AbortSignal.any([config.signal, timeoutSignal])
+            : timeoutSignal,
         },
       })
+
+      const candidate = response.candidates?.[0] ?? response.response?.candidates?.[0]
+      if (candidate?.finishReason === 'MAX_TOKENS') {
+        throw new Error('Gemini text generation was truncated at the token limit')
+      }
 
       let responseText: string
       if (typeof response.text === 'string') {

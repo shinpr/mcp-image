@@ -81,7 +81,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate).toHaveBeenCalledWith({
+      expect(mockGenerate.mock.calls[0]![0]).toEqual({
         model: 'gpt-image-2',
         prompt: 'Generate a beautiful landscape',
         n: 1,
@@ -122,7 +122,7 @@ describe('openaiImageClient', () => {
       expect(mockToFile).toHaveBeenCalledWith(Buffer.from('input-image-data'), 'input.png', {
         type: 'image/png',
       })
-      expect(mockEdit).toHaveBeenCalledWith({
+      expect(mockEdit.mock.calls[0]![0]).toEqual({
         model: 'gpt-image-2',
         prompt: 'Make this image warmer',
         image: { name: 'input.png', type: 'image/png' },
@@ -147,7 +147,7 @@ describe('openaiImageClient', () => {
         quality: 'balanced',
       })
 
-      expect(mockGenerate).toHaveBeenCalledWith(
+      expect(mockGenerate.mock.calls[0]![0]).toEqual(
         expect.objectContaining({
           quality: 'medium',
         })
@@ -168,14 +168,14 @@ describe('openaiImageClient', () => {
         quality: 'quality',
       })
 
-      expect(mockGenerate).toHaveBeenCalledWith(
+      expect(mockGenerate.mock.calls[0]![0]).toEqual(
         expect.objectContaining({
           quality: 'high',
         })
       )
     })
 
-    it('should map aspect ratio to closest OpenAI size', async () => {
+    it('should preserve a 16:9 aspect ratio at the default size', async () => {
       mockGenerate.mockResolvedValue({
         data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
@@ -189,14 +189,14 @@ describe('openaiImageClient', () => {
         aspectRatio: '16:9',
       })
 
-      expect(mockGenerate).toHaveBeenCalledWith(
+      expect(mockGenerate.mock.calls[0]![0]).toEqual(
         expect.objectContaining({
-          size: '1536x1024',
+          size: '1536x864',
         })
       )
     })
 
-    it('should fall back to square size when aspect ratio is malformed', async () => {
+    it('should reject a malformed aspect ratio before calling OpenAI', async () => {
       mockGenerate.mockResolvedValue({
         data: [{ b64_json: PNG_BYTES.toString('base64') }],
       })
@@ -205,21 +205,44 @@ describe('openaiImageClient', () => {
       expect(clientResult.success).toBe(true)
       if (!clientResult.success) return
 
-      // 'abc:1' parses to NaN width — current behavior is silent fallback to square.
-      // Pinning this so future changes that promote it to a typed error are deliberate.
-      // 'abc:1' is not a valid AspectRatio union member; cast through unknown to
-      // exercise the runtime fallback branch in mapSize.
-      await clientResult.data.generateImage({
+      const result = await clientResult.data.generateImage({
         prompt: 'Generate an image',
         aspectRatio: 'abc:1' as unknown as never,
       })
 
-      expect(mockGenerate).toHaveBeenCalledWith(
-        expect.objectContaining({
-          size: '1024x1024',
-        })
-      )
+      expect(result.success).toBe(false)
+      expect(mockGenerate).not.toHaveBeenCalled()
     })
+
+    it.each([
+      ['4:5', '1K'],
+      ['3:4', '2K'],
+      ['16:9', '2K'],
+      ['21:9', '4K'],
+      ['4:5', '4K'],
+      ['1:1', '4K'],
+    ] as const)(
+      'preserves %s at %s within provider dimension limits',
+      async (aspectRatio, imageSize) => {
+        mockGenerate.mockResolvedValue({ data: [{ b64_json: PNG_BYTES.toString('base64') }] })
+        const clientResult = createOpenAIImageClient(testConfig)
+        if (!clientResult.success) throw clientResult.error
+        const result = await clientResult.data.generateImage({
+          prompt: 'test',
+          aspectRatio,
+          imageSize,
+        })
+        expect(result.success).toBe(true)
+        const [width, height] = mockGenerate.mock.calls[0]![0].size.split('x').map(Number)
+        const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number)
+        expect(Math.abs(width / height - ratioWidth! / ratioHeight!)).toBeLessThan(0.025)
+        expect(width % 16).toBe(0)
+        expect(height % 16).toBe(0)
+        expect(Math.max(width, height)).toBeLessThanOrEqual(3840)
+        expect(width * height).toBeGreaterThanOrEqual(655360)
+        expect(width * height).toBeLessThanOrEqual(8294400)
+      }
+    )
 
     it('should return ImageAPIError when response data array is empty', async () => {
       mockGenerate.mockResolvedValue({ data: [] })
@@ -272,7 +295,9 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate).toHaveBeenCalledWith(expect.objectContaining({ output_format: 'jpeg' }))
+      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+        expect.objectContaining({ output_format: 'jpeg' })
+      )
       if (result.success) {
         expect(result.data.imageData).toEqual(JPEG_BYTES)
         expect(result.data.metadata.mimeType).toBe('image/jpeg')
@@ -295,7 +320,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockEdit).toHaveBeenCalledWith(expect.objectContaining({ output_format: 'jpeg' }))
+      expect(mockEdit.mock.calls[0]![0]).toEqual(expect.objectContaining({ output_format: 'jpeg' }))
     })
 
     it('should reject bytes that contradict the requested format', async () => {
@@ -331,7 +356,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate).toHaveBeenCalledWith(
+      expect(mockGenerate.mock.calls[0]![0]).toEqual(
         expect.objectContaining({
           size: '2048x1152',
         })
@@ -354,7 +379,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate).toHaveBeenCalledWith(
+      expect(mockGenerate.mock.calls[0]![0]).toEqual(
         expect.objectContaining({
           size: '2160x3840',
         })

@@ -50,7 +50,8 @@ export interface StructuredPromptGenerator {
     features?: FeatureFlags,
     inputImageData?: string,
     purpose?: string,
-    inputImageMimeType?: string
+    inputImageMimeType?: string,
+    signal?: AbortSignal
   ): Promise<Result<string, Error>>
 }
 
@@ -65,7 +66,8 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
     features: FeatureFlags = {},
     inputImageData?: string,
     purpose?: string,
-    inputImageMimeType?: string
+    inputImageMimeType?: string,
+    signal?: AbortSignal
   ): Promise<Result<string, Error>> {
     try {
       if (!userPrompt || userPrompt.trim().length === 0) {
@@ -84,6 +86,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         : SYSTEM_PROMPT
 
       const config = {
+        ...(signal && { signal }),
         temperature: 0.7,
         maxTokens: this.maxTokens,
         systemInstruction,
