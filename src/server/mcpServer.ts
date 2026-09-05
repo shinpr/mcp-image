@@ -16,7 +16,7 @@ import {
   type FeatureFlags,
   type StructuredPromptGenerator,
 } from '../business/structuredPromptGenerator.js'
-import type { GenerateImageParams, ImageProvider, MCPServerConfig } from '../types/mcp.js'
+import type { ImageProvider, MCPServerConfig } from '../types/mcp.js'
 import {
   ASPECT_RATIO_VALUES,
   IMAGE_PROVIDER_VALUES,
@@ -123,7 +123,7 @@ export class MCPServerImpl {
               aspectRatio: {
                 type: 'string' as const,
                 description:
-                  'Set the requested output aspect ratio. Omit to use the provider default.',
+                  'Set the requested output aspect ratio. Omit to use the provider default. OpenAI does not support 1:4, 1:8, 4:1, or 8:1.',
                 enum: [...ASPECT_RATIO_VALUES],
               },
               imageSize: {
@@ -157,10 +157,10 @@ export class MCPServerImpl {
     }
   }
 
-  public async callTool(name: string, args: unknown) {
+  public async callTool(name: string, args: unknown, signal?: AbortSignal) {
     try {
       if (name === 'generate_image') {
-        return await this.handleGenerateImage(args as GenerateImageParams)
+        return await this.handleGenerateImage(args, signal)
       }
       throw new Error(`Unknown tool: ${name}`)
     } catch (error) {
@@ -204,12 +204,14 @@ export class MCPServerImpl {
     return clients
   }
 
-  private async handleGenerateImage(params: GenerateImageParams) {
+  private async handleGenerateImage(args: unknown, signal?: AbortSignal) {
     const result = await ErrorHandler.wrapWithResultType(async () => {
-      const validationResult = validateGenerateImageParams(params)
+      signal?.throwIfAborted()
+      const validationResult = validateGenerateImageParams(args)
       if (!validationResult.success) {
         throw validationResult.error
       }
+      const params = validationResult.data
 
       const sanitizedFileName = params.fileName
         ? this.securityManager.sanitizeFilename(params.fileName)
@@ -221,6 +223,13 @@ export class MCPServerImpl {
         throw configResult.error
       }
       const config = configResult.data
+
+      const outputPreflight = this.securityManager.sanitizeFilePath(
+        path.join(config.imageOutputDir, sanitizedFileName ?? 'image.png')
+      )
+      if (!outputPreflight.success) {
+        throw outputPreflight.error
+      }
 
       const providerName = params.provider ?? config.imageProvider
       const credentialsResult = validateProviderCredentials(config, providerName)
@@ -256,6 +265,7 @@ export class MCPServerImpl {
       } satisfies Omit<ImageApiParams, 'prompt'>
 
       provider.validateImageOptions?.(imageOptions, config)
+      signal?.throwIfAborted()
 
       let structuredPrompt = params.prompt
       if (!config.skipPromptEnhancement && structuredPromptGenerator) {
@@ -274,8 +284,10 @@ export class MCPServerImpl {
           features,
           inputImageData,
           params.purpose,
-          inputImageMimeType
+          inputImageMimeType,
+          signal
         )
+        signal?.throwIfAborted()
 
         if (promptResult.success) {
           structuredPrompt = promptResult.data
@@ -296,7 +308,9 @@ export class MCPServerImpl {
       const generationResult = await imageClient.generateImage({
         prompt: structuredPrompt,
         ...imageOptions,
+        ...(signal && { signal }),
       })
+      signal?.throwIfAborted()
 
       if (!generationResult.success) {
         throw generationResult.error
@@ -374,9 +388,9 @@ export class MCPServerImpl {
 
     this.server.setRequestHandler(
       CallToolRequestSchema,
-      async (request): Promise<CallToolResult> => {
+      async (request, { signal }): Promise<CallToolResult> => {
         const { name, arguments: args } = request.params
-        const result = await this.callTool(name, args)
+        const result = await this.callTool(name, args, signal)
         const response: CallToolResult = {
           content: result.content,
           isError: result.isError,

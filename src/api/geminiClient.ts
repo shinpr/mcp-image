@@ -97,11 +97,17 @@ function isGeminiResponse(obj: unknown): obj is GeminiResponse {
   const response = obj as Record<string, unknown>
 
   if ('response' in response && response['response'] && typeof response['response'] === 'object') {
-    const innerResponse = response['response'] as Record<string, unknown>
-    return 'candidates' in innerResponse && Array.isArray(innerResponse['candidates'])
+    return isGeminiResponse(response['response'])
   }
 
-  return 'candidates' in response && Array.isArray(response['candidates'])
+  const feedback = response['promptFeedback']
+  return (
+    Array.isArray(response['candidates']) ||
+    (typeof feedback === 'object' &&
+      feedback !== null &&
+      'blockReason' in feedback &&
+      typeof feedback.blockReason === 'string')
+  )
 }
 
 class GeminiClientImpl implements ImageClient {
@@ -153,6 +159,7 @@ class GeminiClientImpl implements ImageClient {
       }
 
       const config: GenerateContentConfig = {
+        ...(params.signal && { abortSignal: params.signal }),
         ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
         responseModalities: ['IMAGE'],
         ...(effectiveQuality === 'balanced' && {
@@ -319,6 +326,15 @@ class GeminiClientImpl implements ImageClient {
       }
 
       const imageBuffer = Buffer.from(imagePart.inlineData.data, 'base64')
+      if (imageBuffer.length === 0) {
+        return Err(
+          new GeminiAPIError('Gemini returned empty image data', {
+            provider: 'gemini',
+            stage: 'image_extraction',
+            suggestion: 'Retry the request; the provider returned no image bytes',
+          })
+        )
+      }
       const mimeType = normalizeMimeType(imagePart.inlineData.mimeType || DEFAULT_MIME_TYPE)
 
       const metadata: ImageGenerationMetadata = {
@@ -372,13 +388,17 @@ class GeminiClientImpl implements ImageClient {
     }
 
     return Err(
-      new GeminiAPIError('Failed to generate image with Gemini', {
-        provider: 'gemini',
-        prompt,
-        upstreamMessage: errorMessage,
-        suggestion:
-          'Check your API key, quota, and prompt validity. Try again with a different prompt',
-      })
+      new GeminiAPIError(
+        'Failed to generate image with Gemini',
+        {
+          provider: 'gemini',
+          prompt,
+          upstreamMessage: errorMessage,
+          suggestion:
+            'Check your API key, quota, and prompt validity. Try again with a different prompt',
+        },
+        extractStatusCode(error)
+      )
     )
   }
 

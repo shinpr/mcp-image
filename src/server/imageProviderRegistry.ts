@@ -1,7 +1,7 @@
 import { createGeminiClient } from '../api/geminiClient.js'
 import { createGeminiTextClient } from '../api/geminiTextClient.js'
 import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
-import { createOpenAIImageClient } from '../api/openaiImageClient.js'
+import { createOpenAIImageClient, validateOpenAIOptions } from '../api/openaiImageClient.js'
 import { createOpenAITextClient } from '../api/openaiTextClient.js'
 import {
   createSeedreamImageClient,
@@ -41,6 +41,9 @@ const IMAGE_PROVIDERS = {
     promptGeneration: { maxTokens: 1000 },
     createTextClient: (config) => unwrap(createOpenAITextClient(config)),
     createImageClient: (config) => unwrap(createOpenAIImageClient(config)),
+    validateImageOptions: (options) => {
+      unwrap(validateOpenAIOptions(options))
+    },
   },
   seedream: {
     promptGeneration: { maxTokens: 384 },

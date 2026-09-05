@@ -4,6 +4,7 @@ import type { GeminiAPIError, ImageAPIError, NetworkError } from '../utils/error
 export const MAX_TEXT_PROMPT_LENGTH = 100_000
 
 export interface GenerationConfig {
+  signal?: AbortSignal
   temperature?: number
   maxTokens?: number
   timeout?: number

@@ -36,8 +36,10 @@ vi.mock('../../api/geminiClient', () => {
   }
 })
 
-vi.mock('../../api/openaiImageClient', () => {
+vi.mock('../../api/openaiImageClient', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../api/openaiImageClient.js')>()
   return {
+    ...original,
     createOpenAIImageClient: vi.fn().mockImplementation(() => {
       const mockClient = {
         generateImage: vi.fn().mockImplementation((params) => {

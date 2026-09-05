@@ -853,7 +853,12 @@ describe('BytePlus Seedream integration', () => {
       .map(([size]) => size)
 
     expect.soft(exactResult.isError, 'exact-limit').toBe(false)
-    expect.soft(fileSystem.open, 'exact-limit').toHaveBeenCalledTimes(1)
+    expect
+      .soft(
+        fileSystem.open.mock.calls.filter(([, flags]) => flags === expectedInputOpenFlags),
+        'exact-limit:one input open'
+      )
+      .toHaveLength(1)
     expect
       .soft(fileSystem.open, 'exact-limit')
       .toHaveBeenCalledWith(expect.stringMatching(/\/exact-limit\.png$/), expectedInputOpenFlags)

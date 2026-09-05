@@ -48,6 +48,7 @@ class OpenAITextClientImpl implements TextClient {
     const timeout = config.timeout ?? 30000
 
     try {
+      const timeoutSignal = AbortSignal.timeout(timeout)
       const response = (await this.client.responses.create(
         {
           model: this.modelName,
@@ -57,7 +58,7 @@ class OpenAITextClientImpl implements TextClient {
           temperature: config.temperature ?? 0.7,
           top_p: config.topP ?? 0.95,
         },
-        { signal: AbortSignal.timeout(timeout) }
+        { signal: config.signal ? AbortSignal.any([config.signal, timeoutSignal]) : timeoutSignal }
       )) as OpenAITextResponse
 
       if (response.status === 'incomplete') {
