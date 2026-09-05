@@ -223,14 +223,6 @@ Use an absolute path and make sure the MCP server can read the file. Input image
 
 Check the requested size in the provider table. `useGoogleSearch` works with Gemini only, and Seedream does not support 4K. For OpenAI permission errors, check your [organization settings](https://platform.openai.com/settings/organization/general). For quota or rate-limit errors, check the selected provider account.
 
-OpenAI preserves supported aspect ratios with dimensions rounded to 16-pixel increments. Ratios wider or taller than 3:1 (`1:4`, `1:8`, `4:1`, `8:1`) are rejected before generation. Near-square 4K requests are reduced to fit the provider's pixel limit.
-
-### Long-running requests and cancellation
-
-Your MCP client's tool timeout must allow enough time for prompt enhancement and image generation. Seedream image requests can run for up to 300 seconds, plus prompt enhancement time. Set your client's timeout above that combined duration when using this provider; the server cannot extend a client-side timeout.
-
-Cancelling a tool request stops subsequent generation stages and prevents saving a late provider response. The server also forwards cancellation to the active API request, although this cannot guarantee that the provider stops or refunds work it has already accepted.
-
 ## Image Generation Prompt Skill
 
 This repository also includes an [Agent Skill](https://agentskills.io) for assistants that already have access to an image generation tool. It teaches the prompt-writing approach used by mcp-image and works independently of this server.
