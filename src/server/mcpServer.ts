@@ -16,15 +16,22 @@ import {
   type FeatureFlags,
   type StructuredPromptGenerator,
 } from '../business/structuredPromptGenerator.js'
-import type { ImageProvider, MCPServerConfig } from '../types/mcp.js'
+import type {
+  GenerateImageParams,
+  ImageOutputFormat,
+  ImageProvider,
+  MCPServerConfig,
+  McpToolResponse,
+} from '../types/mcp.js'
 import {
   ASPECT_RATIO_VALUES,
   IMAGE_PROVIDER_VALUES,
   IMAGE_QUALITY_VALUES,
   IMAGE_SIZE_VALUES,
 } from '../types/mcp.js'
-
+import { unwrapOrThrow } from '../types/result.js'
 import { type Config, getConfig, validateProviderCredentials } from '../utils/config.js'
+import { toError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import {
   reconcileFileNameExtension,
@@ -38,11 +45,20 @@ import {
   type ImageProviderDefinition,
 } from './imageProviderRegistry.js'
 
-const PACKAGE_VERSION = (
-  JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as {
-    version: string
+function readPackageVersion(): string {
+  const manifest: unknown = JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+  )
+  if (typeof manifest === 'object' && manifest !== null && 'version' in manifest) {
+    const { version } = manifest
+    if (typeof version === 'string') {
+      return version
+    }
   }
-).version
+  throw new Error('package.json does not declare a string version')
+}
+
+const PACKAGE_VERSION = readPackageVersion()
 
 const DEFAULT_CONFIG: MCPServerConfig = {
   name: 'mcp-image-server',
@@ -53,6 +69,61 @@ const DEFAULT_CONFIG: MCPServerConfig = {
 interface ProviderClients {
   imageClient: ImageClient
   structuredPromptGenerator: StructuredPromptGenerator | null
+}
+
+type ImageOptions = Omit<ImageApiParams, 'prompt'>
+
+/** Assemble the provider-facing image options from validated request params. */
+function buildImageOptions(
+  params: GenerateImageParams,
+  inputImage: { data?: string; mimeType?: string },
+  preferredOutputFormat: ImageOutputFormat | undefined
+): ImageOptions {
+  return {
+    ...(inputImage.data && { inputImage: inputImage.data }),
+    ...(inputImage.mimeType && { inputImageMimeType: inputImage.mimeType }),
+    ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
+    ...(params.imageSize && { imageSize: params.imageSize }),
+    ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
+    ...(preferredOutputFormat && { preferredOutputFormat }),
+    ...(params.quality !== undefined && { quality: params.quality }),
+  } satisfies ImageOptions
+}
+
+/** Project the request's enhancement flags onto the prompt generator's contract. */
+function buildFeatureFlags(params: GenerateImageParams): FeatureFlags {
+  return {
+    ...(params.maintainCharacterConsistency !== undefined && {
+      maintainCharacterConsistency: params.maintainCharacterConsistency,
+    }),
+    ...(params.blendImages !== undefined && { blendImages: params.blendImages }),
+    ...(params.useWorldKnowledge !== undefined && { useWorldKnowledge: params.useWorldKnowledge }),
+  }
+}
+
+/**
+ * Decide the saved file name. A caller-supplied name keeps its stem but takes
+ * the extension of the image that was actually generated; `corrected` reports
+ * whether a supported requested extension was replaced.
+ */
+function resolveOutputFileName(
+  requestedFileName: string | undefined,
+  sanitizedFileName: string | undefined,
+  mimeType: string
+): { fileName: string; requestedExtension: string; corrected: boolean } {
+  const rawFileName = sanitizedFileName ?? generateFileName(mimeType)
+  const fileName = requestedFileName
+    ? reconcileFileNameExtension(rawFileName, mimeType)
+    : rawFileName
+  const requestedExtension = path.extname(rawFileName)
+  return {
+    fileName,
+    requestedExtension,
+    corrected:
+      sanitizedFileName !== undefined &&
+      fileName !== rawFileName &&
+      SUPPORTED_EXTENSIONS.includes(requestedExtension.toLowerCase()),
+  }
 }
 
 export class MCPServerImpl {
@@ -68,14 +139,14 @@ export class MCPServerImpl {
     this.securityManager = new SecurityManager()
   }
 
-  public getServerInfo() {
+  public getServerInfo(): { name: string; version: string } {
     return {
       name: this.config.name,
       version: this.config.version,
     }
   }
 
-  public getToolsList() {
+  public getToolsList(): ListToolsResult {
     return {
       tools: [
         {
@@ -157,15 +228,20 @@ export class MCPServerImpl {
     }
   }
 
-  public async callTool(name: string, args: unknown, signal?: AbortSignal) {
+  public async callTool(
+    name: string,
+    args: unknown,
+    signal?: AbortSignal
+  ): Promise<McpToolResponse> {
     try {
       if (name === 'generate_image') {
         return await this.handleGenerateImage(args, signal)
       }
       throw new Error(`Unknown tool: ${name}`)
     } catch (error) {
-      this.logger.error('mcp-server', 'Tool execution failed', error as Error)
-      return ErrorHandler.handleError(error as Error)
+      const toolError = toError(error)
+      this.logger.error('mcp-server', 'Tool execution failed', toolError)
+      return ErrorHandler.handleError(toolError)
     }
   }
 
@@ -204,159 +280,148 @@ export class MCPServerImpl {
     return clients
   }
 
-  private async handleGenerateImage(args: unknown, signal?: AbortSignal) {
-    const result = await ErrorHandler.wrapWithResultType(async () => {
-      signal?.throwIfAborted()
-      const validationResult = validateGenerateImageParams(args)
-      if (!validationResult.success) {
-        throw validationResult.error
-      }
-      const params = validationResult.data
+  /**
+   * Send the prompt for enhancement and report the outcome. A failed
+   * enhancement is not fatal: the original prompt is used instead.
+   */
+  private async enhancePrompt(
+    generator: StructuredPromptGenerator,
+    params: GenerateImageParams,
+    context: { inputImageData?: string; inputImageMimeType?: string; signal?: AbortSignal }
+  ): Promise<string> {
+    const promptResult = await generator.generateStructuredPrompt(params.prompt, {
+      features: buildFeatureFlags(params),
+      ...(context.inputImageData !== undefined && { inputImageData: context.inputImageData }),
+      ...(params.purpose !== undefined && { purpose: params.purpose }),
+      ...(context.inputImageMimeType !== undefined && {
+        inputImageMimeType: context.inputImageMimeType,
+      }),
+      ...(context.signal !== undefined && { signal: context.signal }),
+    })
+    context.signal?.throwIfAborted()
 
-      const sanitizedFileName = params.fileName
-        ? this.securityManager.sanitizeFilename(params.fileName)
-        : undefined
-      const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
-
-      const configResult = getConfig()
-      if (!configResult.success) {
-        throw configResult.error
-      }
-      const config = configResult.data
-
-      const outputPreflight = this.securityManager.sanitizeFilePath(
-        path.join(config.imageOutputDir, sanitizedFileName ?? 'image.png')
-      )
-      if (!outputPreflight.success) {
-        throw outputPreflight.error
-      }
-
-      const providerName = params.provider ?? config.imageProvider
-      const credentialsResult = validateProviderCredentials(config, providerName)
-      if (!credentialsResult.success) {
-        throw credentialsResult.error
-      }
-      const provider = getImageProviderDefinition(providerName)
-
-      const { imageClient, structuredPromptGenerator } = this.getProviderClients(
-        config,
-        providerName,
-        provider
-      )
-
-      let inputImageData: string | undefined
-      let inputImageMimeType: string | undefined
-      if (params.inputImagePath) {
-        const inputImage = await readInputImage(params.inputImagePath)
-        inputImageData = inputImage.data.toString('base64')
-        inputImageMimeType = inputImage.mimeType
-      }
-
-      const imageOptions = {
-        ...(inputImageData && { inputImage: inputImageData }),
-        ...(inputImageMimeType && { inputImageMimeType }),
-        ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
-        ...(params.imageSize && { imageSize: params.imageSize }),
-        ...(params.useGoogleSearch !== undefined && {
-          useGoogleSearch: params.useGoogleSearch,
-        }),
-        ...(preferredOutputFormat && { preferredOutputFormat }),
-        ...(params.quality !== undefined && { quality: params.quality }),
-      } satisfies Omit<ImageApiParams, 'prompt'>
-
-      provider.validateImageOptions?.(imageOptions, config)
-      signal?.throwIfAborted()
-
-      let structuredPrompt = params.prompt
-      if (!config.skipPromptEnhancement && structuredPromptGenerator) {
-        const features: FeatureFlags = {}
-        if (params.maintainCharacterConsistency !== undefined) {
-          features.maintainCharacterConsistency = params.maintainCharacterConsistency
-        }
-        if (params.blendImages !== undefined) {
-          features.blendImages = params.blendImages
-        }
-        if (params.useWorldKnowledge !== undefined) {
-          features.useWorldKnowledge = params.useWorldKnowledge
-        }
-        const promptResult = await structuredPromptGenerator.generateStructuredPrompt(
-          params.prompt,
-          features,
-          inputImageData,
-          params.purpose,
-          inputImageMimeType,
-          signal
-        )
-        signal?.throwIfAborted()
-
-        if (promptResult.success) {
-          structuredPrompt = promptResult.data
-
-          this.logger.info('mcp-server', 'Structured prompt generated', {
-            originalLength: params.prompt.length,
-            structuredLength: structuredPrompt.length,
-          })
-        } else {
-          this.logger.warn('mcp-server', 'Using original prompt', {
-            error: promptResult.error.message,
-          })
-        }
-      } else if (config.skipPromptEnhancement) {
-        this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
-      }
-
-      const generationResult = await imageClient.generateImage({
-        prompt: structuredPrompt,
-        ...imageOptions,
-        ...(signal && { signal }),
+    if (!promptResult.success) {
+      this.logger.warn('mcp-server', 'Using original prompt', {
+        error: promptResult.error.message,
       })
-      signal?.throwIfAborted()
+      return params.prompt
+    }
 
-      if (!generationResult.success) {
-        throw generationResult.error
-      }
+    this.logger.info('mcp-server', 'Structured prompt generated', {
+      originalLength: params.prompt.length,
+      structuredLength: promptResult.data.length,
+    })
+    return promptResult.data
+  }
 
-      const mimeType = generationResult.data.metadata.mimeType
-      const rawFileName = sanitizedFileName ?? generateFileName(mimeType)
-      const fileName = params.fileName
-        ? reconcileFileNameExtension(rawFileName, mimeType)
-        : rawFileName
-      const requestedExtension = path.extname(rawFileName)
-      if (
-        sanitizedFileName &&
-        fileName !== rawFileName &&
-        SUPPORTED_EXTENSIONS.includes(requestedExtension.toLowerCase())
-      ) {
-        this.logger.warn(
-          'mcp-server',
-          'Output filename extension corrected to match generated MIME type',
-          {
-            requestedExtension,
-            savedExtension: path.extname(fileName),
-            mimeType,
-          }
-        )
-      }
-      const outputPath = path.join(config.imageOutputDir, fileName)
-
-      const sanitizedPath = this.securityManager.sanitizeFilePath(outputPath)
-      if (!sanitizedPath.success) {
-        throw sanitizedPath.error
-      }
-
-      const saveResult = await saveImage(generationResult.data.imageData, sanitizedPath.data)
-      if (!saveResult.success) {
-        throw saveResult.error
-      }
-
-      return buildSuccessResponse(generationResult.data, saveResult.data)
-    }, 'image-generation')
+  private async handleGenerateImage(args: unknown, signal?: AbortSignal): Promise<McpToolResponse> {
+    const result = await ErrorHandler.wrapWithResultType(
+      () => this.generateImage(args, signal),
+      'image-generation'
+    )
 
     if (result.success) {
       return result.data
     }
 
     return buildErrorResponse(result.error)
+  }
+
+  /**
+   * One image generation, in order: validate, resolve config and provider,
+   * load any input image, enhance the prompt, generate, then save. Runs inside
+   * the caller's error boundary, so a failed step throws.
+   */
+  private async generateImage(args: unknown, signal?: AbortSignal): Promise<McpToolResponse> {
+    signal?.throwIfAborted()
+    const params = unwrapOrThrow(validateGenerateImageParams(args))
+
+    const sanitizedFileName = params.fileName
+      ? this.securityManager.sanitizeFilename(params.fileName)
+      : undefined
+    const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
+
+    const config = unwrapOrThrow(getConfig())
+
+    // Reject an unusable output path before anything is sent upstream.
+    unwrapOrThrow(
+      this.securityManager.sanitizeFilePath(
+        path.join(config.imageOutputDir, sanitizedFileName ?? 'image.png')
+      )
+    )
+
+    const providerName = params.provider ?? config.imageProvider
+    unwrapOrThrow(validateProviderCredentials(config, providerName))
+    const provider = getImageProviderDefinition(providerName)
+
+    const { imageClient, structuredPromptGenerator } = this.getProviderClients(
+      config,
+      providerName,
+      provider
+    )
+
+    let inputImageData: string | undefined
+    let inputImageMimeType: string | undefined
+    if (params.inputImagePath) {
+      const inputImage = await readInputImage(params.inputImagePath)
+      inputImageData = inputImage.data.toString('base64')
+      inputImageMimeType = inputImage.mimeType
+    }
+
+    const imageOptions = buildImageOptions(
+      params,
+      {
+        ...(inputImageData && { data: inputImageData }),
+        ...(inputImageMimeType && { mimeType: inputImageMimeType }),
+      },
+      preferredOutputFormat
+    )
+
+    provider.validateImageOptions?.(imageOptions, config)
+    signal?.throwIfAborted()
+
+    let structuredPrompt = params.prompt
+    if (!config.skipPromptEnhancement && structuredPromptGenerator) {
+      structuredPrompt = await this.enhancePrompt(structuredPromptGenerator, params, {
+        ...(inputImageData !== undefined && { inputImageData }),
+        ...(inputImageMimeType !== undefined && { inputImageMimeType }),
+        ...(signal !== undefined && { signal }),
+      })
+    } else if (config.skipPromptEnhancement) {
+      this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
+    }
+
+    const generationResult = await imageClient.generateImage({
+      prompt: structuredPrompt,
+      ...imageOptions,
+      ...(signal && { signal }),
+    })
+    signal?.throwIfAborted()
+
+    const generatedImage = unwrapOrThrow(generationResult)
+    const mimeType = generatedImage.metadata.mimeType
+    const { fileName, requestedExtension, corrected } = resolveOutputFileName(
+      params.fileName,
+      sanitizedFileName,
+      mimeType
+    )
+    if (corrected) {
+      this.logger.warn(
+        'mcp-server',
+        'Output filename extension corrected to match generated MIME type',
+        {
+          requestedExtension,
+          savedExtension: path.extname(fileName),
+          mimeType,
+        }
+      )
+    }
+    const outputPath = path.join(config.imageOutputDir, fileName)
+
+    const sanitizedPath = unwrapOrThrow(this.securityManager.sanitizeFilePath(outputPath))
+    const savedPath = unwrapOrThrow(await saveImage(generatedImage.imageData, sanitizedPath))
+
+    return buildSuccessResponse(generatedImage, savedPath)
   }
 
   public initialize(): Server {
@@ -401,6 +466,6 @@ export class MCPServerImpl {
   }
 }
 
-export function createMCPServer(config: Partial<MCPServerConfig> = {}) {
+export function createMCPServer(config: Partial<MCPServerConfig> = {}): MCPServerImpl {
   return new MCPServerImpl(config)
 }

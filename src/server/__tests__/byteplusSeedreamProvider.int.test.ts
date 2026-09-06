@@ -3,23 +3,43 @@ import { constants as fsConstants } from 'node:fs'
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { MAX_IMAGE_SIZE } from '../../business/inputValidator.js'
+import { isRecord, parseJsonObject, recordOrEmpty } from '../../tests/helpers/inspect.js'
 import { createMCPServer } from '../mcpServer.js'
 
-const fileSystem = vi.hoisted(() => ({
-  actualOpen: undefined as typeof import('node:fs/promises').open | undefined,
+interface FileSystemStub {
+  actualOpen: typeof import('node:fs/promises').open | undefined
+  open: Mock
+}
+
+const fileSystem: FileSystemStub = vi.hoisted(() => ({
+  actualOpen: undefined,
   open: vi.fn(),
 }))
 
-const transports = vi.hoisted(() => ({
+interface TransportStubs {
+  fetch: Mock<(input: unknown, init?: RequestInit) => unknown>
+  googleConstructor: Mock
+  googleEnhancedText: string
+  googleGenerateContent: Mock
+  googleTextError: Error | undefined
+  openAIConstructorError: Error | undefined
+  openAIConstructorOptions: unknown[]
+  openAIImageEdit: Mock
+  openAIImageGenerate: Mock
+  openAIResponsesCreate: Mock
+  toFile: Mock
+}
+
+const transports: TransportStubs = vi.hoisted(() => ({
   fetch: vi.fn(),
   googleConstructor: vi.fn(),
   googleEnhancedText: '',
   googleGenerateContent: vi.fn(),
-  googleTextError: undefined as Error | undefined,
-  openAIConstructorError: undefined as Error | undefined,
-  openAIConstructorOptions: [] as unknown[],
+  googleTextError: undefined,
+  openAIConstructorError: undefined,
+  openAIConstructorOptions: [],
   openAIImageEdit: vi.fn(),
   openAIImageGenerate: vi.fn(),
   openAIResponsesCreate: vi.fn(),
@@ -258,13 +278,13 @@ function configureGemini(outputDirectory: string): void {
 
 function parsePublicResponse(
   result: Awaited<ReturnType<ReturnType<typeof createMCPServer>['callTool']>>
-) {
+): Record<string, unknown> {
   const firstContent = result.content.at(0)
   if (firstContent?.type !== 'text') {
     return {}
   }
 
-  return JSON.parse(firstContent.text) as Record<string, unknown>
+  return parseJsonObject(firstContent.text, 'public tool response')
 }
 
 function observeLastImageRequest(): {
@@ -275,12 +295,12 @@ function observeLastImageRequest(): {
 } {
   const lastCall = transports.fetch.mock.calls.at(-1)
   const url = lastCall?.[0]
-  const init = lastCall?.[1] as RequestInit | undefined
+  const init = lastCall?.[1]
   let body: Record<string, unknown> = {}
 
   if (typeof init?.body === 'string') {
     try {
-      body = JSON.parse(init.body) as Record<string, unknown>
+      body = parseJsonObject(init.body, 'image request body')
     } catch {
       body = {}
     }
@@ -303,15 +323,16 @@ function extractTextInput(request: Record<string, unknown>): string {
   }
 
   for (const item of request.input) {
-    if (!item || typeof item !== 'object') continue
-    const content = (item as { content?: unknown }).content
-    if (!Array.isArray(content)) continue
-    const textPart = content.find(
-      (part) =>
-        part && typeof part === 'object' && (part as { type?: unknown }).type === 'input_text'
-    ) as { text?: unknown } | undefined
-    if (typeof textPart?.text === 'string') {
-      return textPart.text
+    if (!isRecord(item)) {
+      continue
+    }
+    const content = item['content']
+    if (!Array.isArray(content)) {
+      continue
+    }
+    const textPart = content.find((part) => isRecord(part) && part['type'] === 'input_text')
+    if (isRecord(textPart) && typeof textPart['text'] === 'string') {
+      return textPart['text']
     }
   }
 
@@ -325,13 +346,789 @@ function capturedLogs(): string {
     .join('\n')
 }
 
+type FailureRow = {
+  args?: Record<string, unknown>
+  arkApiKey?: string
+  deleteArkApiKey?: boolean
+  expectedCode: string
+  expectedDecodeCalls: number
+  expectedImageCalls: number
+  expectedParseCalls: number
+  expectedTextCalls: number
+  fetchError?: Error
+  name: string
+  responseFactory?: (responseSentinel: string, imageSentinel: string) => Response
+  sensitiveValues?: string[]
+  skipPromptEnhancement?: boolean
+}
+
+/** Every failure this provider must contain before the next side effect. */
+function buildFailureRows(): FailureRow[] {
+  return [
+    {
+      name: 'missing-key',
+      deleteArkApiKey: true,
+      expectedCode: 'CONFIG_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'empty-key',
+      arkApiKey: '   ',
+      expectedCode: 'CONFIG_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'google-search',
+      args: { useGoogleSearch: true },
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'google-search-string',
+      args: { useGoogleSearch: 'private-invalid-google-search-string' },
+      expectedCode: 'INPUT_VALIDATION_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      sensitiveValues: ['private-invalid-google-search-string'],
+    },
+    {
+      name: 'google-search-number',
+      args: { useGoogleSearch: 8675309 },
+      expectedCode: 'INPUT_VALIDATION_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      sensitiveValues: ['8675309'],
+    },
+    {
+      name: 'google-search-null',
+      args: { useGoogleSearch: null },
+      expectedCode: 'INPUT_VALIDATION_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'google-search-object',
+      args: { useGoogleSearch: { marker: 'private-invalid-google-search-object' } },
+      expectedCode: 'INPUT_VALIDATION_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      sensitiveValues: ['private-invalid-google-search-object'],
+    },
+    {
+      name: 'fast-pro-4k',
+      args: { imageSize: '4K', quality: 'fast' },
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'pro-4k',
+      args: { imageSize: '4K', quality: 'quality' },
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'unsupported-editing-input',
+      args: { inputImagePath: '__CREATE_UNSUPPORTED_INPUT__' },
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 0,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+    },
+    {
+      name: 'missing-data',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse({
+          response_sentinel: responseSentinel,
+          image_sentinel: imageSentinel,
+        }),
+    },
+    {
+      name: 'extra-images',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel): Response => {
+        const imageBytes = createPngFixture(imageSentinel)
+        return createJsonResponse({
+          response_sentinel: responseSentinel,
+          data: [
+            { b64_json: imageBytes.toString('base64'), mime_type: 'image/png' },
+            { b64_json: imageBytes.toString('base64'), mime_type: 'image/png' },
+          ],
+        })
+      },
+    },
+    {
+      name: 'url-only',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse({
+          response_sentinel: responseSentinel,
+          image_sentinel: imageSentinel,
+          data: [{ url: `https://attacker.invalid/${imageSentinel}.png` }],
+        }),
+    },
+    {
+      name: 'stream-event',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        new Response(
+          `data: ${JSON.stringify({
+            response_sentinel: responseSentinel,
+            image_sentinel: imageSentinel,
+            data: [],
+          })}\n\n`,
+          {
+            status: 200,
+            headers: { 'content-type': 'text/event-stream' },
+          }
+        ),
+    },
+    {
+      name: 'malformed-base64',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel): Response => {
+        const validBase64 = createPngFixture(imageSentinel).toString('base64')
+        return createJsonResponse({
+          response_sentinel: responseSentinel,
+          data: [
+            {
+              b64_json: `${validBase64.slice(0, -1)}*`,
+              mime_type: 'image/png',
+            },
+          ],
+        })
+      },
+    },
+    {
+      name: 'empty-base64',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse({
+          response_sentinel: responseSentinel,
+          image_sentinel: imageSentinel,
+          data: [{ b64_json: '', mime_type: 'image/png' }],
+        }),
+    },
+    {
+      name: 'content-length-over-48-mib',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        new Response(`${responseSentinel}:${imageSentinel}`, {
+          status: 200,
+          headers: {
+            'content-length': String(48 * 1024 * 1024 + 1),
+            'content-type': 'application/json',
+          },
+        }),
+    },
+    {
+      name: 'chunked-body-over-48-mib',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+    },
+    {
+      name: 'decoded-size-over-32-mib',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse({
+          response_sentinel: responseSentinel,
+          image_sentinel: imageSentinel,
+          data: [
+            {
+              b64_json: 'A'.repeat(Math.ceil(((32 * 1024 * 1024 + 1) * 4) / 3)),
+              mime_type: 'image/png',
+            },
+          ],
+        }),
+    },
+    {
+      name: 'non-png-magic',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 1,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse({
+          response_sentinel: responseSentinel,
+          data: [
+            {
+              b64_json: Buffer.from(`not-a-png:${imageSentinel}`).toString('base64'),
+              mime_type: 'image/png',
+            },
+          ],
+        }),
+    },
+    {
+      name: 'wrong-mime',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 1,
+      expectedImageCalls: 1,
+      expectedParseCalls: 1,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel): Response => {
+        const imageBytes = createPngFixture(imageSentinel)
+        return createJsonResponse({
+          response_sentinel: responseSentinel,
+          data: [{ b64_json: imageBytes.toString('base64'), mime_type: 'image/jpeg' }],
+        })
+      },
+    },
+    {
+      name: 'abort-timeout',
+      expectedCode: 'NETWORK_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      fetchError: new DOMException('synthetic timeout', 'AbortError'),
+    },
+    {
+      name: 'http-401',
+      expectedCode: 'IMAGE_API_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse(
+          {
+            response_sentinel: responseSentinel,
+            image_sentinel: imageSentinel,
+            error: { message: RAW_BODY_MARKER },
+          },
+          401
+        ),
+    },
+    {
+      name: 'http-500',
+      expectedCode: 'NETWORK_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      responseFactory: (responseSentinel, imageSentinel) =>
+        createJsonResponse(
+          {
+            response_sentinel: responseSentinel,
+            image_sentinel: imageSentinel,
+            error: { message: RAW_BODY_MARKER },
+          },
+          500
+        ),
+    },
+    {
+      name: 'network-failure',
+      expectedCode: 'NETWORK_ERROR',
+      expectedDecodeCalls: 0,
+      expectedImageCalls: 1,
+      expectedParseCalls: 0,
+      expectedTextCalls: 0,
+      skipPromptEnhancement: true,
+      fetchError: new TypeError(`fetch failed: ${RAW_BODY_MARKER}`),
+    },
+  ]
+}
+
+const PUBLIC_ERROR_KEYS = ['code', 'details', 'message', 'suggestion', 'timestamp']
+const PUBLIC_DETAIL_KEYS = ['provider', 'stage', 'statusCode', 'upstreamMessage']
+
+/** A contained failure exposes only the allow-listed error and detail keys. */
+function assertPublicErrorShape(
+  result: Awaited<ReturnType<ReturnType<typeof createMCPServer>['callTool']>>,
+  row: FailureRow
+): void {
+  const publicResponse = parsePublicResponse(result)
+  const publicError = recordOrEmpty(publicResponse['error'])
+
+  expect.soft(result.isError, row.name).toBe(true)
+  expect.soft(publicError['code'], row.name).toBe(row.expectedCode)
+  expect.soft(Object.keys(result).sort(), row.name).toEqual(['content', 'isError'])
+  expect.soft(Object.keys(publicResponse), row.name).toEqual(['error'])
+  expect
+    .soft(
+      Object.keys(publicError).every((key) => PUBLIC_ERROR_KEYS.includes(key)),
+      row.name
+    )
+    .toBe(true)
+
+  const publicDetails = isRecord(publicError['details']) ? publicError['details'] : undefined
+  if (!publicDetails) {
+    return
+  }
+  expect
+    .soft(
+      Object.keys(publicDetails).every((key) => PUBLIC_DETAIL_KEYS.includes(key)),
+      row.name
+    )
+    .toBe(true)
+}
+
+interface RowSentinels {
+  responseSentinel: string
+  imageSentinel: string
+}
+
+/**
+ * Arrange the fetch double for one failure row. Returns the stream `cancel`
+ * spy when the row streams a body, so the caller can assert it was cancelled.
+ */
+function arrangeFailureTransport(
+  row: FailureRow,
+  sentinels: RowSentinels
+): ReturnType<typeof vi.fn> | undefined {
+  const { responseSentinel, imageSentinel } = sentinels
+
+  if (row.name === 'chunked-body-over-48-mib') {
+    const chunkedCancel = vi.fn()
+    transports.fetch.mockImplementation(async () =>
+      createChunkedResponse(`${responseSentinel}:${imageSentinel}`, chunkedCancel)
+    )
+    return chunkedCancel
+  }
+
+  if (row.fetchError) {
+    const message = `${row.fetchError.message}:${responseSentinel}:${imageSentinel}`
+    transports.fetch.mockRejectedValue(
+      row.fetchError instanceof DOMException
+        ? new DOMException(message, row.fetchError.name)
+        : new TypeError(message)
+    )
+    return undefined
+  }
+
+  if (row.responseFactory) {
+    transports.fetch.mockImplementation(async () =>
+      row.responseFactory?.(responseSentinel, imageSentinel)
+    )
+  }
+  return undefined
+}
+
+/** A JSON response whose body is streamed past the accepted size limit. */
+function createChunkedResponse(marker: string, cancel: () => void): Response {
+  let emittedChunks = 0
+  const markerChunk = new TextEncoder().encode(marker)
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      cancel,
+      pull(controller) {
+        if (emittedChunks === 0) {
+          controller.enqueue(markerChunk)
+          emittedChunks += 1
+        } else if (emittedChunks < 50) {
+          controller.enqueue(new Uint8Array(1024 * 1024))
+          emittedChunks += 1
+        } else {
+          controller.close()
+        }
+      },
+    }),
+    { status: 200, headers: { 'content-type': 'application/json' } }
+  )
+}
+
+/** Tool arguments for one failure row, creating an unsupported input file on demand. */
+async function buildFailureArgs(
+  row: FailureRow,
+  index: number,
+  outputDirectory: string,
+  requestSentinel: string
+): Promise<Record<string, unknown>> {
+  const args: Record<string, unknown> = {
+    prompt: requestSentinel,
+    fileName: `failure-${index}.png`,
+    ...row.args,
+  }
+
+  if (row.args?.['inputImagePath'] !== '__CREATE_UNSUPPORTED_INPUT__') {
+    return args
+  }
+
+  const unsupportedInputPath = join(outputDirectory, 'unsupported.gif')
+  await writeFile(unsupportedInputPath, `${INPUT_IMAGE_MARKER}:${row.name}`)
+  return { ...args, inputImagePath: unsupportedInputPath }
+}
+
+/** The base64 payload this failure row is expected to attempt to decode, if any. */
+function expectedDecodePayload(row: FailureRow, imageSentinel: string): string | undefined {
+  const pngBase64 = createPngFixture(imageSentinel).toString('base64')
+  switch (row.name) {
+    case 'extra-images':
+    case 'wrong-mime':
+      return pngBase64
+    case 'malformed-base64':
+      return `${pngBase64.slice(0, -1)}*`
+    case 'empty-base64':
+      return ''
+    case 'non-png-magic':
+      return Buffer.from(`not-a-png:${imageSentinel}`).toString('base64')
+    default:
+      return undefined
+  }
+}
+
+interface SavedPngExpectation {
+  outputDirectory: string
+  fileName: string
+  expectedBytes: Buffer
+  expectedModel: string
+}
+
+type SupportedRow = {
+  args: Record<string, unknown>
+  expectedAspectRatio: (typeof ALL_ASPECT_RATIOS)[number]
+  expectedModel: 'dola-seedream-5-0-pro-260628'
+  expectedQuality: 'fast' | 'balanced' | 'quality'
+  expectedResolution: '1K' | '2K'
+  inputImage?: boolean
+  name: string
+  skipPromptEnhancement?: boolean
+  textFailure?: boolean
+}
+
+/** The full matrix of supported request shapes this provider must honour. */
+function buildSupportedRows(): SupportedRow[] {
+  return [
+    {
+      name: 'prompt-baseline',
+      args: {},
+      expectedAspectRatio: '1:1',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'fast',
+      expectedResolution: '1K',
+    },
+    {
+      name: 'enhancement-failure-original-fallback',
+      args: { aspectRatio: '4:3', quality: 'balanced' },
+      expectedAspectRatio: '4:3',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'balanced',
+      expectedResolution: '1K',
+      textFailure: true,
+    },
+    {
+      name: 'enhancement-skip',
+      args: { aspectRatio: '9:16', imageSize: '2K', quality: 'quality' },
+      expectedAspectRatio: '9:16',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'quality',
+      expectedResolution: '2K',
+      skipPromptEnhancement: true,
+    },
+    {
+      name: 'fast-route',
+      args: { quality: 'fast' },
+      expectedAspectRatio: '1:1',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'fast',
+      expectedResolution: '1K',
+    },
+    {
+      name: 'balanced-route',
+      args: { quality: 'balanced' },
+      expectedAspectRatio: '1:1',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'balanced',
+      expectedResolution: '1K',
+    },
+    {
+      name: 'quality-request-overrides-captured-fast',
+      args: { quality: 'quality' },
+      expectedAspectRatio: '1:1',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'quality',
+      expectedResolution: '1K',
+    },
+    {
+      name: 'single-input-image',
+      args: { quality: 'quality' },
+      expectedAspectRatio: '1:1',
+      expectedModel: 'dola-seedream-5-0-pro-260628',
+      expectedQuality: 'quality',
+      expectedResolution: '1K',
+      inputImage: true,
+    },
+    ...ALL_ASPECT_RATIOS.map(
+      (aspectRatio): SupportedRow => ({
+        name: `aspect-${aspectRatio}`,
+        args: { aspectRatio, imageSize: '2K', quality: 'fast' },
+        expectedAspectRatio: aspectRatio,
+        expectedModel: 'dola-seedream-5-0-pro-260628',
+        expectedQuality: 'fast',
+        expectedResolution: '2K',
+      })
+    ),
+    ...['blendImages', 'maintainCharacterConsistency', 'useWorldKnowledge', 'useGoogleSearch'].map(
+      (flag): SupportedRow => ({
+        name: `false-${flag}`,
+        args: { [flag]: false },
+        expectedAspectRatio: '1:1',
+        expectedModel: 'dola-seedream-5-0-pro-260628',
+        expectedQuality: 'fast',
+        expectedResolution: '1K',
+      })
+    ),
+    ...[
+      ['blendImages', true],
+      ['maintainCharacterConsistency', true],
+      ['useWorldKnowledge', true],
+      ['purpose', 'cookbook cover'],
+    ].map(
+      ([flag, value]): SupportedRow => ({
+        name: `prompt-only-${String(flag)}`,
+        args: { [String(flag)]: value },
+        expectedAspectRatio: '1:1',
+        expectedModel: 'dola-seedream-5-0-pro-260628',
+        expectedQuality: 'fast',
+        expectedResolution: '1K',
+      })
+    ),
+  ]
+}
+
+interface SupportedRowFixture {
+  outputDirectory: string
+  fileName: string
+  requestPrompt: string
+  enhancedPrompt: string
+  responseSentinel: string
+  imageSentinel: string
+  expectedImageBytes: Buffer
+  inputImageBytes: Buffer | undefined
+  inputImagePath: string | undefined
+}
+
+/** Per-row directories, prompts and image bytes, each carrying a unique sentinel. */
+async function prepareSupportedRowFixture(
+  row: SupportedRow,
+  index: number
+): Promise<SupportedRowFixture> {
+  const imageSentinel = `${row.name}:decoded-image-sentinel`
+  const fixture: SupportedRowFixture = {
+    outputDirectory: await createOutputDirectory(),
+    fileName: `supported-${index}.png`,
+    requestPrompt: `${ORIGINAL_PROMPT}:${row.name}:request-body-sentinel`,
+    enhancedPrompt: `${ENHANCED_PROMPT}:${row.name}:image-body-sentinel`,
+    responseSentinel: `${row.name}:response-body-sentinel`,
+    imageSentinel,
+    expectedImageBytes: createPngFixture(imageSentinel),
+    inputImageBytes: undefined,
+    inputImagePath: undefined,
+  }
+
+  if (row.inputImage) {
+    fixture.inputImageBytes = createPngFixture(`${row.name}:input-image-sentinel`)
+    fixture.inputImagePath = join(await createOutputDirectory(), `${row.name}-input.png`)
+    await writeFile(fixture.inputImagePath, fixture.inputImageBytes)
+  }
+
+  return fixture
+}
+
+/** The exact Seedream image request body one supported row must produce. */
+function buildExpectedImageRequest(
+  row: SupportedRow,
+  finalPrompt: string,
+  inputImageBytes: Buffer | undefined
+): Record<string, unknown> {
+  return {
+    model: row.expectedModel,
+    prompt: finalPrompt,
+    size: row.expectedResolution,
+    response_format: 'b64_json',
+    output_format: 'png',
+    stream: false,
+    watermark: false,
+    optimize_prompt_options: {
+      mode: row.expectedQuality === 'fast' ? 'fast' : 'standard',
+    },
+    ...(inputImageBytes && {
+      image: `data:image/png;base64,${inputImageBytes.toString('base64')}`,
+    }),
+  }
+}
+
+/** Point every transport double at this row's fixtures. */
+function arrangeSupportedRow(row: SupportedRow, fixture: SupportedRowFixture): void {
+  configureSeedream(fixture.outputDirectory, {
+    imageQuality: 'fast',
+    skipPromptEnhancement: row.skipPromptEnhancement,
+  })
+  transports.googleEnhancedText = fixture.enhancedPrompt
+  transports.openAIResponsesCreate.mockResolvedValue({ output_text: fixture.enhancedPrompt })
+  transports.fetch.mockImplementation(async () =>
+    createSuccessfulImageResponse(fixture.expectedImageBytes, fixture.responseSentinel)
+  )
+
+  if (!row.textFailure) {
+    return
+  }
+
+  const enhancementError = new Error('synthetic enhancement failure')
+  transports.openAIResponsesCreate.mockRejectedValue(enhancementError)
+  transports.googleTextError = enhancementError
+}
+
+interface EnhancementExpectation {
+  label: string
+  requestPrompt: string
+  args: Record<string, unknown>
+  inputImageBytes: Buffer | undefined
+}
+
+/**
+ * Every expectation the Seedream text-enhancement request must satisfy for one
+ * table row: shape, sampling parameters, feature instructions and image part.
+ */
+function assertEnhancementRequest(
+  textRequest: Record<string, unknown>,
+  expectation: EnhancementExpectation
+): void {
+  const { label, requestPrompt, args, inputImageBytes } = expectation
+  const textInput = extractTextInput(textRequest)
+
+  expect
+    .soft(Object.keys(textRequest).sort(), label)
+    .toEqual([
+      'input',
+      'instructions',
+      'max_output_tokens',
+      'model',
+      'temperature',
+      'thinking',
+      'top_p',
+    ])
+  expect.soft(textRequest['model'], label).toBe('seed-2-0-lite-260428')
+  expect.soft(textRequest['thinking'], label).toEqual({ type: 'disabled' })
+  expect.soft(textRequest['max_output_tokens'], label).toBe(384)
+  expect.soft(textRequest['temperature'], label).toBe(0.7)
+  expect.soft(textRequest['top_p'], label).toBe(0.95)
+  expect.soft(typeof textRequest['instructions'], label).toBe('string')
+  expect.soft(countOccurrences(textInput, requestPrompt), label).toBe(1)
+
+  for (const [flag, instruction] of Object.entries(FEATURE_INSTRUCTIONS)) {
+    expect.soft(textInput.includes(instruction), `${label}:${flag}`).toBe(args[flag] === true)
+  }
+
+  const purpose = typeof args['purpose'] === 'string' ? args['purpose'] : undefined
+  const purposeInstruction = purpose
+    ? `INTENDED USE: ${purpose}\nTailor the visual style, quality level, and details to match this purpose.`
+    : 'INTENDED USE:'
+  expect.soft(textInput.includes(purposeInstruction), `${label}:purpose`).toBe(Boolean(purpose))
+
+  if (!inputImageBytes) {
+    expect.soft(textRequest['input'], label).toBe(textInput)
+    return
+  }
+
+  expect.soft(textRequest['input'], label).toEqual([
+    {
+      role: 'user',
+      content: [
+        { type: 'input_text', text: textInput },
+        {
+          type: 'input_image',
+          image_url: `data:image/png;base64,${inputImageBytes.toString('base64')}`,
+          detail: 'auto',
+        },
+      ],
+    },
+  ])
+}
+
+/** No secret, prompt or image byte may appear in what the caller can observe. */
+function assertNoSensitiveDisclosure(
+  label: string,
+  observable: string,
+  values: Array<string | undefined>
+): void {
+  for (const value of values) {
+    if (!value) {
+      continue
+    }
+    expect.soft(observable, `${label}:${value}`).not.toContain(value)
+  }
+}
+
 async function assertSavedPng(
   result: Awaited<ReturnType<ReturnType<typeof createMCPServer>['callTool']>>,
-  outputDirectory: string,
-  fileName: string,
-  expectedBytes: Buffer,
-  expectedModel: string
+  expectation: SavedPngExpectation
 ): Promise<void> {
+  const { outputDirectory, fileName, expectedBytes, expectedModel } = expectation
   const files = await readdir(outputDirectory)
   const expectedPath = join(outputDirectory, fileName)
   const bytes = files[0] ? await readFile(expectedPath) : Buffer.alloc(0)
@@ -475,7 +1272,7 @@ describe('BytePlus Seedream integration', () => {
     expect.soft(transports.openAIResponsesCreate).not.toHaveBeenCalled()
     expect.soft(transports.fetch).not.toHaveBeenCalled()
     expect
-      .soft((failedPublicResponse.error as { message?: string } | undefined)?.message)
+      .soft(recordOrEmpty(failedPublicResponse.error)['message'])
       .toContain('synthetic Seedream factory failure')
     expect.soft(await readdir(failureOutput)).toEqual([])
     expect.soft(failureExposure).not.toContain(ARK_DUMMY_KEY)
@@ -486,156 +1283,26 @@ describe('BytePlus Seedream integration', () => {
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
     const jsonParseSpy = vi.spyOn(JSON, 'parse')
     const bufferFromSpy = vi.spyOn(Buffer, 'from')
-    type SupportedRow = {
-      args: Record<string, unknown>
-      expectedAspectRatio: (typeof ALL_ASPECT_RATIOS)[number]
-      expectedModel: 'dola-seedream-5-0-pro-260628'
-      expectedQuality: 'fast' | 'balanced' | 'quality'
-      expectedResolution: '1K' | '2K'
-      inputImage?: boolean
-      name: string
-      skipPromptEnhancement?: boolean
-      textFailure?: boolean
-    }
-
-    const supportedRows: SupportedRow[] = [
-      {
-        name: 'prompt-baseline',
-        args: {},
-        expectedAspectRatio: '1:1',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'fast',
-        expectedResolution: '1K',
-      },
-      {
-        name: 'enhancement-failure-original-fallback',
-        args: { aspectRatio: '4:3', quality: 'balanced' },
-        expectedAspectRatio: '4:3',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'balanced',
-        expectedResolution: '1K',
-        textFailure: true,
-      },
-      {
-        name: 'enhancement-skip',
-        args: { aspectRatio: '9:16', imageSize: '2K', quality: 'quality' },
-        expectedAspectRatio: '9:16',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'quality',
-        expectedResolution: '2K',
-        skipPromptEnhancement: true,
-      },
-      {
-        name: 'fast-route',
-        args: { quality: 'fast' },
-        expectedAspectRatio: '1:1',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'fast',
-        expectedResolution: '1K',
-      },
-      {
-        name: 'balanced-route',
-        args: { quality: 'balanced' },
-        expectedAspectRatio: '1:1',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'balanced',
-        expectedResolution: '1K',
-      },
-      {
-        name: 'quality-request-overrides-captured-fast',
-        args: { quality: 'quality' },
-        expectedAspectRatio: '1:1',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'quality',
-        expectedResolution: '1K',
-      },
-      {
-        name: 'single-input-image',
-        args: { quality: 'quality' },
-        expectedAspectRatio: '1:1',
-        expectedModel: 'dola-seedream-5-0-pro-260628',
-        expectedQuality: 'quality',
-        expectedResolution: '1K',
-        inputImage: true,
-      },
-      ...ALL_ASPECT_RATIOS.map(
-        (aspectRatio): SupportedRow => ({
-          name: `aspect-${aspectRatio}`,
-          args: { aspectRatio, imageSize: '2K', quality: 'fast' },
-          expectedAspectRatio: aspectRatio,
-          expectedModel: 'dola-seedream-5-0-pro-260628',
-          expectedQuality: 'fast',
-          expectedResolution: '2K',
-        })
-      ),
-      ...[
-        'blendImages',
-        'maintainCharacterConsistency',
-        'useWorldKnowledge',
-        'useGoogleSearch',
-      ].map(
-        (flag): SupportedRow => ({
-          name: `false-${flag}`,
-          args: { [flag]: false },
-          expectedAspectRatio: '1:1',
-          expectedModel: 'dola-seedream-5-0-pro-260628',
-          expectedQuality: 'fast',
-          expectedResolution: '1K',
-        })
-      ),
-      ...[
-        ['blendImages', true],
-        ['maintainCharacterConsistency', true],
-        ['useWorldKnowledge', true],
-        ['purpose', 'cookbook cover'],
-      ].map(
-        ([flag, value]): SupportedRow => ({
-          name: `prompt-only-${String(flag)}`,
-          args: { [String(flag)]: value },
-          expectedAspectRatio: '1:1',
-          expectedModel: 'dola-seedream-5-0-pro-260628',
-          expectedQuality: 'fast',
-          expectedResolution: '1K',
-        })
-      ),
-    ]
+    const supportedRows = buildSupportedRows()
 
     for (const [index, row] of supportedRows.entries()) {
       resetTransportDoubles()
       vi.mocked(console.error).mockClear()
-      const outputDirectory = await createOutputDirectory()
-      const fileName = `supported-${index}.png`
-      const requestPrompt = `${ORIGINAL_PROMPT}:${row.name}:request-body-sentinel`
-      const enhancedPrompt = `${ENHANCED_PROMPT}:${row.name}:image-body-sentinel`
-      const responseSentinel = `${row.name}:response-body-sentinel`
-      const imageSentinel = `${row.name}:decoded-image-sentinel`
-      const expectedImageBytes = createPngFixture(imageSentinel)
+      const fixture = await prepareSupportedRowFixture(row, index)
+      const {
+        outputDirectory,
+        fileName,
+        requestPrompt,
+        enhancedPrompt,
+        responseSentinel,
+        imageSentinel,
+        expectedImageBytes,
+        inputImageBytes,
+        inputImagePath,
+      } = fixture
       const expectedBase64 = expectedImageBytes.toString('base64')
-      const inputImageBytes = row.inputImage
-        ? createPngFixture(`${row.name}:input-image-sentinel`)
-        : undefined
-      const inputDirectory = row.inputImage ? await createOutputDirectory() : undefined
-      const inputImagePath =
-        inputDirectory && row.inputImage ? join(inputDirectory, `${row.name}-input.png`) : undefined
-      if (inputImagePath && inputImageBytes) {
-        await writeFile(inputImagePath, inputImageBytes)
-      }
 
-      configureSeedream(outputDirectory, {
-        imageQuality: 'fast',
-        skipPromptEnhancement: row.skipPromptEnhancement,
-      })
-      transports.googleEnhancedText = enhancedPrompt
-      transports.openAIResponsesCreate.mockResolvedValue({ output_text: enhancedPrompt })
-      transports.fetch.mockImplementation(async () =>
-        createSuccessfulImageResponse(expectedImageBytes, responseSentinel)
-      )
-
-      if (row.textFailure) {
-        const enhancementError = new Error('synthetic enhancement failure')
-        transports.openAIResponsesCreate.mockRejectedValue(enhancementError)
-        transports.googleTextError = enhancementError
-      }
+      arrangeSupportedRow(row, fixture)
 
       const server = createMCPServer()
       const beforeTimeoutCalls = timeoutSpy.mock.calls.length
@@ -658,33 +1325,15 @@ describe('BytePlus Seedream integration', () => {
         .slice(beforeDecodeCalls)
         .filter(([value, encoding]) => value === expectedBase64 && encoding === 'base64').length
       const imageRequest = observeLastImageRequest()
-      const textRequest =
-        (transports.openAIResponsesCreate.mock.calls.at(-1)?.[0] as
-          | Record<string, unknown>
-          | undefined) ?? {}
+      const textRequest = recordOrEmpty(transports.openAIResponsesCreate.mock.calls.at(-1)?.[0])
       const selectedPrompt =
         row.skipPromptEnhancement || row.textFailure ? requestPrompt : enhancedPrompt
       const finalPrompt = `${selectedPrompt}\n\nOutput aspect ratio: ${row.expectedAspectRatio}.`
       const rowTimeouts = timeoutSpy.mock.calls
         .slice(beforeTimeoutCalls)
         .map(([timeout]) => timeout)
-      const expectedImageRequest = {
-        model: row.expectedModel,
-        prompt: finalPrompt,
-        size: row.expectedResolution,
-        response_format: 'b64_json',
-        output_format: 'png',
-        stream: false,
-        watermark: false,
-        optimize_prompt_options: {
-          mode: row.expectedQuality === 'fast' ? 'fast' : 'standard',
-        },
-        ...(inputImageBytes && {
-          image: `data:image/png;base64,${inputImageBytes.toString('base64')}`,
-        }),
-      }
+      const expectedImageRequest = buildExpectedImageRequest(row, finalPrompt, inputImageBytes)
       const expectedImageKeys = Object.keys(expectedImageRequest).sort()
-      const textInput = extractTextInput(textRequest)
 
       expect.soft(transports.googleConstructor, row.name).not.toHaveBeenCalled()
       expect
@@ -703,72 +1352,31 @@ describe('BytePlus Seedream integration', () => {
       if (row.skipPromptEnhancement) {
         expect.soft(textRequest, row.name).toEqual({})
       } else {
-        expect
-          .soft(Object.keys(textRequest).sort(), row.name)
-          .toEqual([
-            'input',
-            'instructions',
-            'max_output_tokens',
-            'model',
-            'temperature',
-            'thinking',
-            'top_p',
-          ])
-        expect.soft(textRequest.model, row.name).toBe('seed-2-0-lite-260428')
-        expect.soft(textRequest.thinking, row.name).toEqual({ type: 'disabled' })
-        expect.soft(textRequest.max_output_tokens, row.name).toBe(384)
-        expect.soft(textRequest.temperature, row.name).toBe(0.7)
-        expect.soft(textRequest.top_p, row.name).toBe(0.95)
-        expect.soft(typeof textRequest.instructions, row.name).toBe('string')
-        expect.soft(countOccurrences(textInput, requestPrompt), row.name).toBe(1)
-
-        for (const [flag, instruction] of Object.entries(FEATURE_INSTRUCTIONS)) {
-          expect
-            .soft(textInput.includes(instruction), `${row.name}:${flag}`)
-            .toBe(row.args[flag] === true)
-        }
-
-        const purpose = typeof row.args.purpose === 'string' ? row.args.purpose : undefined
-        const purposeInstruction = purpose
-          ? `INTENDED USE: ${purpose}\nTailor the visual style, quality level, and details to match this purpose.`
-          : 'INTENDED USE:'
-        expect
-          .soft(textInput.includes(purposeInstruction), `${row.name}:purpose`)
-          .toBe(Boolean(purpose))
-
-        if (inputImageBytes) {
-          expect.soft(textRequest.input, row.name).toEqual([
-            {
-              role: 'user',
-              content: [
-                { type: 'input_text', text: textInput },
-                {
-                  type: 'input_image',
-                  image_url: `data:image/png;base64,${inputImageBytes.toString('base64')}`,
-                  detail: 'auto',
-                },
-              ],
-            },
-          ])
-        } else {
-          expect.soft(textRequest.input, row.name).toBe(textInput)
-        }
+        assertEnhancementRequest(textRequest, {
+          label: row.name,
+          requestPrompt,
+          args: row.args,
+          inputImageBytes,
+        })
       }
 
-      await assertSavedPng(result, outputDirectory, fileName, expectedImageBytes, row.expectedModel)
+      await assertSavedPng(result, {
+        outputDirectory,
+        fileName,
+        expectedBytes: expectedImageBytes,
+        expectedModel: row.expectedModel,
+      })
 
       const publicAndLogs = `${JSON.stringify(parsePublicResponse(result))}\n${capturedLogs()}`
-      for (const sensitiveValue of [
+      assertNoSensitiveDisclosure(row.name, publicAndLogs, [
         ARK_DUMMY_KEY,
         AUTHORIZATION_VALUE,
         requestPrompt,
         enhancedPrompt,
         responseSentinel,
         imageSentinel,
-        inputImageBytes?.toString('base64') ?? '',
-      ].filter(Boolean)) {
-        expect.soft(publicAndLogs, `${row.name}:${sensitiveValue}`).not.toContain(sensitiveValue)
-      }
+        inputImageBytes?.toString('base64'),
+      ])
     }
   })
 
@@ -910,10 +1518,7 @@ describe('BytePlus Seedream integration', () => {
     const oversizedBase64Calls = bufferToStringSpy.mock.calls
       .slice(beforeOversizedBase64Calls)
       .filter(([encoding]) => encoding === 'base64')
-    const oversizedError = (parsePublicResponse(oversizedResult).error ?? {}) as Record<
-      string,
-      unknown
-    >
+    const oversizedError = recordOrEmpty(parsePublicResponse(oversizedResult).error)
 
     expect.soft(oversizedResult.isError, 'over-limit').toBe(true)
     expect.soft(oversizedError.code, 'over-limit').toBe('INPUT_VALIDATION_ERROR')
@@ -980,7 +1585,7 @@ describe('BytePlus Seedream integration', () => {
     const growthBase64Calls = bufferToStringSpy.mock.calls
       .slice(beforeGrowthBase64Calls)
       .filter(([encoding]) => encoding === 'base64')
-    const growthError = (parsePublicResponse(growthResult).error ?? {}) as Record<string, unknown>
+    const growthError = recordOrEmpty(parsePublicResponse(growthResult).error)
 
     expect.soft(growthResult.isError, 'growth').toBe(true)
     expect.soft(growthError.code, 'growth').toBe('INPUT_VALIDATION_ERROR')
@@ -1042,10 +1647,7 @@ describe('BytePlus Seedream integration', () => {
     const nonRegularBase64Calls = bufferToStringSpy.mock.calls
       .slice(beforeNonRegularBase64Calls)
       .filter(([encoding]) => encoding === 'base64')
-    const nonRegularError = (parsePublicResponse(nonRegularResult).error ?? {}) as Record<
-      string,
-      unknown
-    >
+    const nonRegularError = recordOrEmpty(parsePublicResponse(nonRegularResult).error)
 
     expect.soft(nonRegularResult.isError, 'non-regular').toBe(true)
     expect.soft(nonRegularError.code, 'non-regular').toBe('INPUT_VALIDATION_ERROR')
@@ -1065,8 +1667,11 @@ describe('BytePlus Seedream integration', () => {
       const fifoInputPath = join(inputDirectory, 'named-pipe.png')
       await new Promise<void>((resolve, reject) => {
         execFile('/usr/bin/mkfifo', [fifoInputPath], (error) => {
-          if (error) reject(error)
-          else resolve()
+          if (error) {
+            reject(error)
+          } else {
+            resolve()
+          }
         })
       })
       const sanitizedFifoInputPath = await realpath(fifoInputPath)
@@ -1116,7 +1721,7 @@ describe('BytePlus Seedream integration', () => {
       const fifoBase64Calls = bufferToStringSpy.mock.calls
         .slice(beforeFifoBase64Calls)
         .filter(([encoding]) => encoding === 'base64')
-      const fifoError = (parsePublicResponse(fifoResult).error ?? {}) as Record<string, unknown>
+      const fifoError = recordOrEmpty(parsePublicResponse(fifoResult).error)
 
       expect.soft(completionState, 'fifo:deadline').toBe('completed')
       expect.soft(fifoResult.isError, 'fifo').toBe(true)
@@ -1139,359 +1744,7 @@ describe('BytePlus Seedream integration', () => {
     const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
     const jsonParseSpy = vi.spyOn(JSON, 'parse')
     const bufferFromSpy = vi.spyOn(Buffer, 'from')
-    type FailureRow = {
-      args?: Record<string, unknown>
-      arkApiKey?: string
-      deleteArkApiKey?: boolean
-      expectedCode: string
-      expectedDecodeCalls: number
-      expectedImageCalls: number
-      expectedParseCalls: number
-      expectedTextCalls: number
-      fetchError?: Error
-      name: string
-      responseFactory?: (responseSentinel: string, imageSentinel: string) => Response
-      sensitiveValues?: string[]
-      skipPromptEnhancement?: boolean
-    }
-
-    const failureRows: FailureRow[] = [
-      {
-        name: 'missing-key',
-        deleteArkApiKey: true,
-        expectedCode: 'CONFIG_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'empty-key',
-        arkApiKey: '   ',
-        expectedCode: 'CONFIG_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'google-search',
-        args: { useGoogleSearch: true },
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'google-search-string',
-        args: { useGoogleSearch: 'private-invalid-google-search-string' },
-        expectedCode: 'INPUT_VALIDATION_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        sensitiveValues: ['private-invalid-google-search-string'],
-      },
-      {
-        name: 'google-search-number',
-        args: { useGoogleSearch: 8675309 },
-        expectedCode: 'INPUT_VALIDATION_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        sensitiveValues: ['8675309'],
-      },
-      {
-        name: 'google-search-null',
-        args: { useGoogleSearch: null },
-        expectedCode: 'INPUT_VALIDATION_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'google-search-object',
-        args: { useGoogleSearch: { marker: 'private-invalid-google-search-object' } },
-        expectedCode: 'INPUT_VALIDATION_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        sensitiveValues: ['private-invalid-google-search-object'],
-      },
-      {
-        name: 'fast-pro-4k',
-        args: { imageSize: '4K', quality: 'fast' },
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'pro-4k',
-        args: { imageSize: '4K', quality: 'quality' },
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'unsupported-editing-input',
-        args: { inputImagePath: '__CREATE_UNSUPPORTED_INPUT__' },
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 0,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-      },
-      {
-        name: 'missing-data',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse({
-            response_sentinel: responseSentinel,
-            image_sentinel: imageSentinel,
-          }),
-      },
-      {
-        name: 'extra-images',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) => {
-          const imageBytes = createPngFixture(imageSentinel)
-          return createJsonResponse({
-            response_sentinel: responseSentinel,
-            data: [
-              { b64_json: imageBytes.toString('base64'), mime_type: 'image/png' },
-              { b64_json: imageBytes.toString('base64'), mime_type: 'image/png' },
-            ],
-          })
-        },
-      },
-      {
-        name: 'url-only',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse({
-            response_sentinel: responseSentinel,
-            image_sentinel: imageSentinel,
-            data: [{ url: `https://attacker.invalid/${imageSentinel}.png` }],
-          }),
-      },
-      {
-        name: 'stream-event',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          new Response(
-            `data: ${JSON.stringify({
-              response_sentinel: responseSentinel,
-              image_sentinel: imageSentinel,
-              data: [],
-            })}\n\n`,
-            {
-              status: 200,
-              headers: { 'content-type': 'text/event-stream' },
-            }
-          ),
-      },
-      {
-        name: 'malformed-base64',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) => {
-          const validBase64 = createPngFixture(imageSentinel).toString('base64')
-          return createJsonResponse({
-            response_sentinel: responseSentinel,
-            data: [
-              {
-                b64_json: `${validBase64.slice(0, -1)}*`,
-                mime_type: 'image/png',
-              },
-            ],
-          })
-        },
-      },
-      {
-        name: 'empty-base64',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse({
-            response_sentinel: responseSentinel,
-            image_sentinel: imageSentinel,
-            data: [{ b64_json: '', mime_type: 'image/png' }],
-          }),
-      },
-      {
-        name: 'content-length-over-48-mib',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          new Response(`${responseSentinel}:${imageSentinel}`, {
-            status: 200,
-            headers: {
-              'content-length': String(48 * 1024 * 1024 + 1),
-              'content-type': 'application/json',
-            },
-          }),
-      },
-      {
-        name: 'chunked-body-over-48-mib',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-      },
-      {
-        name: 'decoded-size-over-32-mib',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse({
-            response_sentinel: responseSentinel,
-            image_sentinel: imageSentinel,
-            data: [
-              {
-                b64_json: 'A'.repeat(Math.ceil(((32 * 1024 * 1024 + 1) * 4) / 3)),
-                mime_type: 'image/png',
-              },
-            ],
-          }),
-      },
-      {
-        name: 'non-png-magic',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 1,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse({
-            response_sentinel: responseSentinel,
-            data: [
-              {
-                b64_json: Buffer.from(`not-a-png:${imageSentinel}`).toString('base64'),
-                mime_type: 'image/png',
-              },
-            ],
-          }),
-      },
-      {
-        name: 'wrong-mime',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 1,
-        expectedImageCalls: 1,
-        expectedParseCalls: 1,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) => {
-          const imageBytes = createPngFixture(imageSentinel)
-          return createJsonResponse({
-            response_sentinel: responseSentinel,
-            data: [{ b64_json: imageBytes.toString('base64'), mime_type: 'image/jpeg' }],
-          })
-        },
-      },
-      {
-        name: 'abort-timeout',
-        expectedCode: 'NETWORK_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        fetchError: new DOMException('synthetic timeout', 'AbortError'),
-      },
-      {
-        name: 'http-401',
-        expectedCode: 'IMAGE_API_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse(
-            {
-              response_sentinel: responseSentinel,
-              image_sentinel: imageSentinel,
-              error: { message: RAW_BODY_MARKER },
-            },
-            401
-          ),
-      },
-      {
-        name: 'http-500',
-        expectedCode: 'NETWORK_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        responseFactory: (responseSentinel, imageSentinel) =>
-          createJsonResponse(
-            {
-              response_sentinel: responseSentinel,
-              image_sentinel: imageSentinel,
-              error: { message: RAW_BODY_MARKER },
-            },
-            500
-          ),
-      },
-      {
-        name: 'network-failure',
-        expectedCode: 'NETWORK_ERROR',
-        expectedDecodeCalls: 0,
-        expectedImageCalls: 1,
-        expectedParseCalls: 0,
-        expectedTextCalls: 0,
-        skipPromptEnhancement: true,
-        fetchError: new TypeError(`fetch failed: ${RAW_BODY_MARKER}`),
-      },
-    ]
+    const failureRows = buildFailureRows()
 
     for (const [index, row] of failureRows.entries()) {
       resetTransportDoubles()
@@ -1508,56 +1761,8 @@ describe('BytePlus Seedream integration', () => {
         delete process.env.ARK_API_KEY
       }
 
-      let chunkedCancel: ReturnType<typeof vi.fn> | undefined
-      if (row.name === 'chunked-body-over-48-mib') {
-        chunkedCancel = vi.fn()
-        transports.fetch.mockImplementation(async () => {
-          let emittedChunks = 0
-          const markerChunk = new TextEncoder().encode(`${responseSentinel}:${imageSentinel}`)
-          return new Response(
-            new ReadableStream<Uint8Array>({
-              cancel: chunkedCancel,
-              pull(controller) {
-                if (emittedChunks === 0) {
-                  controller.enqueue(markerChunk)
-                  emittedChunks += 1
-                } else if (emittedChunks < 50) {
-                  controller.enqueue(new Uint8Array(1024 * 1024))
-                  emittedChunks += 1
-                } else {
-                  controller.close()
-                }
-              },
-            }),
-            { status: 200, headers: { 'content-type': 'application/json' } }
-          )
-        })
-      } else if (row.fetchError) {
-        const message = `${row.fetchError.message}:${responseSentinel}:${imageSentinel}`
-        const error =
-          row.fetchError instanceof DOMException
-            ? new DOMException(message, row.fetchError.name)
-            : new TypeError(message)
-        transports.fetch.mockRejectedValue(error)
-      } else if (row.responseFactory) {
-        transports.fetch.mockImplementation(async () =>
-          row.responseFactory?.(responseSentinel, imageSentinel)
-        )
-      }
-
-      let args: Record<string, unknown> = {
-        prompt: requestSentinel,
-        fileName: `failure-${index}.png`,
-        ...row.args,
-      }
-      if (row.args?.inputImagePath === '__CREATE_UNSUPPORTED_INPUT__') {
-        const unsupportedInputPath = join(outputDirectory, 'unsupported.gif')
-        await writeFile(unsupportedInputPath, `${INPUT_IMAGE_MARKER}:${row.name}`)
-        args = {
-          ...args,
-          inputImagePath: unsupportedInputPath,
-        }
-      }
+      const chunkedCancel = arrangeFailureTransport(row, { responseSentinel, imageSentinel })
+      const args = await buildFailureArgs(row, index, outputDirectory, requestSentinel)
 
       const beforeFiles = await readdir(outputDirectory)
       const beforeTimeoutCalls = timeoutSpy.mock.calls.length
@@ -1569,38 +1774,20 @@ describe('BytePlus Seedream integration', () => {
       const parseCount = jsonParseSpy.mock.calls
         .slice(beforeParseCalls)
         .filter(([value]) => typeof value === 'string' && value.includes(responseSentinel)).length
-      const pngBase64 = createPngFixture(imageSentinel).toString('base64')
-      const malformedBase64 = `${pngBase64.slice(0, -1)}*`
-      const nonPngBase64 = Buffer.from(`not-a-png:${imageSentinel}`).toString('base64')
       const oversizedBase64Length = Math.ceil(((32 * 1024 * 1024 + 1) * 4) / 3)
+      const expectedPayload = expectedDecodePayload(row, imageSentinel)
       const decodeCount = bufferFromSpy.mock.calls
         .slice(beforeDecodeCalls)
         .filter(([value, encoding]) => {
           if (encoding !== 'base64' || typeof value !== 'string') {
             return false
           }
-
-          if (row.name === 'extra-images' || row.name === 'wrong-mime') {
-            return value === pngBase64
-          }
-          if (row.name === 'malformed-base64') {
-            return value === malformedBase64
-          }
-          if (row.name === 'empty-base64') {
-            return value === ''
-          }
           if (row.name === 'decoded-size-over-32-mib') {
             return value.length === oversizedBase64Length && value.startsWith('A')
           }
-          if (row.name === 'non-png-magic') {
-            return value === nonPngBase64
-          }
-
-          return false
+          return expectedPayload !== undefined && value === expectedPayload
         }).length
-      const publicResponse = parsePublicResponse(result)
-      const publicError = (publicResponse.error ?? {}) as Record<string, unknown>
-      const exposed = `${JSON.stringify(publicResponse)}\n${capturedLogs()}`
+      const exposed = `${JSON.stringify(parsePublicResponse(result))}\n${capturedLogs()}`
       const rowTimeouts = timeoutSpy.mock.calls
         .slice(beforeTimeoutCalls)
         .map(([timeout]) => timeout)
@@ -1611,29 +1798,7 @@ describe('BytePlus Seedream integration', () => {
           row.name
         )
         .toEqual([])
-      expect.soft(result.isError, row.name).toBe(true)
-      expect.soft(publicError.code, row.name).toBe(row.expectedCode)
-      expect.soft(Object.keys(result).sort(), row.name).toEqual(['content', 'isError'])
-      expect.soft(Object.keys(publicResponse), row.name).toEqual(['error'])
-      expect
-        .soft(
-          Object.keys(publicError).every((key) => {
-            return ['code', 'details', 'message', 'suggestion', 'timestamp'].includes(key)
-          }),
-          row.name
-        )
-        .toBe(true)
-      const publicDetails = publicError.details as Record<string, unknown> | undefined
-      if (publicDetails) {
-        expect
-          .soft(
-            Object.keys(publicDetails).every((key) => {
-              return ['provider', 'stage', 'statusCode', 'upstreamMessage'].includes(key)
-            }),
-            row.name
-          )
-          .toBe(true)
-      }
+      assertPublicErrorShape(result, row)
       expect.soft(transports.googleConstructor, row.name).not.toHaveBeenCalled()
       expect
         .soft(transports.openAIResponsesCreate, row.name)
@@ -1661,7 +1826,7 @@ describe('BytePlus Seedream integration', () => {
         expect.soft(chunkedCancel?.mock.calls.length ?? 0, row.name).toBe(1)
       }
 
-      for (const sensitiveValue of [
+      assertNoSensitiveDisclosure(row.name, exposed, [
         ARK_DUMMY_KEY,
         AUTHORIZATION_VALUE,
         requestSentinel,
@@ -1670,9 +1835,7 @@ describe('BytePlus Seedream integration', () => {
         responseSentinel,
         imageSentinel,
         ...(row.sensitiveValues ?? []),
-      ]) {
-        expect.soft(exposed, `${row.name}:${sensitiveValue}`).not.toContain(sensitiveValue)
-      }
+      ])
     }
   })
 })

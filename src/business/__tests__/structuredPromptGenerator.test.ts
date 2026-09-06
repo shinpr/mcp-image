@@ -13,7 +13,7 @@ describe('StructuredPromptGenerator', () => {
     vi.clearAllMocks()
   })
 
-  function createGenerator(maxTokens = 1000) {
+  function createGenerator(maxTokens = 1000): StructuredPromptGeneratorImpl {
     return new StructuredPromptGeneratorImpl(mockGeminiTextClient, maxTokens)
   }
 
@@ -63,7 +63,7 @@ describe('StructuredPromptGenerator', () => {
         Ok('A warrior with detailed character features in the forest')
       )
 
-      const result = await generator.generateStructuredPrompt(userPrompt, features)
+      const result = await generator.generateStructuredPrompt(userPrompt, { features })
 
       expect(result.success).toBe(true)
       expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
@@ -115,7 +115,7 @@ describe('StructuredPromptGenerator', () => {
       const structuredPrompt = 'Professional food photography of artfully plated pasta'
       vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok(structuredPrompt))
 
-      const result = await generator.generateStructuredPrompt(userPrompt, {}, undefined, purpose)
+      const result = await generator.generateStructuredPrompt(userPrompt, { purpose })
 
       expect(result.success).toBe(true)
       if (result.success) {

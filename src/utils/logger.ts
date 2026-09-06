@@ -38,6 +38,10 @@ const FILTER_PATTERNS = [
  * error handlers) can sanitize before placing values into caller-visible
  * fields without instantiating a Logger.
  */
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export function sanitizeText(input: string): string {
   let sanitized = input
 
@@ -77,14 +81,16 @@ export class Logger {
   ]
 
   private currentTraceId?: string
-  private currentSessionId?: string
+  private readonly currentSessionId: string
 
   constructor() {
-    this.currentSessionId = this.generateId()
+    this.currentSessionId = Logger.generateId()
   }
 
   debug(context: string, message: string, metadata?: Record<string, unknown>): void {
-    if (process.env['NODE_ENV'] === 'production') return
+    if (process.env['NODE_ENV'] === 'production') {
+      return
+    }
     this.writeLog('debug', context, message, metadata)
   }
 
@@ -143,8 +149,8 @@ export class Logger {
         sanitized[key] = '[REDACTED]'
       } else if (typeof value === 'string') {
         sanitized[key] = this.sanitizeString(value)
-      } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        sanitized[key] = this.sanitizeMetadata(value as Record<string, unknown>)
+      } else if (isPlainRecord(value)) {
+        sanitized[key] = this.sanitizeMetadata(value)
       } else {
         sanitized[key] = value
       }
@@ -157,18 +163,18 @@ export class Logger {
     return this.keyBasedSensitivePatterns.some((pattern) => pattern.test(key))
   }
 
-  private generateId(): string {
+  private static generateId(): string {
     return crypto.randomUUID().substring(0, 8)
   }
 
   private getCurrentTraceId(): string {
     if (!this.currentTraceId) {
-      this.currentTraceId = this.generateId()
+      this.currentTraceId = Logger.generateId()
     }
     return this.currentTraceId
   }
 
   private getCurrentSessionId(): string {
-    return this.currentSessionId!
+    return this.currentSessionId
   }
 }

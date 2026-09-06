@@ -22,9 +22,22 @@ import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageC
 type OpenAIImageSize = `${number}x${number}`
 type OpenAIImageQuality = 'low' | 'medium' | 'high'
 // The OpenAI guide documents flexible gpt-image-2 resolutions, while SDK types still
-// enumerate the older fixed GPT image sizes. Keep the request cast local to this file.
-type OpenAIImageGenerateRequest = ImageGenerateParamsNonStreaming
-type OpenAIImageEditRequest = ImageEditParamsNonStreaming
+// enumerate the older fixed GPT image sizes. The widened `size` is confined to
+// this file through `OpenAIImagesApi`, which the SDK's images resource satisfies.
+type OpenAIImageGenerateRequest = Omit<ImageGenerateParamsNonStreaming, 'size'> & {
+  size: OpenAIImageSize
+}
+type OpenAIImageEditRequest = Omit<ImageEditParamsNonStreaming, 'size'> & {
+  size: OpenAIImageSize
+}
+
+interface OpenAIImagesApi {
+  generate(
+    body: OpenAIImageGenerateRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<ImagesResponse>
+  edit(body: OpenAIImageEditRequest, options?: { signal?: AbortSignal }): Promise<ImagesResponse>
+}
 type ImageEditApiParams = ImageApiParams & { inputImage: string }
 
 function mapQuality(quality: ImageQuality): OpenAIImageQuality {
@@ -38,11 +51,20 @@ function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   }
 }
 
+function requestedLongEdge(imageSize: ImageApiParams['imageSize'], ratio: number): number {
+  if (imageSize === '4K') {
+    return 3840
+  }
+  if (imageSize === '2K') {
+    return 2048
+  }
+  return ratio === 1 ? 1024 : 1536
+}
+
 function mapSize(params: ImageApiParams): OpenAIImageSize {
   const [width = 1, height = 1] = (params.aspectRatio ?? '1:1').split(':').map(Number)
   const ratio = Math.max(width, height) / Math.min(width, height)
-  const requestedEdge =
-    params.imageSize === '4K' ? 3840 : params.imageSize === '2K' ? 2048 : ratio === 1 ? 1024 : 1536
+  const requestedEdge = requestedLongEdge(params.imageSize, ratio)
   // GPT Image 2: 16px increments, at most 3840px per edge and 8,294,400 pixels.
   // Flooring keeps the pixel cap intact even for near-square 4K requests.
   const longEdge = Math.floor(Math.min(requestedEdge, Math.sqrt(8_294_400 * ratio)) / 16) * 16
@@ -180,7 +202,8 @@ class OpenAIImageClientImpl implements ImageClient {
       size,
     }
 
-    return await this.client.images.generate(request as unknown as OpenAIImageGenerateRequest, {
+    const images: OpenAIImagesApi = this.client.images
+    return await images.generate(request, {
       ...(params.signal && { signal: params.signal }),
     })
   }
@@ -208,7 +231,8 @@ class OpenAIImageClientImpl implements ImageClient {
       size,
     }
 
-    return await this.client.images.edit(request as unknown as OpenAIImageEditRequest, {
+    const images: OpenAIImagesApi = this.client.images
+    return await images.edit(request, {
       ...(params.signal && { signal: params.signal }),
     })
   }

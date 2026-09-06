@@ -21,3 +21,15 @@ export function Err<E extends Error>(error: E): Result<never, E> {
     error,
   }
 }
+
+/**
+ * Return the value of a successful result, or throw its error. Lets a caller
+ * that already runs inside an error boundary read a sequence of fallible steps
+ * as ordinary statements.
+ */
+export function unwrapOrThrow<T, E extends Error>(result: Result<T, E>): T {
+  if (!result.success) {
+    throw result.error
+  }
+  return result.data
+}

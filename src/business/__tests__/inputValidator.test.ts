@@ -146,9 +146,9 @@ describe('inputValidator', () => {
     })
 
     it('should return error for invalid new feature parameters', () => {
-      const invalidParams: GenerateImageParams = {
+      const invalidParams = {
         prompt: 'Generate a beautiful landscape',
-        blendImages: 'true' as any,
+        blendImages: 'true',
       }
 
       const result = validateGenerateImageParams(invalidParams)
@@ -202,7 +202,7 @@ describe('inputValidator', () => {
       const params = {
         prompt: 'Generate a beautiful landscape',
         useGoogleSearch,
-      } as unknown as GenerateImageParams
+      }
 
       const result = validateGenerateImageParams(params)
 
@@ -243,9 +243,9 @@ describe('inputValidator', () => {
     })
 
     it('should reject invalid aspect ratio "7:3"', () => {
-      const invalidParams: GenerateImageParams = {
+      const invalidParams = {
         prompt: 'test',
-        aspectRatio: '7:3' as AspectRatio,
+        aspectRatio: '7:3',
       }
 
       const result = validateGenerateImageParams(invalidParams)
@@ -275,7 +275,7 @@ describe('inputValidator', () => {
     it('should reject invalid quality value', () => {
       const result = validateGenerateImageParams({
         prompt: 'test',
-        quality: 'ultra' as any,
+        quality: 'ultra',
       })
 
       expect(result.success).toBe(false)
@@ -304,7 +304,7 @@ describe('inputValidator', () => {
     it('should reject invalid provider value', () => {
       const result = validateGenerateImageParams({
         prompt: 'test',
-        provider: 'midjourney' as any,
+        provider: 'midjourney',
       })
 
       expect(result.success).toBe(false)

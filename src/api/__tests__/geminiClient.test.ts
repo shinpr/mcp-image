@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { errorWithCode } from '../../tests/helpers/inspect'
 import type { Config } from '../../utils/config'
 import { GeminiAPIError, NetworkError } from '../../utils/errors'
 import { createGeminiClient } from '../geminiClient'
@@ -19,7 +20,7 @@ vi.mock('@google/genai', async (importActual) => {
     ...actual,
     GoogleGenAI: class {
       models = mockGeminiClientInstance.models
-      constructor(...args: any[]) {
+      constructor(...args: unknown[]) {
         mockGoogleGenAI(...args)
       }
     },
@@ -89,7 +90,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -130,7 +133,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const inputImageBuffer = Buffer.from('fake-input-image-data')
@@ -157,7 +162,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -173,14 +180,15 @@ describe('geminiClient', () => {
     })
 
     it('should return NetworkError for network-related failures', async () => {
-      const networkError = new Error('ECONNRESET') as Error & { code: string }
-      networkError.code = 'ECONNRESET'
+      const networkError = errorWithCode('ECONNRESET', 'ECONNRESET')
       mockGeminiClientInstance.models.generateContent = vi.fn().mockRejectedValue(networkError)
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -208,7 +216,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -247,7 +257,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -300,7 +312,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -342,7 +356,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -379,7 +395,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -425,7 +443,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -470,7 +490,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -482,8 +504,7 @@ describe('geminiClient', () => {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
         expect(result.data.metadata.prompt).toBe('test prompt without aspect ratio')
       }
-      const request = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
-        .mock.calls[0][0]
+      const request = vi.mocked(mockGeminiClientInstance.models.generateContent).mock.calls[0][0]
       expect(request.config.imageConfig).toBeUndefined()
     })
   })
@@ -514,7 +535,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -528,8 +551,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.prompt).toBe('Generate current 2025 weather map of Tokyo')
       }
 
-      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
-        .mock.calls[0][0]
+      const callArgs = vi.mocked(mockGeminiClientInstance.models.generateContent).mock.calls[0][0]
       expect(callArgs.config.tools).toEqual([
         { googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } },
       ])
@@ -560,7 +582,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -574,8 +598,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.prompt).toBe('Generate creative fantasy landscape')
       }
 
-      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
-        .mock.calls[0][0]
+      const callArgs = vi.mocked(mockGeminiClientInstance.models.generateContent).mock.calls[0][0]
       expect(callArgs.config.tools).toBeUndefined()
     })
 
@@ -604,7 +627,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -617,8 +642,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.prompt).toBe('Generate image without grounding')
       }
 
-      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
-        .mock.calls[0][0]
+      const callArgs = vi.mocked(mockGeminiClientInstance.models.generateContent).mock.calls[0][0]
       expect(callArgs.config.tools).toBeUndefined()
     })
 
@@ -647,7 +671,9 @@ describe('geminiClient', () => {
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
 
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -663,8 +689,7 @@ describe('geminiClient', () => {
         expect(result.data.metadata.prompt).toBe('Generate 2025 Japan foodtech industry chaos map')
       }
 
-      const callArgs = (mockGeminiClientInstance.models.generateContent as ReturnType<typeof vi.fn>)
-        .mock.calls[0][0]
+      const callArgs = vi.mocked(mockGeminiClientInstance.models.generateContent).mock.calls[0][0]
       expect(callArgs.config.tools).toEqual([
         { googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } },
       ])
@@ -699,7 +724,9 @@ describe('geminiClient', () => {
 
       const clientResult = createGeminiClient(testConfig) // testConfig has imageQuality: 'fast'
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({ prompt: 'test fast preset' })
@@ -726,7 +753,9 @@ describe('geminiClient', () => {
       const balancedConfig: Config = { ...testConfig, imageQuality: 'balanced' }
       const clientResult = createGeminiClient(balancedConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({ prompt: 'test balanced preset' })
@@ -753,7 +782,9 @@ describe('geminiClient', () => {
       const qualityConfig: Config = { ...testConfig, imageQuality: 'quality' }
       const clientResult = createGeminiClient(qualityConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({ prompt: 'test quality preset' })
@@ -779,7 +810,9 @@ describe('geminiClient', () => {
 
       const clientResult = createGeminiClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({
@@ -806,7 +839,9 @@ describe('geminiClient', () => {
       const balancedConfig: Config = { ...testConfig, imageQuality: 'balanced' }
       const clientResult = createGeminiClient(balancedConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
       const client = clientResult.data
 
       const result = await client.generateImage({ prompt: 'test default fallback' })

@@ -1,5 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { MCPServerImpl } from './server/mcpServer.js'
+import { toError } from './utils/errors.js'
 import { Logger } from './utils/logger.js'
 
 const logger = new Logger()
@@ -22,15 +23,16 @@ async function main(): Promise<void> {
 
     logger.info('mcp-startup', 'Image Generator MCP Server started successfully')
   } catch (error) {
-    logger.error('mcp-startup', 'Failed to start MCP server', error as Error, {
-      errorType: (error as Error)?.constructor?.name,
-      stack: (error as Error)?.stack,
+    const startupError = toError(error)
+    logger.error('mcp-startup', 'Failed to start MCP server', startupError, {
+      errorType: startupError.constructor.name,
+      stack: startupError.stack,
     })
     process.exit(1)
   }
 }
 
-main().catch((error) => {
-  logger.error('mcp-startup', 'Fatal error during startup', error as Error)
+main().catch((error: unknown) => {
+  logger.error('mcp-startup', 'Fatal error during startup', toError(error))
   process.exit(1)
 })

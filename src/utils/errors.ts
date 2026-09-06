@@ -9,14 +9,19 @@ import { SUPPORTED_EXTENSIONS } from './mimeUtils.js'
  * in `context` and must be projected through a sanitizer (see
  * `responseBuilder.buildPublicDetails`) before being placed on the wire.
  */
+/** Narrow an unknown thrown value to an Error without asserting over it. */
+export function toError(value: unknown): Error {
+  return value instanceof Error ? value : new Error(String(value))
+}
+
 export abstract class BaseError extends Error {
   abstract readonly code: string
   abstract readonly suggestion: string
   readonly timestamp: string
   readonly context: Record<string, unknown> | undefined
 
-  constructor(message: string, context?: Record<string, unknown>) {
-    super(message)
+  constructor(message: string, context?: Record<string, unknown>, options?: ErrorOptions) {
+    super(message, options)
     this.name = this.constructor.name
     this.timestamp = new Date().toISOString()
     this.context = context
@@ -74,6 +79,8 @@ export class FileOperationError extends BaseError {
 
 export class GeminiAPIError extends BaseError {
   readonly code = 'GEMINI_API_ERROR'
+  /** Set via `Object.defineProperty` in the constructor; declared for the type only. */
+  declare readonly statusCode: number | undefined
   private customSuggestion?: string
 
   constructor(
@@ -137,6 +144,8 @@ export class GeminiAPIError extends BaseError {
 
 export class ImageAPIError extends BaseError {
   readonly code = 'IMAGE_API_ERROR'
+  /** Set via `Object.defineProperty` in the constructor; declared for the type only. */
+  declare readonly statusCode: number | undefined
   private customSuggestion: string | undefined
 
   constructor(
@@ -265,6 +274,10 @@ export class ConfigError extends BaseError {
 
 export class SecurityError extends BaseError {
   readonly code = 'SECURITY_ERROR'
+
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, undefined, options)
+  }
 
   get suggestion(): string {
     const message = this.message.toLowerCase()

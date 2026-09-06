@@ -105,13 +105,19 @@ function responseContractError(): ImageAPIError {
   })
 }
 
+function base64PaddingLength(value: string): number {
+  if (value.endsWith('==')) {
+    return 2
+  }
+  return value.endsWith('=') ? 1 : 0
+}
+
 function isStrictBase64(value: string): boolean {
   if (value.length === 0 || value.length % 4 !== 0) {
     return false
   }
 
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
-  const contentLength = value.length - padding
+  const contentLength = value.length - base64PaddingLength(value)
 
   for (let index = 0; index < contentLength; index += 1) {
     const code = value.charCodeAt(index)
@@ -247,7 +253,7 @@ async function readBoundedJson(response: Response): Promise<Result<unknown, Imag
   const chunks: Uint8Array[] = []
   let totalBytes = 0
 
-  while (true) {
+  for (;;) {
     const { done, value } = await reader.read()
     if (done) {
       break
@@ -280,8 +286,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function calculateDecodedSize(base64: string): number {
-  const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
-  return (base64.length / 4) * 3 - padding
+  return (base64.length / 4) * 3 - base64PaddingLength(base64)
 }
 
 function parseImagePayload(

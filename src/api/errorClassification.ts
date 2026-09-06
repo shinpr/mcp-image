@@ -1,22 +1,23 @@
-interface ErrorWithCode extends Error {
-  code?: string
-  status?: number
-}
-
 const NETWORK_ERROR_CODES = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND'] as const
+
+function extractErrorCode(error: Error): string | undefined {
+  if ('code' in error && typeof error.code === 'string') {
+    return error.code
+  }
+  return undefined
+}
 
 export function isNetworkError(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
   }
-  return NETWORK_ERROR_CODES.some(
-    (code) => error.message.includes(code) || (error as ErrorWithCode).code === code
-  )
+  const errorCode = extractErrorCode(error)
+  return NETWORK_ERROR_CODES.some((code) => error.message.includes(code) || errorCode === code)
 }
 
 export function extractStatusCode(error: unknown): number | undefined {
   if (error && typeof error === 'object' && 'status' in error) {
-    const status = (error as ErrorWithCode).status
+    const { status } = error
     return typeof status === 'number' ? status : undefined
   }
   return undefined

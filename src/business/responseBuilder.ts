@@ -55,7 +55,7 @@ function buildPublicDetails(error: BaseError): Record<string, unknown> | undefin
   return Object.keys(details).length > 0 ? details : undefined
 }
 
-function resolveMimeType(metadataMimeType: string | undefined, filePath: string): string {
+function resolveMimeType(metadataMimeType: string, filePath: string): string {
   if (metadataMimeType && SUPPORTED_MIME_TYPES.includes(metadataMimeType)) {
     return metadataMimeType
   }

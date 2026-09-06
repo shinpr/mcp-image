@@ -34,22 +34,22 @@ function unwrap<T, E extends Error>(result: Result<T, E>): T {
 const IMAGE_PROVIDERS = {
   gemini: {
     promptGeneration: { maxTokens: 1000 },
-    createTextClient: (config) => unwrap(createGeminiTextClient(config)),
-    createImageClient: (config) => unwrap(createGeminiClient(config)),
+    createTextClient: (config): TextClient => unwrap(createGeminiTextClient(config)),
+    createImageClient: (config): ImageClient => unwrap(createGeminiClient(config)),
   },
   openai: {
     promptGeneration: { maxTokens: 1000 },
-    createTextClient: (config) => unwrap(createOpenAITextClient(config)),
-    createImageClient: (config) => unwrap(createOpenAIImageClient(config)),
-    validateImageOptions: (options) => {
+    createTextClient: (config): TextClient => unwrap(createOpenAITextClient(config)),
+    createImageClient: (config): ImageClient => unwrap(createOpenAIImageClient(config)),
+    validateImageOptions: (options): void => {
       unwrap(validateOpenAIOptions(options))
     },
   },
   seedream: {
     promptGeneration: { maxTokens: 384 },
-    createTextClient: (config) => unwrap(createSeedreamTextClient(config)),
-    createImageClient: (config) => unwrap(createSeedreamImageClient(config)),
-    validateImageOptions: (options, config) => {
+    createTextClient: (config): TextClient => unwrap(createSeedreamTextClient(config)),
+    createImageClient: (config): ImageClient => unwrap(createSeedreamImageClient(config)),
+    validateImageOptions: (options, config): void => {
       unwrap(validateSeedreamCapabilities(options, config.imageQuality))
     },
   },

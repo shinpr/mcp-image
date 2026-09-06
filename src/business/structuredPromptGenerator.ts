@@ -44,14 +44,20 @@ export interface FeatureFlags {
   useWorldKnowledge?: boolean
 }
 
+export interface StructuredPromptOptions {
+  /** Defaults to no feature flags. */
+  features?: FeatureFlags
+  /** Base64 image data; when present the editing system instruction is used. */
+  inputImageData?: string
+  purpose?: string
+  inputImageMimeType?: string
+  signal?: AbortSignal
+}
+
 export interface StructuredPromptGenerator {
   generateStructuredPrompt(
     userPrompt: string,
-    features?: FeatureFlags,
-    inputImageData?: string,
-    purpose?: string,
-    inputImageMimeType?: string,
-    signal?: AbortSignal
+    options?: StructuredPromptOptions
   ): Promise<Result<string, Error>>
 }
 
@@ -63,12 +69,9 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
 
   async generateStructuredPrompt(
     userPrompt: string,
-    features: FeatureFlags = {},
-    inputImageData?: string,
-    purpose?: string,
-    inputImageMimeType?: string,
-    signal?: AbortSignal
+    options: StructuredPromptOptions = {}
   ): Promise<Result<string, Error>> {
+    const { features = {}, inputImageData, purpose, inputImageMimeType, signal } = options
     try {
       if (!userPrompt || userPrompt.trim().length === 0) {
         return Err(new GeminiAPIError('User prompt cannot be empty'))
