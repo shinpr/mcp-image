@@ -48,12 +48,11 @@ describe('ResponseBuilder', () => {
       ['image/jpeg', '/path/to/image.jpg', 'image/jpeg'],
       ['image/webp', '/path/to/image.webp', 'image/webp'],
       ['image/png', '/path/to/image.png', 'image/png'],
-      [undefined, '/path/to/image.webp', 'image/webp'],
       ['', '/path/to/image.jpg', 'image/jpeg'],
       ['image/tiff', '/path/to/image.tiff', 'image/png'],
     ])('resolves metadata MIME %s and path %s to %s', (metadataMime, filePath, expectedMime) => {
       const response = responseBuilder.buildSuccessResponse(
-        makeGenerationResult(metadataMime as string),
+        makeGenerationResult(metadataMime),
         filePath
       )
       const contentData = JSON.parse(response.content[0].text)
@@ -154,7 +153,7 @@ describe('ResponseBuilder', () => {
     })
 
     it('should handle unknown errors gracefully', () => {
-      const error = new Error('Unknown error') as any
+      const error = new Error('Unknown error')
 
       const response = responseBuilder.buildErrorResponse(error)
 

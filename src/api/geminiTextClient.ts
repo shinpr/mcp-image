@@ -15,6 +15,15 @@ const DEFAULT_GENERATION_CONFIG = {
   timeout: 15000,
 } as const
 
+/**
+ * Response contract of `@google/genai` v2 `models.generateContent`: the text is
+ * exposed directly and may be absent when generation produced no content.
+ */
+interface GeminiTextResponse {
+  text: string | undefined
+  candidates?: Array<{ finishReason?: string }> | undefined
+}
+
 interface GeminiAIInstance {
   models: {
     generateContent(params: {
@@ -36,20 +45,35 @@ interface GeminiAIInstance {
         }
         abortSignal?: AbortSignal
       }
-    }): Promise<{
-      text: string
-      candidates?: Array<{ finishReason?: string }>
-      response?: {
-        text?: () => string
-        candidates?: Array<{
-          finishReason?: string
-          content: {
-            parts: Array<{ text: string }>
-          }
-        }>
-      }
-    }>
+    }): Promise<GeminiTextResponse>
   }
+}
+
+type RequestContents =
+  | string
+  | Array<{
+      role?: string
+      parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }>
+    }>
+
+/** A bare prompt, or an image part followed by the prompt when editing. */
+function buildRequestContents(prompt: string, config: GenerationConfig): RequestContents {
+  if (!config.inputImage) {
+    return prompt
+  }
+  return [
+    {
+      parts: [
+        {
+          inlineData: {
+            data: config.inputImage,
+            mimeType: config.inputImageMimeType ?? DEFAULT_MIME_TYPE,
+          },
+        },
+        { text: prompt },
+      ],
+    },
+  ]
 }
 
 class GeminiTextClientImpl implements GeminiTextClient {
@@ -59,7 +83,7 @@ class GeminiTextClientImpl implements GeminiTextClient {
   constructor(config: Config) {
     this.genai = new GoogleGenAI({
       apiKey: config.geminiApiKey,
-    }) as unknown as GeminiAIInstance
+    })
   }
 
   async generateText(
@@ -87,36 +111,10 @@ class GeminiTextClientImpl implements GeminiTextClient {
   private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
     try {
       const timeoutSignal = AbortSignal.timeout(config.timeout || 15000)
-      let contents:
-        | string
-        | Array<{
-            role?: string
-            parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }>
-          }>
-
-      if (config.inputImage) {
-        contents = [
-          {
-            parts: [
-              {
-                inlineData: {
-                  data: config.inputImage,
-                  mimeType: config.inputImageMimeType ?? DEFAULT_MIME_TYPE,
-                },
-              },
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ]
-      } else {
-        contents = prompt
-      }
 
       const response = await this.genai.models.generateContent({
         model: this.modelName,
-        contents,
+        contents: buildRequestContents(prompt, config),
         config: {
           ...(config.systemInstruction !== undefined && {
             systemInstruction: config.systemInstruction,
@@ -134,30 +132,25 @@ class GeminiTextClientImpl implements GeminiTextClient {
         },
       })
 
-      const candidate = response.candidates?.[0] ?? response.response?.candidates?.[0]
+      const candidate = response.candidates?.[0]
       if (candidate?.finishReason === 'MAX_TOKENS') {
         throw new Error('Gemini text generation was truncated at the token limit')
       }
 
-      let responseText: string
-      if (typeof response.text === 'string') {
-        responseText = response.text
-      } else if (response.response?.text && typeof response.response.text === 'function') {
-        responseText = response.response.text()
-      } else if (response.response?.candidates?.[0]?.content?.parts?.[0]?.text) {
-        responseText = response.response.candidates[0].content.parts[0].text
-      } else {
+      const responseText = response.text
+      if (responseText === undefined) {
         throw new Error('Unable to extract text from API response')
       }
 
-      if (!responseText || responseText.trim().length === 0) {
+      if (responseText.trim().length === 0) {
         throw new Error('Empty response from Gemini API')
       }
 
       return responseText.trim()
     } catch (error) {
       throw new Error(
-        `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+        `Gemini API call failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        { cause: error }
       )
     }
   }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { expectString } from '../../tests/helpers/inspect'
 import {
   getExtensionFromMimeType,
   getMimeTypeForOutputFormat,
@@ -50,7 +51,10 @@ describe('mimeUtils', () => {
 
       expect(result).toBe('.png')
       expect(consoleErrorSpy).toHaveBeenCalled()
-      const logOutput = consoleErrorSpy.mock.calls[0]?.[0] as string
+      const logOutput = expectString(
+        consoleErrorSpy.mock.calls[0]?.[0],
+        'first console.error argument'
+      )
       expect(logOutput).toContain('warn')
       expect(logOutput).toContain('image/tiff')
     })

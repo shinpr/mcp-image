@@ -32,10 +32,6 @@ mockGenerateContent.mockImplementation((params: { contents: string }) => {
 
   return Promise.resolve({
     text: 'Enhanced: test prompt with professional lighting, 85mm lens, dramatic composition',
-    response: {
-      text: () =>
-        'Enhanced: test prompt with professional lighting, 85mm lens, dramatic composition',
-    },
   })
 })
 

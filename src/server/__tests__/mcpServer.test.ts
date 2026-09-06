@@ -1,16 +1,39 @@
 import { readFileSync } from 'node:fs'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 import { generateFileName, saveImage } from '../../business/fileManager.js'
+import {
+  expectDefined,
+  expectRecord,
+  expectString,
+  parseJsonObject,
+  readPath,
+} from '../../tests/helpers/inspect'
 import { Logger } from '../../utils/logger.js'
 import { createMCPServer, MCPServerImpl } from '../mcpServer'
 
-const packageVersion = (
-  JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')) as {
-    version: string
+const packageVersion = expectString(
+  readPath(
+    parseJsonObject(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8')),
+    'version'
+  ),
+  'package.json version'
+)
+
+/**
+ * The `generateImage` mock of a client produced by a mocked provider factory,
+ * verified at runtime rather than asserted over.
+ */
+function createdImageClientMock(creation: unknown, what: string): Mock {
+  const result = expectRecord(expectRecord(creation, what)['value'], `${what} result`)
+  const client = expectRecord(result['data'], `${what} client`)
+  const generateImage = client['generateImage']
+  if (!vi.isMockFunction(generateImage)) {
+    throw new Error(`Expected ${what} to expose a mocked generateImage`)
   }
-).version
+  return generateImage
+}
 
 vi.mock('../../api/geminiClient', () => {
   return {
@@ -86,8 +109,12 @@ vi.mock('../../business/fileManager', () => {
       data: './test-output/test-image.png',
     }),
     generateFileName: vi.fn().mockImplementation((mimeType?: string) => {
-      if (mimeType === 'image/jpeg') return 'test-image.jpg'
-      if (mimeType === 'image/webp') return 'test-image.webp'
+      if (mimeType === 'image/jpeg') {
+        return 'test-image.jpg'
+      }
+      if (mimeType === 'image/webp') {
+        return 'test-image.webp'
+      }
       return 'test-image.png'
     }),
   }
@@ -354,8 +381,7 @@ describe('MCP Server', () => {
       fileName: 'my-photo',
     })
 
-    const saveImageCall = vi.mocked(saveImage).mock.calls[0]
-    const savedPath = saveImageCall[1] as string
+    const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
     expect(savedPath).toMatch(/my-photo\.png$/)
   })
 
@@ -370,8 +396,7 @@ describe('MCP Server', () => {
       fileName: 'my-photo.jpg',
     })
 
-    const saveImageCall = vi.mocked(saveImage).mock.calls[0]
-    const savedPath = saveImageCall[1] as string
+    const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
     expect(savedPath).toMatch(/my-photo\.jpg$/)
   })
 
@@ -410,8 +435,7 @@ describe('MCP Server', () => {
       fileName: '...my-photo\x00',
     })
 
-    const saveImageCall = vi.mocked(saveImage).mock.calls[0]
-    const savedPath = saveImageCall[1] as string
+    const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
     expect(savedPath).toMatch(/my-photo\.png$/)
   })
 
@@ -594,9 +618,11 @@ describe('MCP Server', () => {
 
     expect(result.isError).toBe(false)
     const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
-    const imageClient = (createOpenAIImageClient as ReturnType<typeof vi.fn>).mock.results[0].value
-      .data
-    expect(imageClient.generateImage).toHaveBeenCalledWith(
+    const generateImage = createdImageClientMock(
+      vi.mocked(createOpenAIImageClient).mock.results[0],
+      'openai image client creation'
+    )
+    expect(generateImage).toHaveBeenCalledWith(
       expect.objectContaining({ preferredOutputFormat: 'jpeg' })
     )
   })
@@ -618,12 +644,14 @@ describe('MCP Server', () => {
 
       expect(result.isError).toBe(false)
       const { createGeminiClient } = await import('../../api/geminiClient')
-      const imageClient = (createGeminiClient as ReturnType<typeof vi.fn>).mock.results.at(-1)
-        ?.value.data
-      const imageParams = imageClient.generateImage.mock.calls[0][0]
+      const generateImage = createdImageClientMock(
+        vi.mocked(createGeminiClient).mock.results.at(-1),
+        'gemini image client creation'
+      )
+      const imageParams = expectDefined(generateImage.mock.calls[0], 'generateImage call')[0]
       expect(imageParams).not.toHaveProperty('preferredOutputFormat')
 
-      const savedPath = vi.mocked(saveImage).mock.calls[0][1]
+      const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
       expect(savedPath.endsWith(expectedSavedName)).toBe(true)
     }
   )
@@ -637,10 +665,14 @@ describe('MCP Server', () => {
     })
 
     const { createGeminiClient } = await import('../../api/geminiClient')
-    const imageClient = (createGeminiClient as ReturnType<typeof vi.fn>).mock.results.at(-1)?.value
-      .data
+    const generateImage = createdImageClientMock(
+      vi.mocked(createGeminiClient).mock.results.at(-1),
+      'gemini image client creation'
+    )
     expect(result.isError).toBe(false)
-    expect(imageClient.generateImage.mock.calls[0][0]).not.toHaveProperty('preferredOutputFormat')
+    expect(expectDefined(generateImage.mock.calls[0], 'generateImage call')[0]).not.toHaveProperty(
+      'preferredOutputFormat'
+    )
   })
 
   it('should preserve tool execution errors across the MCP transport boundary', async () => {

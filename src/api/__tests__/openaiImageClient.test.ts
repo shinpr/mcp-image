@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { asUntypedCaller, errorWithCode, expectDefined } from '../../tests/helpers/inspect'
 import type { Config } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import { createOpenAIImageClient } from '../openaiImageClient'
@@ -17,11 +18,11 @@ vi.mock('openai', () => ({
       edit: mockEdit,
     }
 
-    constructor(...args: any[]) {
+    constructor(...args: unknown[]) {
       mockOpenAI(...args)
     }
   },
-  toFile: (...args: any[]) => mockToFile(...args),
+  toFile: (...args: unknown[]) => mockToFile(...args),
 }))
 
 describe('openaiImageClient', () => {
@@ -74,14 +75,16 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate a beautiful landscape',
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate.mock.calls[0]![0]).toEqual({
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual({
         model: 'gpt-image-2',
         prompt: 'Generate a beautiful landscape',
         n: 1,
@@ -109,7 +112,9 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const inputImage = Buffer.from('input-image-data').toString('base64')
       const result = await clientResult.data.generateImage({
@@ -122,7 +127,7 @@ describe('openaiImageClient', () => {
       expect(mockToFile).toHaveBeenCalledWith(Buffer.from('input-image-data'), 'input.png', {
         type: 'image/png',
       })
-      expect(mockEdit.mock.calls[0]![0]).toEqual({
+      expect(expectDefined(mockEdit.mock.calls[0], 'images.edit call')[0]).toEqual({
         model: 'gpt-image-2',
         prompt: 'Make this image warmer',
         image: { name: 'input.png', type: 'image/png' },
@@ -140,14 +145,16 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       await clientResult.data.generateImage({
         prompt: 'Generate an image',
         quality: 'balanced',
       })
 
-      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
         expect.objectContaining({
           quality: 'medium',
         })
@@ -161,14 +168,16 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       await clientResult.data.generateImage({
         prompt: 'Generate an image',
         quality: 'quality',
       })
 
-      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
         expect.objectContaining({
           quality: 'high',
         })
@@ -182,14 +191,16 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       await clientResult.data.generateImage({
         prompt: 'Generate a landscape image',
         aspectRatio: '16:9',
       })
 
-      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
         expect.objectContaining({
           size: '1536x864',
         })
@@ -203,11 +214,13 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
-      const result = await clientResult.data.generateImage({
+      const result = await asUntypedCaller(clientResult.data).generateImage({
         prompt: 'Generate an image',
-        aspectRatio: 'abc:1' as unknown as never,
+        aspectRatio: 'abc:1',
       })
 
       expect(result.success).toBe(false)
@@ -226,16 +239,20 @@ describe('openaiImageClient', () => {
       async (aspectRatio, imageSize) => {
         mockGenerate.mockResolvedValue({ data: [{ b64_json: PNG_BYTES.toString('base64') }] })
         const clientResult = createOpenAIImageClient(testConfig)
-        if (!clientResult.success) throw clientResult.error
+        if (!clientResult.success) {
+          throw clientResult.error
+        }
         const result = await clientResult.data.generateImage({
           prompt: 'test',
           aspectRatio,
           imageSize,
         })
         expect(result.success).toBe(true)
-        const [width, height] = mockGenerate.mock.calls[0]![0].size.split('x').map(Number)
-        const [ratioWidth, ratioHeight] = aspectRatio.split(':').map(Number)
-        expect(Math.abs(width / height - ratioWidth! / ratioHeight!)).toBeLessThan(0.025)
+        const [width, height] = expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]
+          .size.split('x')
+          .map(Number)
+        const [ratioWidth = 1, ratioHeight = 1] = aspectRatio.split(':').map(Number)
+        expect(Math.abs(width / height - ratioWidth / ratioHeight)).toBeLessThan(0.025)
         expect(width % 16).toBe(0)
         expect(height % 16).toBe(0)
         expect(Math.max(width, height)).toBeLessThanOrEqual(3840)
@@ -249,7 +266,9 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate image',
@@ -265,7 +284,9 @@ describe('openaiImageClient', () => {
     it('should reject useGoogleSearch because OpenAI image generation does not support Google Search grounding', async () => {
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate a current event image',
@@ -287,7 +308,9 @@ describe('openaiImageClient', () => {
       })
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate a JPEG image',
@@ -295,7 +318,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
         expect.objectContaining({ output_format: 'jpeg' })
       )
       if (result.success) {
@@ -310,7 +333,9 @@ describe('openaiImageClient', () => {
       })
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Edit as JPEG',
@@ -320,7 +345,9 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockEdit.mock.calls[0]![0]).toEqual(expect.objectContaining({ output_format: 'jpeg' }))
+      expect(expectDefined(mockEdit.mock.calls[0], 'images.edit call')[0]).toEqual(
+        expect.objectContaining({ output_format: 'jpeg' })
+      )
     })
 
     it('should reject bytes that contradict the requested format', async () => {
@@ -329,7 +356,9 @@ describe('openaiImageClient', () => {
       })
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({ prompt: 'Generate PNG' })
 
@@ -347,7 +376,9 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate a 2K product photo',
@@ -356,7 +387,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
         expect.objectContaining({
           size: '2048x1152',
         })
@@ -370,7 +401,9 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate a 4K portrait poster',
@@ -379,7 +412,7 @@ describe('openaiImageClient', () => {
       })
 
       expect(result.success).toBe(true)
-      expect(mockGenerate.mock.calls[0]![0]).toEqual(
+      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
         expect.objectContaining({
           size: '2160x3840',
         })
@@ -393,7 +426,9 @@ describe('openaiImageClient', () => {
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate image',
@@ -407,13 +442,14 @@ describe('openaiImageClient', () => {
     })
 
     it('should return NetworkError for network failures', async () => {
-      const networkError = new Error('ECONNRESET') as Error & { code: string }
-      networkError.code = 'ECONNRESET'
+      const networkError = errorWithCode('ECONNRESET', 'ECONNRESET')
       mockGenerate.mockRejectedValue(networkError)
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
-      if (!clientResult.success) return
+      if (!clientResult.success) {
+        return
+      }
 
       const result = await clientResult.data.generateImage({
         prompt: 'Generate image',

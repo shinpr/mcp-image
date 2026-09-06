@@ -5,6 +5,16 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  expectArray,
+  expectDefined,
+  expectRecord,
+  expectString,
+  firstContentText,
+  parseJsonObject,
+  parseToolPayload,
+  readPath,
+} from '../../tests/helpers/inspect'
 import type { ImageProvider } from '../../types/mcp.js'
 import { MCPServerImpl } from '../mcpServer.js'
 
@@ -108,9 +118,7 @@ describe('request and output boundaries', () => {
   ])('rejects invalid arguments before any provider request: %j', async (args) => {
     const result = await client.callTool({ name: 'generate_image', arguments: args })
     expect(result.isError).toBe(true)
-    expect(JSON.parse((result.content as Array<{ text: string }>)[0]!.text).error.code).toBe(
-      'INPUT_VALIDATION_ERROR'
-    )
+    expect(readPath(parseToolPayload(result), 'error', 'code')).toBe('INPUT_VALIDATION_ERROR')
     expect(fetchMock).not.toHaveBeenCalled()
     expect(await readdir(outputDir)).toEqual([])
   })
@@ -150,8 +158,17 @@ describe('request and output boundaries', () => {
     })
     expect(result.isError).toBe(false)
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    const imageRequest = JSON.parse(fetchMock.mock.calls[1]![1]!.body as string)
-    expect(imageRequest.contents[0].parts[0].text).toBe('complete original instructions')
+    const imageRequest = parseJsonObject(
+      expectString(
+        expectDefined(expectDefined(fetchMock.mock.calls[1], 'second fetch call')[1], 'fetch init')
+          .body,
+        'fetch request body'
+      ),
+      'image request body'
+    )
+    const contents = expectArray(imageRequest['contents'], 'request contents')
+    const parts = expectArray(readPath(contents[0], 'parts'), 'content parts')
+    expect(readPath(parts[0], 'text')).toBe('complete original instructions')
     expect(await readFile(resolve(outputDir, 'fallback.png'))).toEqual(PNG)
   })
 
@@ -180,10 +197,10 @@ describe('request and output boundaries', () => {
       name: 'generate_image',
       arguments: { provider: 'gemini', prompt: 'test' },
     })
-    const error = JSON.parse((result.content as Array<{ text: string }>)[0]!.text).error
+    const error = expectRecord(readPath(parseToolPayload(result), 'error'), 'error payload')
     expect(result.isError).toBe(true)
-    expect(error.suggestion).toContain('Rephrase')
-    expect(error.details.stage).toBe('prompt_analysis')
+    expect(expectString(error['suggestion'], 'error suggestion')).toContain('Rephrase')
+    expect(readPath(error, 'details', 'stage')).toBe('prompt_analysis')
   })
 
   it.each([401, 429, 503])(
@@ -194,9 +211,9 @@ describe('request and output boundaries', () => {
         name: 'generate_image',
         arguments: { provider: 'seedream', prompt: 'private prompt' },
       })
-      const text = (result.content as Array<{ text: string }>)[0]!.text
+      const text = firstContentText(result)
       expect(result.isError).toBe(true)
-      expect(JSON.parse(text).error.details.statusCode).toBe(status)
+      expect(readPath(parseJsonObject(text), 'error', 'details', 'statusCode')).toBe(status)
       expect(text).not.toContain('private')
       expect(await readdir(outputDir)).toEqual([])
     }
@@ -209,7 +226,7 @@ describe('request and output boundaries', () => {
       arguments: { prompt: 'test', fileName },
     })
     expect(result.isError).toBe(false)
-    const uri = JSON.parse((result.content as Array<{ text: string }>)[0]!.text).resource.uri
+    const uri = expectString(readPath(parseToolPayload(result), 'resource', 'uri'), 'resource uri')
     expect(fileURLToPath(uri)).toBe(resolve(outputDir, fileName))
     expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
   })
@@ -228,9 +245,7 @@ describe('request and output boundaries', () => {
         arguments: { provider, prompt: 'test' },
       })
       expect(result.isError).toBe(true)
-      expect(
-        JSON.parse((result.content as Array<{ text: string }>)[0]!.text).error.details.statusCode
-      ).toBe(503)
+      expect(readPath(parseToolPayload(result), 'error', 'details', 'statusCode')).toBe(503)
     }
   )
 
@@ -281,7 +296,7 @@ describe('request and output boundaries', () => {
     provider: ImageProvider,
     stage: 'text' | 'image',
     inputImagePath?: string
-  ) {
+  ): Promise<void> {
     vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', String(stage !== 'text'))
     let release!: () => void
     let started!: () => void
@@ -294,7 +309,9 @@ describe('request and output boundaries', () => {
     })
     fetchMock.mockImplementation(async (url, options) => {
       // The installed OpenAI SDK checks FormData support with a local data URL.
-      if (String(url) === 'data:,') return new Response('')
+      if (String(url) === 'data:,') {
+        return new Response('')
+      }
       upstreamSignal = options?.signal
       started()
       await held
@@ -325,11 +342,13 @@ describe('request and output boundaries', () => {
       await new Promise<void>((done) => setImmediate(done))
       const forwarded = upstreamSignal?.aborted
       release()
-      await execution.mock.results[0]!.value
+      await expectDefined(execution.mock.results[0], 'first execution result').value
       expect(forwarded).toBe(true)
       const apiCalls = fetchMock.mock.calls.filter(([url]) => String(url) !== 'data:,')
       expect(apiCalls).toHaveLength(1)
-      if (inputImagePath) expect(String(apiCalls[0]![0])).toMatch(/\/images\/edits$/)
+      if (inputImagePath) {
+        expect(String(expectDefined(apiCalls[0], 'first api call')[0])).toMatch(/\/images\/edits$/)
+      }
       expect(await readdir(outputDir)).toEqual(inputImagePath ? ['input.png'] : [])
     } finally {
       release()

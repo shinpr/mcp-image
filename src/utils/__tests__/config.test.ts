@@ -67,7 +67,7 @@ describe('config', () => {
         arkApiKey: '',
         imageOutputDir: './output',
         skipPromptEnhancement: false,
-        imageQuality: 'invalid' as any,
+        imageQuality: 'invalid',
       }
 
       const result = validateConfig(config)

@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { parseJsonObject } from '../../tests/helpers/inspect'
 import { type Config, getConfig } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import { createSeedreamTextClient } from '../seedreamTextClient'
+import type { TextClient } from '../textClient'
 
 const MODELARK_BASE_URL = 'https://ark.ap-southeast.bytepluses.com/api/v3'
 const DUMMY_API_KEY = 'ark-dummy-seedream-text-key'
@@ -27,10 +29,10 @@ function successfulResponse(outputText: string): Response {
 
 function readSerializedBody(init: RequestInit | undefined): Record<string, unknown> {
   expect(typeof init?.body).toBe('string')
-  return JSON.parse(String(init?.body)) as Record<string, unknown>
+  return parseJsonObject(String(init?.body), 'request body')
 }
 
-function createClient() {
+function createClient(): TextClient {
   const clientResult = createSeedreamTextClient(testConfig)
   expect(clientResult.success).toBe(true)
   if (!clientResult.success) {
@@ -198,10 +200,15 @@ describe('seedreamTextClient', () => {
     const result = await createClient().generateText(PRIVATE_PROMPT)
 
     expect(result.success).toBe(false)
-    if (result.success) return
+    if (result.success) {
+      return
+    }
 
     expect(result.error).toBeInstanceOf(ImageAPIError)
-    expect((result.error as ImageAPIError & { statusCode?: number }).statusCode).toBe(401)
+    if (!(result.error instanceof ImageAPIError)) {
+      throw result.error
+    }
+    expect(result.error.statusCode).toBe(401)
 
     const disclosed = JSON.stringify({
       message: result.error.message,
@@ -227,7 +234,9 @@ describe('seedreamTextClient', () => {
     const result = await createClient().generateText(PRIVATE_PROMPT, { timeout: 1 })
 
     expect(result.success).toBe(false)
-    if (result.success) return
+    if (result.success) {
+      return
+    }
 
     expect(result.error).toBeInstanceOf(NetworkError)
     const disclosed = JSON.stringify({

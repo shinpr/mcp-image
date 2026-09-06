@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { errorWithCode } from '../../tests/helpers/inspect'
 import type { Config } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import { createOpenAITextClient } from '../openaiTextClient'
@@ -12,7 +13,7 @@ vi.mock('openai', () => ({
       create: mockResponsesCreate,
     }
 
-    constructor(...args: any[]) {
+    constructor(...args: unknown[]) {
       mockOpenAI(...args)
     }
   },
@@ -46,7 +47,9 @@ describe('openaiTextClient', () => {
 
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     const result = await clientResult.data.generateText('make a product photo', {
       systemInstruction: 'Enhance image prompts',
@@ -78,7 +81,9 @@ describe('openaiTextClient', () => {
 
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     await clientResult.data.generateText('make the lighting warmer', {
       inputImage: Buffer.from('image-bytes').toString('base64'),
@@ -113,7 +118,9 @@ describe('openaiTextClient', () => {
 
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     const result = await clientResult.data.generateText('make a product photo')
 
@@ -133,7 +140,9 @@ describe('openaiTextClient', () => {
 
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     const result = await clientResult.data.generateText('make a product photo', {
       maxTokens: 1000,
@@ -149,7 +158,9 @@ describe('openaiTextClient', () => {
   it('should reject prompts that exceed the 100k character cap', async () => {
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     const overLimitPrompt = 'a'.repeat(100_001)
     const result = await clientResult.data.generateText(overLimitPrompt)
@@ -167,7 +178,9 @@ describe('openaiTextClient', () => {
 
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     const atLimitPrompt = 'a'.repeat(100_000)
     const result = await clientResult.data.generateText(atLimitPrompt)
@@ -176,13 +189,14 @@ describe('openaiTextClient', () => {
   })
 
   it('should return NetworkError for network failures', async () => {
-    const networkError = new Error('ECONNRESET') as Error & { code: string }
-    networkError.code = 'ECONNRESET'
+    const networkError = errorWithCode('ECONNRESET', 'ECONNRESET')
     mockResponsesCreate.mockRejectedValue(networkError)
 
     const clientResult = createOpenAITextClient(testConfig)
     expect(clientResult.success).toBe(true)
-    if (!clientResult.success) return
+    if (!clientResult.success) {
+      return
+    }
 
     const result = await clientResult.data.generateText('make a product photo')
 

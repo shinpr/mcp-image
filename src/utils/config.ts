@@ -14,6 +14,23 @@ export interface Config {
   imageQuality: ImageQuality
 }
 
+/**
+ * Environment-sourced shape before enum validation. `validateConfig` narrows
+ * `imageProvider` and `imageQuality` to their union types.
+ */
+export interface UnvalidatedConfig extends Omit<Config, 'imageProvider' | 'imageQuality'> {
+  imageProvider: string
+  imageQuality: string
+}
+
+function isImageProvider(value: string): value is ImageProvider {
+  return IMAGE_PROVIDER_VALUES.some((candidate) => candidate === value)
+}
+
+function isImageQuality(value: string): value is ImageQuality {
+  return IMAGE_QUALITY_VALUES.some((candidate) => candidate === value)
+}
+
 const DEFAULT_CONFIG = {
   imageProvider: 'gemini',
   imageOutputDir: './output',
@@ -72,8 +89,10 @@ export function validateProviderCredentials(
   return Ok(config)
 }
 
-export function validateConfig(config: Config): Result<Config, ConfigError> {
-  if (!IMAGE_PROVIDER_VALUES.includes(config.imageProvider)) {
+export function validateConfig(config: UnvalidatedConfig): Result<Config, ConfigError> {
+  const { imageProvider, imageQuality } = config
+
+  if (!isImageProvider(imageProvider)) {
     return Err(
       new ConfigError(
         `Invalid IMAGE_PROVIDER value: "${config.imageProvider}". Valid options: ${IMAGE_PROVIDER_VALUES.join(', ')}`,
@@ -91,7 +110,7 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
-  if (!IMAGE_QUALITY_VALUES.includes(config.imageQuality)) {
+  if (!isImageQuality(imageQuality)) {
     return Err(
       new ConfigError(
         `Invalid IMAGE_QUALITY value: "${config.imageQuality}". Valid options: ${IMAGE_QUALITY_VALUES.join(', ')}`,
@@ -100,18 +119,18 @@ export function validateConfig(config: Config): Result<Config, ConfigError> {
     )
   }
 
-  return Ok(config)
+  return Ok({ ...config, imageProvider, imageQuality })
 }
 
 export function getConfig(): Result<Config, ConfigError> {
-  const config: Config = {
-    imageProvider: (readEnv('IMAGE_PROVIDER') || DEFAULT_CONFIG.imageProvider) as ImageProvider,
+  const config: UnvalidatedConfig = {
+    imageProvider: readEnv('IMAGE_PROVIDER') || DEFAULT_CONFIG.imageProvider,
     geminiApiKey: readEnv('GEMINI_API_KEY') || '',
     openaiApiKey: readEnv('OPENAI_API_KEY') || '',
     arkApiKey: readEnv('ARK_API_KEY') || '',
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',
-    imageQuality: (readEnv('IMAGE_QUALITY') || 'fast') as ImageQuality,
+    imageQuality: readEnv('IMAGE_QUALITY') || 'fast',
   }
 
   return validateConfig(config)

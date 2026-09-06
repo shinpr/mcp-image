@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { asUntypedCaller, expectRecord, parseJsonObject } from '../../tests/helpers/inspect'
 import { type Config, getConfig } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
-import type { ImageApiParams, ImageClient } from '../imageClient'
+import type { ImageClient } from '../imageClient'
 import { createSeedreamImageClient, validateSeedreamCapabilities } from '../seedreamImageClient'
 
 const API_ENDPOINT = 'https://ark.ap-southeast.bytepluses.com/api/v3/images/generations'
@@ -84,7 +85,7 @@ function readRequest(callIndex = -1): {
   const init = rawInit ?? {}
   expect(typeof init.body).toBe('string')
   return {
-    body: JSON.parse(String(init.body)) as Record<string, unknown>,
+    body: parseJsonObject(String(init.body), 'request body'),
     headers: new Headers(init.headers),
     init,
     url: String(url),
@@ -140,7 +141,7 @@ describe('seedreamImageClient', () => {
     expect(result.success).toBe(true)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const request = readRequest()
-    expect((request.init.headers as Record<string, string>).Authorization).toBe(
+    expect(expectRecord(request.init.headers, 'request headers')['Authorization']).toBe(
       `Bearer ${WRAPPED_DUMMY_API_KEY}`
     )
     expect(request.headers.get('authorization')).toBe(`Bearer  \t${DUMMY_API_KEY}`)
@@ -382,9 +383,9 @@ describe('seedreamImageClient', () => {
       params: { aspectRatio: '3:1' },
     },
   ])('rejects unsupported $name before transport without coercion', async ({ params }) => {
-    const result = await createClient().generateImage({
+    const result = await asUntypedCaller(createClient()).generateImage({
       prompt: PRIVATE_PROMPT,
-      ...(params as ImageApiParams),
+      ...params,
     })
 
     expect(result.success).toBe(false)

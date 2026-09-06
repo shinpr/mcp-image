@@ -1,4 +1,8 @@
 import OpenAI from 'openai'
+import type {
+  Response as OpenAIResponse,
+  ResponseCreateParamsNonStreaming,
+} from 'openai/resources/responses/responses'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
@@ -10,18 +14,15 @@ import {
 } from './openaiCompatibleText.js'
 import type { GenerationConfig, TextClient } from './textClient.js'
 
-interface OpenAITextResponse {
-  output_text?: string
-  status?: 'completed' | 'failed' | 'in_progress' | 'cancelled' | 'queued' | 'incomplete'
-  incomplete_details?: {
-    reason?: 'max_output_tokens' | 'content_filter'
-  } | null
-  output?: Array<{
-    content?: Array<{
-      type?: string
-      text?: string
-    }>
-  }>
+/**
+ * Minimal view of `client.responses` used here. Declaring it locally keeps the
+ * narrowing to the fields this client reads without asserting over the SDK type.
+ */
+interface OpenAIResponsesApi {
+  create(
+    body: ResponseCreateParamsNonStreaming,
+    options: { signal: AbortSignal }
+  ): Promise<OpenAIResponse>
 }
 
 const OPENAI_TEXT_MODEL = 'gpt-5.4-nano'
@@ -49,7 +50,8 @@ class OpenAITextClientImpl implements TextClient {
 
     try {
       const timeoutSignal = AbortSignal.timeout(timeout)
-      const response = (await this.client.responses.create(
+      const responses: OpenAIResponsesApi = this.client.responses
+      const response = await responses.create(
         {
           model: this.modelName,
           input: buildOpenAICompatibleInput(prompt, config),
@@ -59,7 +61,7 @@ class OpenAITextClientImpl implements TextClient {
           top_p: config.topP ?? 0.95,
         },
         { signal: config.signal ? AbortSignal.any([config.signal, timeoutSignal]) : timeoutSignal }
-      )) as OpenAITextResponse
+      )
 
       if (response.status === 'incomplete') {
         const reason = response.incomplete_details?.reason ?? 'unknown reason'
@@ -83,19 +85,16 @@ class OpenAITextClientImpl implements TextClient {
     }
   }
 
-  private extractResponseText(response: OpenAITextResponse): string {
+  private extractResponseText(response: OpenAIResponse): string {
     if (typeof response.output_text === 'string') {
       return response.output_text
     }
 
-    const textParts =
-      response.output?.flatMap((item) =>
-        item.content
-          ?.filter((content) => content.type === 'output_text' && typeof content.text === 'string')
-          .map((content) => content.text ?? '')
-      ) ?? []
-
-    return textParts.join('')
+    return response.output
+      .flatMap((item) => (item.type === 'message' ? item.content : []))
+      .filter((content) => content.type === 'output_text')
+      .map((content) => content.text)
+      .join('')
   }
 
   private handleError(

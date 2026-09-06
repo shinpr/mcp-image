@@ -51,8 +51,8 @@ export async function readInputImage(inputPath: string): Promise<InputImage> {
   let realPath: string
   try {
     realPath = await fs.realpath(path.resolve(inputPath))
-  } catch {
-    throw new SecurityError('File path cannot be resolved')
+  } catch (error) {
+    throw new SecurityError('File path cannot be resolved', { cause: error })
   }
 
   const extension = path.extname(realPath).toLowerCase()
@@ -78,7 +78,9 @@ export async function readInputImage(inputPath: string): Promise<InputImage> {
     while (observedBytes < boundedBuffer.length) {
       const readLength = Math.min(64 * 1024, boundedBuffer.length - observedBytes)
       const { bytesRead } = await fileHandle.read(boundedBuffer, observedBytes, readLength, null)
-      if (bytesRead === 0) break
+      if (bytesRead === 0) {
+        break
+      }
 
       observedBytes += bytesRead
       if (observedBytes > MAX_IMAGE_SIZE) {
