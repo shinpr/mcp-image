@@ -163,7 +163,9 @@ Changing the provider changes both prompt enhancement and image generation. The 
 IMAGE_QUALITY=balanced
 ```
 
-A request-level `quality` option takes precedence. Each provider maps the three values to its own image settings.
+Use `fast` to try ideas quickly, `balanced` for everyday use, and `quality` for complex scenes or images where small details matter. Higher settings can take longer and cost more; results vary by provider.
+
+All three providers support these presets for generation and editing. You can override the default with the `quality` option on each request.
 
 ### Environment variables
 
