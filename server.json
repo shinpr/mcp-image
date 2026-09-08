@@ -8,13 +8,13 @@
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.13.2",
+  "version": "0.14.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.13.2",
+      "version": "0.14.0",
       "transport": {
         "type": "stdio"
       },
@@ -35,7 +35,7 @@
         },
         {
           "name": "OPENAI_API_KEY",
-          "description": "OpenAI API key for image generation when IMAGE_PROVIDER=openai. Requires OpenAI organization verification to access gpt-image-2 (https://platform.openai.com/settings/organization/general)",
+          "description": "OpenAI API key for image generation when IMAGE_PROVIDER=openai. Requires OpenAI organization verification to access GPT Image 2.5 (https://platform.openai.com/settings/organization/general)",
           "isRequired": false,
           "format": "string",
           "isSecret": true
@@ -94,7 +94,7 @@
     "prompt-enhancement",
     "gemini",
     "openai",
-    "gpt-image-2",
+    "gpt-image-2.5",
     "byteplus",
     "modelark",
     "seedream",

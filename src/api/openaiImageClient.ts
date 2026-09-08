@@ -20,32 +20,37 @@ import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
 
 type OpenAIImageSize = `${number}x${number}`
-type OpenAIImageQuality = 'low' | 'medium' | 'high'
-// The OpenAI guide documents flexible gpt-image-2 resolutions, while SDK types still
-// enumerate the older fixed GPT image sizes. The widened `size` is confined to
-// this file through `OpenAIImagesApi`, which the SDK's images resource satisfies.
-type OpenAIImageGenerateRequest = Omit<ImageGenerateParamsNonStreaming, 'size'> & {
+type OpenAIImageQuality = 'low' | 'high' | 'max'
+// GPT Image 2.5 supports flexible resolutions and max quality, while SDK types
+// still enumerate older sizes and quality settings. Keep this compatibility
+// boundary local: OpenAIImagesApi accepts SDK requests plus the documented 2.5 variant.
+type OpenAIImageGenerateRequest = Omit<ImageGenerateParamsNonStreaming, 'size' | 'quality'> & {
   size: OpenAIImageSize
+  quality: OpenAIImageQuality
 }
-type OpenAIImageEditRequest = Omit<ImageEditParamsNonStreaming, 'size'> & {
+type OpenAIImageEditRequest = Omit<ImageEditParamsNonStreaming, 'size' | 'quality'> & {
   size: OpenAIImageSize
+  quality: OpenAIImageQuality
 }
 
 interface OpenAIImagesApi {
   generate(
-    body: OpenAIImageGenerateRequest,
+    body: ImageGenerateParamsNonStreaming | OpenAIImageGenerateRequest,
     options?: { signal?: AbortSignal }
   ): Promise<ImagesResponse>
-  edit(body: OpenAIImageEditRequest, options?: { signal?: AbortSignal }): Promise<ImagesResponse>
+  edit(
+    body: ImageEditParamsNonStreaming | OpenAIImageEditRequest,
+    options?: { signal?: AbortSignal }
+  ): Promise<ImagesResponse>
 }
 type ImageEditApiParams = ImageApiParams & { inputImage: string }
 
 function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   switch (quality) {
     case 'quality':
-      return 'high'
+      return 'max'
     case 'balanced':
-      return 'medium'
+      return 'high'
     case 'fast':
       return 'low'
   }
@@ -65,7 +70,7 @@ function mapSize(params: ImageApiParams): OpenAIImageSize {
   const [width = 1, height = 1] = (params.aspectRatio ?? '1:1').split(':').map(Number)
   const ratio = Math.max(width, height) / Math.min(width, height)
   const requestedEdge = requestedLongEdge(params.imageSize, ratio)
-  // GPT Image 2: 16px increments, at most 3840px per edge and 8,294,400 pixels.
+  // GPT Image 2.5: 16px increments, at most 3840px per edge and 8,294,400 pixels.
   // Flooring keeps the pixel cap intact even for near-square 4K requests.
   const longEdge = Math.floor(Math.min(requestedEdge, Math.sqrt(8_294_400 * ratio)) / 16) * 16
   const shortEdge = Math.floor(longEdge / ratio / 16) * 16
@@ -83,7 +88,10 @@ function mimeTypeToExtension(mimeType: string): string {
   }
 }
 
-const OPENAI_IMAGE_MODEL = 'gpt-image-2'
+const OPENAI_IMAGE_MODELS = {
+  FLARE: 'gpt-image-2.5-flare',
+  SUNBURST: 'gpt-image-2.5-sunburst',
+} as const
 
 function hasInputImage(params: ImageApiParams): params is ImageEditApiParams {
   return typeof params.inputImage === 'string' && params.inputImage.length > 0
@@ -120,8 +128,6 @@ export function validateOpenAIOptions(
 }
 
 class OpenAIImageClientImpl implements ImageClient {
-  private readonly modelName = OPENAI_IMAGE_MODEL
-
   constructor(
     private readonly client: OpenAI,
     private readonly defaultQuality: ImageQuality = 'fast'
@@ -136,20 +142,34 @@ class OpenAIImageClientImpl implements ImageClient {
         return optionsResult
       }
 
-      const quality = mapQuality(params.quality ?? this.defaultQuality)
+      const effectiveQuality = params.quality ?? this.defaultQuality
+      const modelName =
+        effectiveQuality === 'quality' ? OPENAI_IMAGE_MODELS.SUNBURST : OPENAI_IMAGE_MODELS.FLARE
+      const quality = mapQuality(effectiveQuality)
       const size = mapSize(params)
       const outputFormat: ImageOutputFormat = params.preferredOutputFormat ?? 'png'
 
+      const request: OpenAIImageGenerateRequest = {
+        model: modelName,
+        prompt: params.prompt,
+        n: 1,
+        output_format: outputFormat,
+        quality,
+        size,
+      }
+      const images: OpenAIImagesApi = this.client.images
       const response = hasInputImage(params)
-        ? await this.editImage(params, quality, size, outputFormat)
-        : await this.createImage(params, quality, size, outputFormat)
+        ? await this.editImage(params, request)
+        : await images.generate(request, {
+            ...(params.signal && { signal: params.signal }),
+          })
 
       const firstImage = response.data?.[0]
       if (!firstImage?.b64_json) {
         return Err(
           new ImageAPIError('No image data returned from OpenAI image API', {
             provider: 'openai',
-            model: this.modelName,
+            model: modelName,
             stage: 'image_extraction',
             suggestion:
               'Retry the request or verify that the selected model returns base64 image data',
@@ -163,7 +183,7 @@ class OpenAIImageClientImpl implements ImageClient {
         return Err(
           new ImageAPIError('OpenAI image response did not match the requested output format', {
             provider: 'openai',
-            model: this.modelName,
+            model: modelName,
             stage: 'image_response',
             suggestion: 'Retry the request; the provider returned unexpected image bytes',
           })
@@ -173,7 +193,7 @@ class OpenAIImageClientImpl implements ImageClient {
       return Ok({
         imageData,
         metadata: {
-          model: this.modelName,
+          model: modelName,
           provider: 'openai',
           prompt: params.prompt,
           mimeType,
@@ -187,32 +207,9 @@ class OpenAIImageClientImpl implements ImageClient {
     }
   }
 
-  private async createImage(
-    params: ImageApiParams,
-    quality: OpenAIImageQuality,
-    size: OpenAIImageSize,
-    outputFormat: ImageOutputFormat
-  ): Promise<ImagesResponse> {
-    const request = {
-      model: this.modelName,
-      prompt: params.prompt,
-      n: 1,
-      output_format: outputFormat,
-      quality,
-      size,
-    }
-
-    const images: OpenAIImagesApi = this.client.images
-    return await images.generate(request, {
-      ...(params.signal && { signal: params.signal }),
-    })
-  }
-
   private async editImage(
     params: ImageEditApiParams,
-    quality: OpenAIImageQuality,
-    size: OpenAIImageSize,
-    outputFormat: ImageOutputFormat
+    request: OpenAIImageGenerateRequest
   ): Promise<ImagesResponse> {
     const mimeType = normalizeMimeType(params.inputImageMimeType ?? DEFAULT_MIME_TYPE)
     const inputFile = await toFile(
@@ -221,20 +218,13 @@ class OpenAIImageClientImpl implements ImageClient {
       { type: mimeType }
     )
 
-    const request = {
-      model: this.modelName,
-      prompt: params.prompt,
-      image: inputFile,
-      n: 1,
-      output_format: outputFormat,
-      quality,
-      size,
-    }
-
     const images: OpenAIImagesApi = this.client.images
-    return await images.edit(request, {
-      ...(params.signal && { signal: params.signal }),
-    })
+    return await images.edit(
+      { ...request, image: inputFile },
+      {
+        ...(params.signal && { signal: params.signal }),
+      }
+    )
   }
 
   private handleError(error: unknown, prompt: string): Result<never, ImageAPIError | NetworkError> {
@@ -276,7 +266,7 @@ class OpenAIImageClientImpl implements ImageClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Verify your OpenAI organization has been verified to use gpt-image-2 (https://platform.openai.com/settings/organization/general)'
+      return 'Verify your OpenAI organization has access to GPT Image 2.5 and has completed verification (https://platform.openai.com/settings/organization/general)'
     }
 
     if (lowerMessage.includes('forbidden') || lowerMessage.includes('permission')) {

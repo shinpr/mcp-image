@@ -64,7 +64,7 @@ describe('openaiImageClient', () => {
   })
 
   describe('OpenAIImageClient.generateImage', () => {
-    it('should generate image successfully with gpt-image-2', async () => {
+    it('should generate image successfully with gpt-image-2.5-flare', async () => {
       mockGenerate.mockResolvedValue({
         data: [
           {
@@ -85,7 +85,7 @@ describe('openaiImageClient', () => {
 
       expect(result.success).toBe(true)
       expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual({
-        model: 'gpt-image-2',
+        model: 'gpt-image-2.5-flare',
         prompt: 'Generate a beautiful landscape',
         n: 1,
         output_format: 'png',
@@ -94,7 +94,7 @@ describe('openaiImageClient', () => {
       })
       if (result.success) {
         expect(result.data.imageData).toEqual(PNG_BYTES)
-        expect(result.data.metadata.model).toBe('gpt-image-2')
+        expect(result.data.metadata.model).toBe('gpt-image-2.5-flare')
         expect(result.data.metadata.provider).toBe('openai')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
         expect(result.data.metadata.mimeType).toBe('image/png')
@@ -128,7 +128,7 @@ describe('openaiImageClient', () => {
         type: 'image/png',
       })
       expect(expectDefined(mockEdit.mock.calls[0], 'images.edit call')[0]).toEqual({
-        model: 'gpt-image-2',
+        model: 'gpt-image-2.5-flare',
         prompt: 'Make this image warmer',
         image: { name: 'input.png', type: 'image/png' },
         n: 1,
@@ -138,50 +138,65 @@ describe('openaiImageClient', () => {
       })
     })
 
-    it('should map balanced quality to medium OpenAI quality', async () => {
-      mockGenerate.mockResolvedValue({
-        data: [{ b64_json: PNG_BYTES.toString('base64') }],
-      })
+    describe.each([
+      ['fast', 'gpt-image-2.5-flare', 'low'],
+      ['balanced', 'gpt-image-2.5-flare', 'high'],
+      ['quality', 'gpt-image-2.5-sunburst', 'max'],
+    ] as const)('%s preset', (preset, model, quality) => {
+      it.each([
+        ['generate', mockGenerate, mockEdit, undefined],
+        ['edit', mockEdit, mockGenerate, PNG_BYTES.toString('base64')],
+      ] as const)(
+        'routes %s requests and reports the selected model',
+        async (_operation, mock, unusedMock, inputImage) => {
+          mock.mockResolvedValue({ data: [{ b64_json: PNG_BYTES.toString('base64') }] })
+          const client = createOpenAIImageClient({ ...testConfig, imageQuality: preset })
+          if (!client.success) {
+            throw client.error
+          }
 
-      const clientResult = createOpenAIImageClient(testConfig)
-      expect(clientResult.success).toBe(true)
-      if (!clientResult.success) {
-        return
-      }
+          const result = await client.data.generateImage({
+            prompt: 'Generate an image',
+            ...(inputImage && { inputImage }),
+          })
 
-      await clientResult.data.generateImage({
-        prompt: 'Generate an image',
-        quality: 'balanced',
-      })
-
-      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
-        expect.objectContaining({
-          quality: 'medium',
-        })
+          expect(result.success).toBe(true)
+          expect(mock).toHaveBeenCalledWith(
+            expect.objectContaining({ model, quality }),
+            expect.anything()
+          )
+          if (result.success) {
+            expect(result.data.metadata.model).toBe(model)
+          }
+          expect(unusedMock).not.toHaveBeenCalled()
+        }
       )
-    })
 
-    it('should map quality preset to high OpenAI quality', async () => {
-      mockGenerate.mockResolvedValue({
-        data: [{ b64_json: PNG_BYTES.toString('base64') }],
+      it('lets the request override the configured preset without changing the next request', async () => {
+        mockGenerate.mockResolvedValue({ data: [{ b64_json: PNG_BYTES.toString('base64') }] })
+        const client = createOpenAIImageClient({ ...testConfig, imageQuality: 'quality' })
+        if (!client.success) {
+          throw client.error
+        }
+
+        const result = await client.data.generateImage({ prompt: 'Override', quality: preset })
+        expect(mockGenerate).toHaveBeenNthCalledWith(
+          1,
+          expect.objectContaining({ model, quality }),
+          expect.anything()
+        )
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.metadata.model).toBe(model)
+        }
+
+        await client.data.generateImage({ prompt: 'Default again' })
+        expect(mockGenerate).toHaveBeenNthCalledWith(
+          2,
+          expect.objectContaining({ model: 'gpt-image-2.5-sunburst', quality: 'max' }),
+          expect.anything()
+        )
       })
-
-      const clientResult = createOpenAIImageClient(testConfig)
-      expect(clientResult.success).toBe(true)
-      if (!clientResult.success) {
-        return
-      }
-
-      await clientResult.data.generateImage({
-        prompt: 'Generate an image',
-        quality: 'quality',
-      })
-
-      expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual(
-        expect.objectContaining({
-          quality: 'high',
-        })
-      )
     })
 
     it('should preserve a 16:9 aspect ratio at the default size', async () => {
