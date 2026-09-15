@@ -9,6 +9,7 @@ export interface Config {
   geminiApiKey: string
   openaiApiKey: string
   arkApiKey: string
+  muapiApiKey: string
   imageOutputDir: string
   skipPromptEnhancement: boolean
   imageQuality: ImageQuality
@@ -45,7 +46,7 @@ function readEnv(name: string): string | undefined {
 }
 
 type ProviderCredentialConfig = {
-  configKey: 'geminiApiKey' | 'openaiApiKey' | 'arkApiKey'
+  configKey: 'geminiApiKey' | 'openaiApiKey' | 'arkApiKey' | 'muapiApiKey'
   environmentVariable: string
 }
 
@@ -61,6 +62,10 @@ const PROVIDER_CREDENTIALS = {
   seedream: {
     configKey: 'arkApiKey',
     environmentVariable: 'ARK_API_KEY',
+  },
+  muapi: {
+    configKey: 'muapiApiKey',
+    environmentVariable: 'MUAPI_API_KEY',
   },
 } as const satisfies Record<ImageProvider, ProviderCredentialConfig>
 
@@ -128,6 +133,7 @@ export function getConfig(): Result<Config, ConfigError> {
     geminiApiKey: readEnv('GEMINI_API_KEY') || '',
     openaiApiKey: readEnv('OPENAI_API_KEY') || '',
     arkApiKey: readEnv('ARK_API_KEY') || '',
+    muapiApiKey: readEnv('MUAPI_API_KEY') || '',
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',
     imageQuality: readEnv('IMAGE_QUALITY') || 'fast',

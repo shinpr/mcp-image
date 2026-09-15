@@ -32,6 +32,8 @@ describe('geminiClient', () => {
     imageProvider: 'gemini',
     geminiApiKey: 'test-api-key-12345',
     openaiApiKey: '',
+    arkApiKey: '',
+    muapiApiKey: '',
     imageOutputDir: './output',
     skipPromptEnhancement: false,
     imageQuality: 'fast',

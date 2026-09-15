@@ -30,6 +30,8 @@ describe('openaiImageClient', () => {
     imageProvider: 'openai',
     geminiApiKey: '',
     openaiApiKey: 'test-openai-api-key-12345',
+    arkApiKey: '',
+    muapiApiKey: '',
     imageOutputDir: './output',
     skipPromptEnhancement: false,
     imageQuality: 'fast',

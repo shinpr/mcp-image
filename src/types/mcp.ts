@@ -27,7 +27,7 @@ export const IMAGE_QUALITY_VALUES = ['fast', 'balanced', 'quality'] as const
 
 export type ImageQuality = (typeof IMAGE_QUALITY_VALUES)[number]
 
-export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream'] as const
+export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream', 'muapi'] as const
 
 export type ImageProvider = (typeof IMAGE_PROVIDER_VALUES)[number]
 

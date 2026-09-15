@@ -164,7 +164,7 @@ export class MCPServerImpl {
               fileName: {
                 type: 'string' as const,
                 description:
-                  'Use .png, .jpg, or .jpeg to request that output format from OpenAI or Seedream. Other or absent suffixes use the provider default; the saved filename is corrected to the actual image extension.',
+                  'Use .png, .jpg, or .jpeg to request that output format from OpenAI or Seedream. MuAPI uses the format returned by its CDN URL. Other or absent suffixes use the provider default; the saved filename is corrected to the actual image extension.',
               },
               inputImagePath: {
                 type: 'string' as const,
@@ -189,18 +189,18 @@ export class MCPServerImpl {
               useGoogleSearch: {
                 type: 'boolean' as const,
                 description:
-                  'Enable when using Gemini and the image requires current or time-sensitive web information. With OpenAI or Seedream, omit this option or set it to false.',
+                  'Enable when using Gemini and the image requires current or time-sensitive web information. With OpenAI, Seedream, or MuAPI, omit this option or set it to false.',
               },
               aspectRatio: {
                 type: 'string' as const,
                 description:
-                  'Set the requested output aspect ratio. Omit to use the provider default. OpenAI does not support 1:4, 1:8, 4:1, or 8:1.',
+                  'Set the requested output aspect ratio. Omit to use the provider default. OpenAI does not support 1:4, 1:8, 4:1, or 8:1; MuAPI supports 1:1, 16:9, and 9:16.',
                 enum: [...ASPECT_RATIO_VALUES],
               },
               imageSize: {
                 type: 'string' as const,
                 description:
-                  "Set the requested output size to 1K, 2K, or 4K. Omit to use the selected provider and quality preset's default. With Seedream, use 1K or 2K.",
+                  "Set the requested output size to 1K, 2K, or 4K. Omit to use the selected provider and quality preset's default. With Seedream, use 1K or 2K; with MuAPI, use 1K.",
                 enum: [...IMAGE_SIZE_VALUES],
               },
               purpose: {
@@ -254,17 +254,26 @@ export class MCPServerImpl {
     providerName: ImageProvider,
     provider: ImageProviderDefinition
   ): ProviderClients {
+    const supportsPromptEnhancement = Boolean(
+      provider.createTextClient && provider.promptGeneration
+    )
     const cached = this.clientsByProvider.get(providerName)
-    if (cached && (config.skipPromptEnhancement || cached.structuredPromptGenerator)) {
+    if (
+      cached &&
+      (config.skipPromptEnhancement ||
+        !supportsPromptEnhancement ||
+        cached.structuredPromptGenerator)
+    ) {
       return cached
     }
 
-    const structuredPromptGenerator = config.skipPromptEnhancement
-      ? null
-      : createStructuredPromptGenerator(
-          provider.createTextClient(config),
-          provider.promptGeneration.maxTokens
-        )
+    const structuredPromptGenerator =
+      !config.skipPromptEnhancement && provider.createTextClient && provider.promptGeneration
+        ? createStructuredPromptGenerator(
+            provider.createTextClient(config),
+            provider.promptGeneration.maxTokens
+          )
+        : null
 
     const clients: ProviderClients = {
       imageClient: cached?.imageClient ?? provider.createImageClient(config),

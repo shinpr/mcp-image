@@ -1,6 +1,6 @@
 # MCP Image Generator 🍌
 
-> Generate and edit images from Codex, Cursor, Claude Code, or any MCP client. mcp-image adds visual direction to your request before sending it to Gemini, OpenAI, or BytePlus Seedream.
+> Generate and edit images from Codex, Cursor, Claude Code, or any MCP client. mcp-image adds visual direction to your request before sending it to Gemini, OpenAI, or BytePlus Seedream, and can send generation-only requests to MuAPI.
 
 [![npm version](https://badge.fury.io/js/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
 [![npm downloads](https://img.shields.io/npm/dm/mcp-image.svg)](https://www.npmjs.com/package/mcp-image)
@@ -48,17 +48,18 @@ You need Node.js 22 or later, an MCP-compatible client, and an API key for one i
 
 ### 1. Get an API key
 
-All three providers generate and edit images. Gemini is the default and requires the least configuration.
+Gemini is the default and requires the least configuration. Gemini, OpenAI, and BytePlus Seedream generate and edit images; MuAPI supports image generation through its OpenAI-compatible endpoint and returns a hosted image URL.
 
 | Provider | Image size | Output format | Setup |
 |----------|------------|---------------|-------|
 | Gemini (default) | 1K, 2K, 4K | Automatic | [Get a key](https://aistudio.google.com/apikey), then set `GEMINI_API_KEY` |
 | OpenAI | 1K, 2K, 4K | PNG or JPEG | [Get a key](https://platform.openai.com/api-keys), then set `IMAGE_PROVIDER=openai` and `OPENAI_API_KEY` |
 | BytePlus Seedream | 1K, 2K | PNG or JPEG | [Get an AP region key](https://console.byteplus.com/ark/region:ark+ap-southeast-1/apikey), then set `IMAGE_PROVIDER=seedream` and `ARK_API_KEY` |
+| MuAPI | 1K; 1:1, 16:9, or 9:16 | Provider-returned image type | [Read the API docs](https://muapi.ai/docs/openai-compatible), then set `IMAGE_PROVIDER=muapi` and `MUAPI_API_KEY` |
 
 Google Search grounding is available with Gemini only. OpenAI may require organization verification before it can generate images.
 
-The examples below use Gemini. Replace the provider settings if you prefer OpenAI or Seedream.
+The examples below use Gemini. Replace the provider settings if you prefer OpenAI, Seedream, or MuAPI.
 
 ### 2. Configure your MCP client
 
@@ -153,7 +154,7 @@ See the [tool reference](#tool-reference) for the options your assistant can pas
 
 ## Configuration
 
-Changing the provider changes both prompt enhancement and image generation. The way you ask for an image stays the same.
+Changing the provider changes both prompt enhancement and image generation. The way you ask for an image stays the same. MuAPI exposes the documented image-generation route only, so the original prompt is sent as-is when MuAPI is selected; image editing and Google Search grounding are unavailable for MuAPI.
 
 ### Quality
 
@@ -165,16 +166,17 @@ IMAGE_QUALITY=balanced
 
 Use `fast` to try ideas quickly, `balanced` for everyday use, and `quality` for complex scenes or images where small details matter. Higher settings can take longer and cost more; results vary by provider.
 
-All three providers support these presets for generation and editing. You can override the default with the `quality` option on each request.
+Gemini, OpenAI, and Seedream support these presets for generation and editing. MuAPI uses its `flux-schnell` generation model; the preset is accepted for tool compatibility but does not change the MuAPI model. You can override the default with the `quality` option on each request.
 
 ### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `IMAGE_PROVIDER` | `gemini` | Default provider: `gemini`, `openai`, or `seedream` |
+| `IMAGE_PROVIDER` | `gemini` | Default provider: `gemini`, `openai`, `seedream`, or `muapi` |
 | `GEMINI_API_KEY` | - | API key for Gemini |
 | `OPENAI_API_KEY` | - | API key for OpenAI |
 | `ARK_API_KEY` | - | ModelArk AP API key for Seedream |
+| `MUAPI_API_KEY` | - | API key for [MuAPI](https://muapi.ai/docs/openai-compatible) |
 | `IMAGE_OUTPUT_DIR` | `./output` | Directory where generated images are saved; use an absolute path in MCP configuration |
 | `IMAGE_QUALITY` | `fast` | Default quality preset: `fast`, `balanced`, or `quality` |
 | `SKIP_PROMPT_ENHANCEMENT` | `false` | Set to `true` to send prompts through unchanged |
@@ -192,11 +194,11 @@ Your MCP client calls this tool for you. Open the reference when you need to che
 |-----------|------|----------|-------------|
 | `prompt` | string | Yes | Image description or editing instruction |
 | `quality` | string | No | `fast`, `balanced`, or `quality`; overrides `IMAGE_QUALITY` |
-| `provider` | string | No | `gemini`, `openai`, or `seedream`; overrides `IMAGE_PROVIDER` |
+| `provider` | string | No | `gemini`, `openai`, `seedream`, or `muapi`; overrides `IMAGE_PROVIDER` |
 | `inputImagePath` | string | No | Absolute path to an input image for editing |
-| `fileName` | string | No | Output filename; `.png`, `.jpg`, or `.jpeg` selects the format for OpenAI and Seedream |
-| `aspectRatio` | string | No | `1:1` (default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `1:8`, `4:1`, or `8:1` |
-| `imageSize` | string | No | `1K`, `2K`, or `4K`; availability depends on the provider |
+| `fileName` | string | No | Output filename; `.png`, `.jpg`, or `.jpeg` selects the format for OpenAI and Seedream; MuAPI uses the returned image type |
+| `aspectRatio` | string | No | `1:1` (default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `1:8`, `4:1`, or `8:1`; MuAPI supports `1:1`, `16:9`, and `9:16` |
+| `imageSize` | string | No | `1K`, `2K`, or `4K`; availability depends on the provider; MuAPI supports `1K` |
 | `blendImages` | boolean | No | Add blending guidance when combining visual elements |
 | `maintainCharacterConsistency` | boolean | No | Keep a character's appearance consistent across images |
 | `useWorldKnowledge` | boolean | No | Add context for historical figures, landmarks, and factual scenes |
@@ -214,6 +216,7 @@ Check that the key for the selected provider is present in the MCP server's envi
 - Gemini: `GEMINI_API_KEY`
 - OpenAI: `OPENAI_API_KEY`
 - Seedream: `ARK_API_KEY`
+- MuAPI: `MUAPI_API_KEY`
 
 Restart the MCP client after changing its configuration.
 
@@ -223,7 +226,7 @@ Use an absolute path and make sure the MCP server can read the file. Input image
 
 ### Provider rejects a request
 
-Check the requested size in the provider table. `useGoogleSearch` works with Gemini only, and Seedream does not support 4K. For OpenAI permission errors, check your [organization settings](https://platform.openai.com/settings/organization/general). For quota or rate-limit errors, check the selected provider account.
+Check the requested size in the provider table. `useGoogleSearch` works with Gemini only, Seedream does not support 4K, and MuAPI supports generation-only `flux-schnell` output at 1K in `1:1`, `16:9`, or `9:16`. For OpenAI permission errors, check your [organization settings](https://platform.openai.com/settings/organization/general). For MuAPI setup and quota errors, check the [MuAPI OpenAI-compatible API docs](https://muapi.ai/docs/openai-compatible) and selected account.
 
 ## Image Generation Prompt Skill
 

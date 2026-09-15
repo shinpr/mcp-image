@@ -290,7 +290,7 @@ describe('inputValidator', () => {
 
   describe('validateGenerateImageParams with provider', () => {
     it('should accept all valid provider values', () => {
-      const validProviders = ['gemini', 'openai', 'seedream'] as const
+      const validProviders = ['gemini', 'openai', 'seedream', 'muapi'] as const
 
       for (const provider of validProviders) {
         const result = validateGenerateImageParams({
@@ -313,6 +313,7 @@ describe('inputValidator', () => {
         expect(result.error.message).toContain('gemini')
         expect(result.error.message).toContain('openai')
         expect(result.error.message).toContain('seedream')
+        expect(result.error.message).toContain('muapi')
       }
     })
   })

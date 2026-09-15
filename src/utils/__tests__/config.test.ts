@@ -11,6 +11,7 @@ describe('config', () => {
     delete process.env.GEMINI_API_KEY
     delete process.env.OPENAI_API_KEY
     delete process.env.ARK_API_KEY
+    delete process.env.MUAPI_API_KEY
     delete process.env.IMAGE_OUTPUT_DIR
     delete process.env.IMAGE_QUALITY
   })
@@ -26,6 +27,7 @@ describe('config', () => {
         geminiApiKey: '',
         openaiApiKey: '',
         arkApiKey: '',
+        muapiApiKey: '',
         imageOutputDir: './output',
         skipPromptEnhancement: false,
         imageQuality: 'fast' as const,
@@ -48,6 +50,7 @@ describe('config', () => {
           geminiApiKey: 'valid-api-key-12345',
           openaiApiKey: '',
           arkApiKey: '',
+          muapiApiKey: '',
           imageOutputDir: './output',
           skipPromptEnhancement: false,
           imageQuality: quality,
@@ -65,6 +68,7 @@ describe('config', () => {
         geminiApiKey: 'valid-api-key-12345',
         openaiApiKey: '',
         arkApiKey: '',
+        muapiApiKey: '',
         imageOutputDir: './output',
         skipPromptEnhancement: false,
         imageQuality: 'invalid',
@@ -89,6 +93,7 @@ describe('config', () => {
       geminiApiKey: '',
       openaiApiKey: '',
       arkApiKey: '',
+      muapiApiKey: '',
       imageOutputDir: './output',
       skipPromptEnhancement: false,
       imageQuality: 'fast' as const,
@@ -98,6 +103,7 @@ describe('config', () => {
       ['gemini' as const, { geminiApiKey: 'x' }],
       ['openai' as const, { openaiApiKey: 'x' }],
       ['seedream' as const, { arkApiKey: 'x' }],
+      ['muapi' as const, { muapiApiKey: 'x' }],
     ])('should accept %s credentials without inferring a key format', (provider, credentials) => {
       const config = { ...configWithoutCredentials, ...credentials }
 
@@ -113,6 +119,8 @@ describe('config', () => {
       ['openai' as const, { openaiApiKey: ' \t\n ' }, 'OPENAI_API_KEY'],
       ['seedream' as const, { arkApiKey: '' }, 'ARK_API_KEY'],
       ['seedream' as const, { arkApiKey: ' \t\n ' }, 'ARK_API_KEY'],
+      ['muapi' as const, { muapiApiKey: '' }, 'MUAPI_API_KEY'],
+      ['muapi' as const, { muapiApiKey: ' \t\n ' }, 'MUAPI_API_KEY'],
     ])(
       'should guide the caller when %s credentials are missing',
       (provider, credentials, environmentVariable) => {
@@ -145,6 +153,7 @@ describe('config', () => {
           geminiApiKey: '',
           openaiApiKey: '',
           arkApiKey: '',
+          muapiApiKey: '',
           imageOutputDir: './output',
           imageQuality: 'fast',
         })
@@ -190,10 +199,24 @@ describe('config', () => {
       }
     })
 
+    it('should load the MuAPI provider and MUAPI_API_KEY from environment', () => {
+      process.env.IMAGE_PROVIDER = 'muapi'
+      process.env.MUAPI_API_KEY = 'test-muapi-api-key'
+
+      const result = getConfig()
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.imageProvider).toBe('muapi')
+        expect(result.data.muapiApiKey).toBe('test-muapi-api-key')
+      }
+    })
+
     it.each([
       ['GEMINI_API_KEY', 'geminiApiKey' as const],
       ['OPENAI_API_KEY', 'openaiApiKey' as const],
       ['ARK_API_KEY', 'arkApiKey' as const],
+      ['MUAPI_API_KEY', 'muapiApiKey' as const],
     ])('should preserve %s exactly as configured', (environmentVariable, configKey) => {
       const credential = ' \ttest-api-key\n '
       process.env[environmentVariable] = credential

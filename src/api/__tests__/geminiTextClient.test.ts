@@ -46,6 +46,8 @@ describe('GeminiTextClient', () => {
       imageProvider: 'gemini',
       geminiApiKey: 'test-api-key',
       openaiApiKey: '',
+      arkApiKey: '',
+      muapiApiKey: '',
       imageOutputDir: './test-output',
       skipPromptEnhancement: false,
       imageQuality: 'fast',

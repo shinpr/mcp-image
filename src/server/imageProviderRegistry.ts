@@ -1,6 +1,7 @@
 import { createGeminiClient } from '../api/geminiClient.js'
 import { createGeminiTextClient } from '../api/geminiTextClient.js'
 import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
+import { createMuapiImageClient, validateMuapiCapabilities } from '../api/muapiImageClient.js'
 import { createOpenAIImageClient, validateOpenAIOptions } from '../api/openaiImageClient.js'
 import { createOpenAITextClient } from '../api/openaiTextClient.js'
 import {
@@ -16,10 +17,10 @@ import type { Config } from '../utils/config.js'
 type ImageOptions = Omit<ImageApiParams, 'prompt'>
 
 export interface ImageProviderDefinition {
-  readonly promptGeneration: Readonly<{
+  readonly promptGeneration?: Readonly<{
     maxTokens: number
   }>
-  createTextClient(config: Config): TextClient
+  createTextClient?(config: Config): TextClient
   createImageClient(config: Config): ImageClient
   validateImageOptions?(options: ImageOptions, config: Config): void
 }
@@ -51,6 +52,12 @@ const IMAGE_PROVIDERS = {
     createImageClient: (config): ImageClient => unwrap(createSeedreamImageClient(config)),
     validateImageOptions: (options, config): void => {
       unwrap(validateSeedreamCapabilities(options, config.imageQuality))
+    },
+  },
+  muapi: {
+    createImageClient: (config): ImageClient => unwrap(createMuapiImageClient(config)),
+    validateImageOptions: (options): void => {
+      unwrap(validateMuapiCapabilities(options))
     },
   },
 } satisfies Record<ImageProvider, ImageProviderDefinition>

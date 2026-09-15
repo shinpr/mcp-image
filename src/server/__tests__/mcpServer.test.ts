@@ -176,6 +176,7 @@ describe('MCP Server', () => {
   let originalArkApiKey: string | undefined
   let originalImageProvider: string | undefined
   let originalOpenAIApiKey: string | undefined
+  let originalMuapiApiKey: string | undefined
   let originalSkipPromptEnhancement: string | undefined
 
   beforeEach(() => {
@@ -184,10 +185,12 @@ describe('MCP Server', () => {
     originalArkApiKey = process.env.ARK_API_KEY
     originalImageProvider = process.env.IMAGE_PROVIDER
     originalOpenAIApiKey = process.env.OPENAI_API_KEY
+    originalMuapiApiKey = process.env.MUAPI_API_KEY
     originalSkipPromptEnhancement = process.env.SKIP_PROMPT_ENHANCEMENT
     delete process.env.IMAGE_PROVIDER
     process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
     delete process.env.OPENAI_API_KEY
+    delete process.env.MUAPI_API_KEY
     delete process.env.ARK_API_KEY
     delete process.env.SKIP_PROMPT_ENHANCEMENT
     process.env.IMAGE_OUTPUT_DIR = './test-output'
@@ -208,6 +211,11 @@ describe('MCP Server', () => {
       process.env.OPENAI_API_KEY = originalOpenAIApiKey
     } else {
       delete process.env.OPENAI_API_KEY
+    }
+    if (originalMuapiApiKey !== undefined) {
+      process.env.MUAPI_API_KEY = originalMuapiApiKey
+    } else {
+      delete process.env.MUAPI_API_KEY
     }
     if (originalArkApiKey !== undefined) {
       process.env.ARK_API_KEY = originalArkApiKey
@@ -302,7 +310,7 @@ describe('MCP Server', () => {
     ])
     expect(schema.properties.imageSize.enum).toEqual(['1K', '2K', '4K'])
     expect(schema.properties.quality.enum).toEqual(['fast', 'balanced', 'quality'])
-    expect(schema.properties.provider.enum).toEqual(['gemini', 'openai', 'seedream'])
+    expect(schema.properties.provider.enum).toEqual(['gemini', 'openai', 'seedream', 'muapi'])
   })
 
   it('should return file URI when no fileName is specified', async () => {
@@ -558,6 +566,13 @@ describe('MCP Server', () => {
       configuredDefault: 'seedream' as const,
       expectedProvider: 'seedream',
       expectedEnvironmentVariable: 'ARK_API_KEY',
+    },
+    {
+      route: 'configured MuAPI default provider',
+      requestProvider: undefined,
+      configuredDefault: 'muapi' as const,
+      expectedProvider: 'muapi',
+      expectedEnvironmentVariable: 'MUAPI_API_KEY',
     },
     {
       route: 'built-in default provider',

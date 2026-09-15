@@ -15,6 +15,7 @@ const testConfig: Config = {
   geminiApiKey: '',
   openaiApiKey: '',
   arkApiKey: DUMMY_API_KEY,
+  muapiApiKey: '',
   imageOutputDir: './output',
   skipPromptEnhancement: false,
   imageQuality: 'fast',
