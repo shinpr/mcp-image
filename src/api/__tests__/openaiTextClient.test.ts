@@ -60,10 +60,11 @@ describe('openaiTextClient', () => {
     expect(result.success).toBe(true)
     expect(mockResponsesCreate).toHaveBeenCalledWith(
       {
-        model: 'gpt-5.4-nano',
+        model: 'gpt-5.6-luna',
         input: 'make a product photo',
         instructions: 'Enhance image prompts',
         max_output_tokens: 1000,
+        reasoning: { effort: 'none' },
         temperature: 0.2,
         top_p: 0.95,
       },
