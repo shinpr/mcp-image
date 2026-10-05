@@ -25,7 +25,7 @@ interface OpenAIResponsesApi {
   ): Promise<OpenAIResponse>
 }
 
-const OPENAI_TEXT_MODEL = 'gpt-5.4-nano'
+const OPENAI_TEXT_MODEL = 'gpt-5.6-luna'
 
 class OpenAITextClientImpl implements TextClient {
   private readonly client: OpenAI
@@ -57,6 +57,8 @@ class OpenAITextClientImpl implements TextClient {
           input: buildOpenAICompatibleInput(prompt, config),
           ...(config.systemInstruction && { instructions: config.systemInstruction }),
           max_output_tokens: config.maxTokens ?? 8192,
+          // temperature/top_p are rejected unless reasoning effort is 'none'
+          reasoning: { effort: 'none' },
           temperature: config.temperature ?? 0.7,
           top_p: config.topP ?? 0.95,
         },
