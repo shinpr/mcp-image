@@ -165,7 +165,7 @@ function resetTransportDoubles(): void {
   transports.openAIConstructorOptions.length = 0
 
   transports.googleGenerateContent.mockImplementation(async (params: { model?: string }) => {
-    if (params.model === 'gemini-2.5-flash') {
+    if (params.model === 'gemini-3.8-flash') {
       if (transports.googleTextError) {
         throw transports.googleTextError
       }
