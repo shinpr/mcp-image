@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai'
+import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
@@ -10,7 +10,6 @@ import { type GenerationConfig, MAX_TEXT_PROMPT_LENGTH, type TextClient } from '
 export type GeminiTextClient = TextClient
 
 const DEFAULT_GENERATION_CONFIG = {
-  temperature: 0.7,
   maxTokens: 8192,
   timeout: 15000,
 } as const
@@ -36,12 +35,9 @@ interface GeminiAIInstance {
           }>
       config?: {
         systemInstruction?: string
-        temperature?: number
         maxOutputTokens?: number
-        topP?: number
-        topK?: number
         thinkingConfig?: {
-          thinkingBudget: number
+          thinkingLevel: ThinkingLevel
         }
         abortSignal?: AbortSignal
       }
@@ -77,7 +73,7 @@ function buildRequestContents(prompt: string, config: GenerationConfig): Request
 }
 
 class GeminiTextClientImpl implements GeminiTextClient {
-  private readonly modelName = 'gemini-2.5-flash'
+  private readonly modelName = 'gemini-3.8-flash'
   private readonly genai: GeminiAIInstance
 
   constructor(config: Config) {
@@ -119,12 +115,10 @@ class GeminiTextClientImpl implements GeminiTextClient {
           ...(config.systemInstruction !== undefined && {
             systemInstruction: config.systemInstruction,
           }),
-          temperature: config.temperature || 0.7,
+          // Sampling parameters are not sent: Gemini 3 ignores them and future models reject them
           maxOutputTokens: config.maxTokens || 8192,
-          topP: config.topP ?? 0.95,
-          topK: config.topK ?? 40,
           thinkingConfig: {
-            thinkingBudget: 0,
+            thinkingLevel: ThinkingLevel.LOW,
           },
           abortSignal: config.signal
             ? AbortSignal.any([config.signal, timeoutSignal])

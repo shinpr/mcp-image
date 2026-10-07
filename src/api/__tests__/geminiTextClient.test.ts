@@ -6,13 +6,17 @@ import { createGeminiTextClient } from '../geminiTextClient'
 
 const mockGenerateContent = vi.fn()
 
-vi.mock('@google/genai', () => ({
-  GoogleGenAI: class {
-    models = {
-      generateContent: mockGenerateContent,
-    }
-  },
-}))
+vi.mock('@google/genai', async (importActual) => {
+  const actual = await importActual<typeof import('@google/genai')>()
+  return {
+    ...actual,
+    GoogleGenAI: class {
+      models = {
+        generateContent: mockGenerateContent,
+      }
+    },
+  }
+})
 
 mockGenerateContent.mockImplementation((params: { contents: string }) => {
   const prompt = typeof params.contents === 'string' ? params.contents : ''
@@ -74,24 +78,36 @@ describe('GeminiTextClient', () => {
 
     it('passes generation configuration to the Gemini SDK', async () => {
       const result = await client.generateText('test prompt', {
-        temperature: 0.1,
         maxTokens: 384,
-        topP: 0.8,
-        topK: 20,
       })
 
       expect(result.success).toBe(true)
       expect(mockGenerateContent).toHaveBeenCalledWith(
         expect.objectContaining({
+          model: 'gemini-3.8-flash',
           contents: 'test prompt',
           config: expect.objectContaining({
-            temperature: 0.1,
             maxOutputTokens: 384,
-            topP: 0.8,
-            topK: 20,
+            thinkingConfig: { thinkingLevel: 'LOW' },
           }),
         })
       )
+    })
+
+    it('does not send sampling parameters that Gemini 3 models reject', async () => {
+      const result = await client.generateText('test prompt', {
+        temperature: 0.1,
+        topP: 0.8,
+        topK: 20,
+      })
+
+      expect(result.success).toBe(true)
+      const requestConfig = mockGenerateContent.mock.calls[0]?.[0]?.config
+      expect(requestConfig).toBeDefined()
+      expect(requestConfig).not.toHaveProperty('temperature')
+      expect(requestConfig).not.toHaveProperty('topP')
+      expect(requestConfig).not.toHaveProperty('topK')
+      expect(requestConfig).not.toHaveProperty('thinkingConfig.thinkingBudget')
     })
   })
 

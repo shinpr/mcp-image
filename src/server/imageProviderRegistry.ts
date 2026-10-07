@@ -33,7 +33,7 @@ function unwrap<T, E extends Error>(result: Result<T, E>): T {
 
 const IMAGE_PROVIDERS = {
   gemini: {
-    promptGeneration: { maxTokens: 1000 },
+    promptGeneration: { maxTokens: 2000 },
     createTextClient: (config): TextClient => unwrap(createGeminiTextClient(config)),
     createImageClient: (config): ImageClient => unwrap(createGeminiClient(config)),
   },
