@@ -12,7 +12,7 @@ describe('ResponseBuilder', () => {
   const makeGenerationResult = (mimeType: string): GeneratedImageResult => ({
     imageData: Buffer.from('fake-image-data'),
     metadata: {
-      model: 'gemini-3.1-flash-image',
+      model: 'gemini-nano-banana-2.1',
       prompt: 'test prompt',
       mimeType,
       timestamp: new Date('2025-08-28T12:00:00Z'),

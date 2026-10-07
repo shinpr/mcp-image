@@ -31,6 +31,11 @@ interface GeminiClientInstance {
   }
 }
 
+const THINKING_LEVEL_BY_QUALITY: Partial<Record<ImageQuality, ThinkingLevel>> = {
+  fast: ThinkingLevel.MEDIUM,
+  balanced: ThinkingLevel.HIGH,
+}
+
 class GeminiClientImpl implements ImageClient {
   constructor(
     private readonly genai: GeminiClientInstance,
@@ -70,6 +75,7 @@ class GeminiClientImpl implements ImageClient {
       const effectiveQuality = params.quality ?? this.defaultQuality
 
       const modelName = effectiveQuality === 'quality' ? GEMINI_MODELS.PRO : GEMINI_MODELS.FLASH
+      const thinkingLevel = THINKING_LEVEL_BY_QUALITY[effectiveQuality]
 
       const imageConfig: ImageConfig = {}
       if (params.aspectRatio) {
@@ -83,9 +89,7 @@ class GeminiClientImpl implements ImageClient {
         ...(params.signal && { abortSignal: params.signal }),
         ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
         responseModalities: ['IMAGE'],
-        ...(effectiveQuality === 'balanced' && {
-          thinkingConfig: { thinkingLevel: ThinkingLevel.HIGH },
-        }),
+        ...(thinkingLevel && { thinkingConfig: { thinkingLevel } }),
         // Google Search grounding (web + image search) must live under config.tools;
         // a top-level `tools` field is not part of the generateContent contract.
         ...(params.useGoogleSearch && {

@@ -102,7 +102,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
+        expect(result.data.metadata.model).toBe('gemini-nano-banana-2.1')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
         expect(result.data.metadata.mimeType).toBe('image/png')
       }
@@ -149,7 +149,7 @@ describe('geminiClient', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageData).toBeInstanceOf(Buffer)
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
+        expect(result.data.metadata.model).toBe('gemini-nano-banana-2.1')
         expect(result.data.metadata.prompt).toBe('Enhance this image')
         expect(result.data.metadata.mimeType).toBe('image/jpeg')
       }
@@ -717,7 +717,7 @@ describe('geminiClient', () => {
       },
     }
 
-    it('should use gemini-3.1-flash-image for fast preset (default)', async () => {
+    it('should use gemini-nano-banana-2.1 with medium thinking for fast preset (default)', async () => {
       mockGeminiClientInstance.models.generateContent = vi
         .fn()
         .mockResolvedValue(mockSuccessResponse)
@@ -733,19 +733,19 @@ describe('geminiClient', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
+        expect(result.data.metadata.model).toBe('gemini-nano-banana-2.1')
       }
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3.1-flash-image',
-          config: expect.not.objectContaining({
-            thinkingConfig: expect.anything(),
+          model: 'gemini-nano-banana-2.1',
+          config: expect.objectContaining({
+            thinkingConfig: { thinkingLevel: 'MEDIUM' },
           }),
         })
       )
     })
 
-    it('should use gemini-3.1-flash-image with thinkingConfig for balanced preset', async () => {
+    it('should use gemini-nano-banana-2.1 with thinkingConfig for balanced preset', async () => {
       mockGeminiClientInstance.models.generateContent = vi
         .fn()
         .mockResolvedValue(mockSuccessResponse)
@@ -762,11 +762,11 @@ describe('geminiClient', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
+        expect(result.data.metadata.model).toBe('gemini-nano-banana-2.1')
       }
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3.1-flash-image',
+          model: 'gemini-nano-banana-2.1',
           config: expect.objectContaining({
             thinkingConfig: { thinkingLevel: 'HIGH' },
           }),
@@ -848,11 +848,11 @@ describe('geminiClient', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.metadata.model).toBe('gemini-3.1-flash-image')
+        expect(result.data.metadata.model).toBe('gemini-nano-banana-2.1')
       }
       expect(mockGeminiClientInstance.models.generateContent).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gemini-3.1-flash-image',
+          model: 'gemini-nano-banana-2.1',
           config: expect.objectContaining({
             thinkingConfig: { thinkingLevel: 'HIGH' },
           }),
