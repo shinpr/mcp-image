@@ -8,13 +8,13 @@
     "url": "https://github.com/shinpr/mcp-image",
     "source": "github"
   },
-  "version": "0.16.0",
+  "version": "0.17.0",
   "packages": [
     {
       "registryType": "npm",
       "registryBaseUrl": "https://registry.npmjs.org",
       "identifier": "mcp-image",
-      "version": "0.16.0",
+      "version": "0.17.0",
       "transport": {
         "type": "stdio"
       },
@@ -99,7 +99,7 @@
     "modelark",
     "seedream",
     "nano-banana",
-    "nano-banana-2",
+    "nano-banana-2.1",
     "nano-banana-pro",
     "google-ai",
     "ai-tools",

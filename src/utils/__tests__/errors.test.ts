@@ -8,7 +8,7 @@ describe('GeminiAPIError', () => {
 
       const suggestion = error.suggestion
 
-      expect(suggestion).toContain('gemini-3.1-flash-image')
+      expect(suggestion).toContain('gemini-nano-banana-2.1')
       expect(suggestion).toContain('gemini-3-pro-image')
     })
 

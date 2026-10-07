@@ -32,7 +32,7 @@ export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream'] as const
 export type ImageProvider = (typeof IMAGE_PROVIDER_VALUES)[number]
 
 export const GEMINI_MODELS = {
-  FLASH: 'gemini-3.1-flash-image',
+  FLASH: 'gemini-nano-banana-2.1',
   PRO: 'gemini-3-pro-image',
 } as const
 
