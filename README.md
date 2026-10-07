@@ -18,7 +18,7 @@ Before generating an image, mcp-image rewrites short requests into more specific
 
 **mcp-image sends to the image model:**
 
-> "... a beautifully roasted whole chicken, **golden-brown and glistening**, resting on a rustic wooden cutting board. One leg is partially carved, revealing **tender, succulent white meat and rich, glistening juices pooling** around the carving knife ... **shallow depth of field** focused on the carved chicken."
+> "... a freshly roasted whole chicken resting on a rustic, seasoned wooden carving board. The chicken features **deeply bronzed, blistered, and crispy skin** ... It is **partway carved, with one breast cleanly sliced open** to reveal **tender, steaming-hot white meat glistening with natural juices pooling** slightly onto the board ... **shallow depth of field** with a softly blurred background."
 
 ![Roast chicken, generated with prompt enhancement](assets/roast-chicken-optimized.jpg)
 
@@ -27,9 +27,9 @@ Before generating an image, mcp-image rewrites short requests into more specific
 What carried through:
 
 - `for a recipe site`: one clear subject, with everything else kept subordinate
-- `actually cooked`: uneven browning and juices across the board
-- `partway through being carved`: the cut face and slices beside it
-- `how juicy it is`: close framing and shallow depth of field around the cut
+- `actually cooked`: blistered, uneven browning, rising steam, and drippings on the knife
+- `partway through being carved`: one breast sliced open, with the cut piece still resting against the bird
+- `how juicy it is`: juices pooling on the board and shallow depth of field around the cut
 
 <details>
 <summary>Compare the same request with prompt enhancement turned off</summary>
