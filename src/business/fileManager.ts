@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { constants as fsConstants, mkdirSync } from 'node:fs'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { MAX_IMAGE_SIZE } from '../types/image.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { FileOperationError, InputValidationError, SecurityError } from '../utils/errors.js'
@@ -11,7 +12,6 @@ import {
   getMimeTypeFromExtension,
   SUPPORTED_EXTENSIONS,
 } from '../utils/mimeUtils.js'
-import { MAX_IMAGE_SIZE } from './inputValidator.js'
 
 const FILE_NAME_PREFIX = 'image' as const
 const RANDOM_BYTES_LENGTH = 4 as const

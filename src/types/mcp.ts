@@ -39,9 +39,7 @@ export const GEMINI_MODELS = {
 export interface GenerateImageParams {
   prompt: string
   fileName?: string
-  inputImagePath?: string
-  inputImage?: string
-  inputImageMimeType?: string
+  inputImagePaths?: string[]
   blendImages?: boolean
   maintainCharacterConsistency?: boolean
   useWorldKnowledge?: boolean

@@ -1,3 +1,4 @@
+import type { ReferenceImage } from '../types/image.js'
 import type { Result } from '../types/result.js'
 import type { GeminiAPIError, ImageAPIError, NetworkError } from '../utils/errors.js'
 
@@ -9,8 +10,7 @@ export interface GenerationConfig {
   maxTokens?: number
   timeout?: number
   systemInstruction?: string
-  inputImage?: string
-  inputImageMimeType?: string
+  inputImages?: ReferenceImage[]
   topP?: number
   topK?: number
 }

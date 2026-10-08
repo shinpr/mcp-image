@@ -1,3 +1,4 @@
+import type { ReferenceImage } from '../types/image.js'
 import type { AspectRatio, ImageOutputFormat, ImageQuality, ImageSize } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import type { GeminiAPIError, ImageAPIError, NetworkError } from '../utils/errors.js'
@@ -17,8 +18,7 @@ export interface ImageGenerationMetadata {
 export interface ImageApiParams {
   prompt: string
   signal?: AbortSignal
-  inputImage?: string
-  inputImageMimeType?: string
+  inputImages?: ReferenceImage[]
   aspectRatio?: AspectRatio
   imageSize?: ImageSize
   useGoogleSearch?: boolean

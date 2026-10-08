@@ -238,12 +238,19 @@ describe('MCP Server', () => {
     expect(toolsList.tools).toHaveLength(1)
     expect(toolsList.tools[0].name).toBe('generate_image')
     expect(toolsList.tools[0].description).toMatch(/generate a new image/i)
-    expect(toolsList.tools[0].description).toMatch(/edit an existing image/i)
-    expect(toolsList.tools[0].description).toContain('inputImagePath')
+    expect(toolsList.tools[0].description).toMatch(/edit and combine reference images/i)
+    expect(toolsList.tools[0].description).toContain('inputImagePaths')
     expect(toolsList.tools[0].description).toMatch(/file resource/i)
 
     const schema = toolsList.tools[0].inputSchema
     expect(schema.type).toBe('object')
+    expect(schema.properties).not.toHaveProperty('inputImagePath')
+    expect(schema.properties?.inputImagePaths).toMatchObject({
+      type: 'array',
+      minItems: 1,
+      maxItems: 16,
+      items: { type: 'string', minLength: 1 },
+    })
     expect(schema.properties).toHaveProperty('prompt')
     expect(schema.properties?.prompt?.type).toBe('string')
     expect(schema.properties?.prompt?.description).toMatch(/generate|edit/i)

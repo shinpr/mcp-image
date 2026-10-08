@@ -1,6 +1,7 @@
 import { createGeminiClient } from '../api/geminiClient.js'
 import { createGeminiTextClient } from '../api/geminiTextClient.js'
 import type { ImageApiParams, ImageClient } from '../api/imageClient.js'
+import { validateInputImages } from '../api/inputImages.js'
 import { createOpenAIImageClient, validateOpenAIOptions } from '../api/openaiImageClient.js'
 import { createOpenAITextClient } from '../api/openaiTextClient.js'
 import {
@@ -36,6 +37,9 @@ const IMAGE_PROVIDERS = {
     promptGeneration: { maxTokens: 2000 },
     createTextClient: (config): TextClient => unwrap(createGeminiTextClient(config)),
     createImageClient: (config): ImageClient => unwrap(createGeminiClient(config)),
+    validateImageOptions: (options): void => {
+      unwrap(validateInputImages('gemini', options.inputImages))
+    },
   },
   openai: {
     promptGeneration: { maxTokens: 1000 },

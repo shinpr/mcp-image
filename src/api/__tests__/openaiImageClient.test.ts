@@ -119,18 +119,17 @@ describe('openaiImageClient', () => {
       const inputImage = Buffer.from('input-image-data').toString('base64')
       const result = await clientResult.data.generateImage({
         prompt: 'Make this image warmer',
-        inputImage,
-        inputImageMimeType: 'image/png',
+        inputImages: [{ data: inputImage, mimeType: 'image/png' }],
       })
 
       expect(result.success).toBe(true)
-      expect(mockToFile).toHaveBeenCalledWith(Buffer.from('input-image-data'), 'input.png', {
+      expect(mockToFile).toHaveBeenCalledWith(Buffer.from('input-image-data'), 'input-1.png', {
         type: 'image/png',
       })
       expect(expectDefined(mockEdit.mock.calls[0], 'images.edit call')[0]).toEqual({
         model: 'gpt-image-2.5-flare',
         prompt: 'Make this image warmer',
-        image: { name: 'input.png', type: 'image/png' },
+        image: [{ name: 'input.png', type: 'image/png' }],
         n: 1,
         output_format: 'png',
         quality: 'low',
@@ -157,7 +156,7 @@ describe('openaiImageClient', () => {
 
           const result = await client.data.generateImage({
             prompt: 'Generate an image',
-            ...(inputImage && { inputImage }),
+            ...(inputImage && { inputImages: [{ data: inputImage, mimeType: 'image/png' }] }),
           })
 
           expect(result.success).toBe(true)
@@ -354,8 +353,9 @@ describe('openaiImageClient', () => {
 
       const result = await clientResult.data.generateImage({
         prompt: 'Edit as JPEG',
-        inputImage: Buffer.from('input-image-data').toString('base64'),
-        inputImageMimeType: 'image/png',
+        inputImages: [
+          { data: Buffer.from('input-image-data').toString('base64'), mimeType: 'image/png' },
+        ],
         preferredOutputFormat: 'jpeg',
       })
 

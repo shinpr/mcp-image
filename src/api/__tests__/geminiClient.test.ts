@@ -41,6 +41,26 @@ describe('geminiClient', () => {
     vi.clearAllMocks()
   })
 
+  it('rejects combined inline payloads over 20 MB before calling the SDK', async () => {
+    const client = createGeminiClient(testConfig)
+    if (!client.success) {
+      throw client.error
+    }
+    const data = Buffer.alloc(8 * 1024 * 1024).toString('base64')
+    const result = await client.data.generateImage({
+      prompt: 'use both images',
+      inputImages: [
+        { data, mimeType: 'image/png' },
+        { data, mimeType: 'image/jpeg' },
+      ],
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.message).toContain('20 MB')
+    }
+    expect(mockGeminiClientInstance.models.generateContent).not.toHaveBeenCalled()
+  })
+
   describe('createGeminiClient', () => {
     it('should create client with correct model configuration', () => {
       const result = createGeminiClient(testConfig)
@@ -143,7 +163,7 @@ describe('geminiClient', () => {
 
       const result = await client.generateImage({
         prompt: 'Enhance this image',
-        inputImage: inputImageBase64,
+        inputImages: [{ data: inputImageBase64, mimeType: 'image/png' }],
       })
 
       expect(result.success).toBe(true)

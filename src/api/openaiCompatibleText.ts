@@ -2,7 +2,6 @@ import type { ResponseCreateParamsNonStreaming } from 'openai/resources/response
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { ImageAPIError } from '../utils/errors.js'
-import { DEFAULT_MIME_TYPE, normalizeMimeType } from '../utils/mimeUtils.js'
 import { type GenerationConfig, MAX_TEXT_PROMPT_LENGTH } from './textClient.js'
 
 type OpenAICompatibleInput = NonNullable<ResponseCreateParamsNonStreaming['input']>
@@ -11,11 +10,9 @@ export function buildOpenAICompatibleInput(
   prompt: string,
   config: GenerationConfig
 ): OpenAICompatibleInput {
-  if (!config.inputImage) {
+  if (!config.inputImages?.length) {
     return prompt
   }
-
-  const mimeType = normalizeMimeType(config.inputImageMimeType ?? DEFAULT_MIME_TYPE)
 
   return [
     {
@@ -25,11 +22,11 @@ export function buildOpenAICompatibleInput(
           type: 'input_text' as const,
           text: prompt,
         },
-        {
+        ...config.inputImages.map(({ data, mimeType }) => ({
           type: 'input_image' as const,
-          image_url: `data:${mimeType};base64,${config.inputImage}`,
+          image_url: `data:${mimeType};base64,${data}`,
           detail: 'auto' as const,
-        },
+        })),
       ],
     },
   ]

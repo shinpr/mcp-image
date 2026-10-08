@@ -280,8 +280,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: inputImage, mimeType: 'image/png' }],
     })
 
     expect(result.success).toBe(true)
@@ -326,8 +325,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage: PRIVATE_INPUT_IMAGE,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
       preferredOutputFormat: 'jpeg',
     })
 
@@ -357,22 +355,21 @@ describe('seedreamImageClient', () => {
     },
     {
       name: 'input image without MIME',
-      params: { inputImage: PNG_BYTES.toString('base64') },
+      params: { inputImages: [{ data: PNG_BYTES.toString('base64') }] },
     },
     {
       name: 'MIME without input image',
-      params: { inputImageMimeType: 'image/png' },
+      params: { inputImages: [{ mimeType: 'image/png' }] },
     },
     {
       name: 'unsupported editing MIME',
       params: {
-        inputImage: PNG_BYTES.toString('base64'),
-        inputImageMimeType: 'image/gif',
+        inputImages: [{ data: PNG_BYTES.toString('base64'), mimeType: 'image/gif' }],
       },
     },
     {
       name: 'malformed editing base64',
-      params: { inputImage: '***', inputImageMimeType: 'image/png' },
+      params: { inputImages: [{ data: '***', mimeType: 'image/png' }] },
     },
     {
       name: 'unknown quality',
@@ -437,8 +434,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage: largePng.toString('base64'),
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: largePng.toString('base64'), mimeType: 'image/png' }],
     })
 
     expect(result.success).toBe(true)
@@ -570,8 +566,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage: PRIVATE_INPUT_IMAGE,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
     })
 
     expect(result.success).toBe(false)
@@ -728,8 +723,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage: PRIVATE_INPUT_IMAGE,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
     })
 
     expect(result.success).toBe(false)
@@ -766,8 +760,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage: PRIVATE_INPUT_IMAGE,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
     })
 
     expect(result.success).toBe(false)
@@ -792,8 +785,7 @@ describe('seedreamImageClient', () => {
 
     const result = await createClient().generateImage({
       prompt: PRIVATE_PROMPT,
-      inputImage: PRIVATE_INPUT_IMAGE,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
     })
 
     expect(result.success).toBe(false)

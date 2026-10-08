@@ -1,4 +1,5 @@
 import type { TextClient } from '../api/textClient.js'
+import type { ReferenceImage } from '../types/image.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { GeminiAPIError } from '../utils/errors.js'
@@ -47,10 +48,9 @@ export interface FeatureFlags {
 export interface StructuredPromptOptions {
   /** Defaults to no feature flags. */
   features?: FeatureFlags
-  /** Base64 image data; when present the editing system instruction is used. */
-  inputImageData?: string
+  /** Ordered reference images; when present the existing editing instruction is used. */
+  inputImages?: ReferenceImage[]
   purpose?: string
-  inputImageMimeType?: string
   signal?: AbortSignal
 }
 
@@ -71,7 +71,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
     userPrompt: string,
     options: StructuredPromptOptions = {}
   ): Promise<Result<string, Error>> {
-    const { features = {}, inputImageData, purpose, inputImageMimeType, signal } = options
+    const { features = {}, inputImages = [], purpose, signal } = options
     try {
       if (!userPrompt || userPrompt.trim().length === 0) {
         return Err(new GeminiAPIError('User prompt cannot be empty'))
@@ -80,21 +80,19 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
       const completePrompt = this.buildCompletePrompt(
         userPrompt,
         features,
-        !!inputImageData,
+        inputImages.length > 0,
         purpose
       )
 
-      const systemInstruction = inputImageData
-        ? SYSTEM_PROMPT + IMAGE_EDITING_CONTEXT
-        : SYSTEM_PROMPT
+      const systemInstruction =
+        inputImages.length > 0 ? SYSTEM_PROMPT + IMAGE_EDITING_CONTEXT : SYSTEM_PROMPT
 
       const config = {
         ...(signal && { signal }),
         temperature: 0.7,
         maxTokens: this.maxTokens,
         systemInstruction,
-        ...(inputImageData && { inputImage: inputImageData }),
-        ...(inputImageMimeType && { inputImageMimeType }),
+        ...(inputImages.length > 0 && { inputImages }),
       }
       const result = await this.textClient.generateText(completePrompt, config)
 

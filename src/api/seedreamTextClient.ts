@@ -53,6 +53,15 @@ class SeedreamTextClientImpl implements TextClient {
       thinking: { type: 'disabled' },
     }
 
+    if (Buffer.byteLength(JSON.stringify(request), 'utf8') > 64_000_000) {
+      return Err(
+        new ImageAPIError(
+          'Seedream text request exceeds the 64 MB limit',
+          'Reduce reference image sizes or the number of images'
+        )
+      )
+    }
+
     try {
       const timeoutSignal = AbortSignal.timeout(config.timeout ?? DEFAULT_TEXT_TIMEOUT)
       const response = await this.client.responses.create(request, {

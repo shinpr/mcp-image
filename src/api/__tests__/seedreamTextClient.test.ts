@@ -149,6 +149,20 @@ describe('seedreamTextClient', () => {
     }
   })
 
+  it('rejects Base64 request bodies above 64 MB before transport', async () => {
+    const transport = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', transport)
+    const data = Buffer.alloc(10 * 1024 * 1024).toString('base64')
+    const result = await createClient().generateText('use all references', {
+      inputImages: Array.from({ length: 5 }, () => ({ data, mimeType: 'image/png' })),
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.message).toContain('64 MB')
+    }
+    expect(transport).not.toHaveBeenCalled()
+  })
+
   it('preserves multimodal TextClient input without provider-native prompt fields', async () => {
     const transport = vi
       .fn<typeof fetch>()
@@ -157,8 +171,7 @@ describe('seedreamTextClient', () => {
     const encodedImage = Buffer.from('fixture-image-bytes').toString('base64')
 
     const result = await createClient().generateText(PRIVATE_PROMPT, {
-      inputImage: encodedImage,
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: encodedImage, mimeType: 'image/png' }],
     })
 
     expect(result).toEqual({ success: true, data: 'enhanced edit prompt' })

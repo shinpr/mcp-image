@@ -11,13 +11,13 @@ import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import {
-  DEFAULT_MIME_TYPE,
   getMimeTypeForOutputFormat,
   matchesImageDataMimeType,
   normalizeMimeType,
 } from '../utils/mimeUtils.js'
 import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
+import { validateInputImages } from './inputImages.js'
 
 type OpenAIImageSize = `${number}x${number}`
 type OpenAIImageQuality = 'low' | 'high' | 'max'
@@ -43,7 +43,6 @@ interface OpenAIImagesApi {
     options?: { signal?: AbortSignal }
   ): Promise<ImagesResponse>
 }
-type ImageEditApiParams = ImageApiParams & { inputImage: string }
 
 function mapQuality(quality: ImageQuality): OpenAIImageQuality {
   switch (quality) {
@@ -93,12 +92,8 @@ const OPENAI_IMAGE_MODELS = {
   SUNBURST: 'gpt-image-2.5-sunburst',
 } as const
 
-function hasInputImage(params: ImageApiParams): params is ImageEditApiParams {
-  return typeof params.inputImage === 'string' && params.inputImage.length > 0
-}
-
 export function validateOpenAIOptions(
-  params: Pick<ImageApiParams, 'useGoogleSearch' | 'aspectRatio'>
+  params: Pick<ImageApiParams, 'inputImages' | 'useGoogleSearch' | 'aspectRatio'>
 ): Result<true, ImageAPIError> {
   if (params.useGoogleSearch) {
     return Err(
@@ -124,7 +119,8 @@ export function validateOpenAIOptions(
     }
   }
 
-  return Ok(true)
+  const inputResult = validateInputImages('openai', params.inputImages)
+  return inputResult.success ? Ok(true) : inputResult
 }
 
 class OpenAIImageClientImpl implements ImageClient {
@@ -158,7 +154,7 @@ class OpenAIImageClientImpl implements ImageClient {
         size,
       }
       const images: OpenAIImagesApi = this.client.images
-      const response = hasInputImage(params)
+      const response = params.inputImages?.length
         ? await this.editImage(params, request)
         : await images.generate(request, {
             ...(params.signal && { signal: params.signal }),
@@ -198,7 +194,7 @@ class OpenAIImageClientImpl implements ImageClient {
           prompt: params.prompt,
           mimeType,
           timestamp: new Date(),
-          inputImageProvided: !!params.inputImage,
+          inputImageProvided: (params.inputImages?.length ?? 0) > 0,
           ...(firstImage.revised_prompt && { revisedPrompt: firstImage.revised_prompt }),
         },
       })
@@ -208,19 +204,25 @@ class OpenAIImageClientImpl implements ImageClient {
   }
 
   private async editImage(
-    params: ImageEditApiParams,
+    params: ImageApiParams,
     request: OpenAIImageGenerateRequest
   ): Promise<ImagesResponse> {
-    const mimeType = normalizeMimeType(params.inputImageMimeType ?? DEFAULT_MIME_TYPE)
-    const inputFile = await toFile(
-      Buffer.from(params.inputImage, 'base64'),
-      `input.${mimeTypeToExtension(mimeType)}`,
-      { type: mimeType }
-    )
+    const inputFiles: Awaited<ReturnType<typeof toFile>>[] = []
+    for (const [index, image] of (params.inputImages ?? []).entries()) {
+      params.signal?.throwIfAborted()
+      const mimeType = normalizeMimeType(image.mimeType)
+      inputFiles.push(
+        await toFile(
+          Buffer.from(image.data, 'base64'),
+          `input-${index + 1}.${mimeTypeToExtension(mimeType)}`,
+          { type: mimeType }
+        )
+      )
+    }
 
     const images: OpenAIImagesApi = this.client.images
     return await images.edit(
-      { ...request, image: inputFile },
+      { ...request, image: inputFiles },
       {
         ...(params.signal && { signal: params.signal }),
       }

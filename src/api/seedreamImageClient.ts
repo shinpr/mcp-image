@@ -6,6 +6,7 @@ import { ImageAPIError, NetworkError } from '../utils/errors.js'
 import { getMimeTypeForOutputFormat, matchesImageDataMimeType } from '../utils/mimeUtils.js'
 import { isNetworkError } from './errorClassification.js'
 import type { GeneratedImageResult, ImageApiParams, ImageClient } from './imageClient.js'
+import { validateInputImages } from './inputImages.js'
 
 const SEEDREAM_IMAGE_ENDPOINT = 'https://ark.ap-southeast.bytepluses.com/api/v3/images/generations'
 const SEEDREAM_IMAGE_TIMEOUT_MS = 300000
@@ -28,8 +29,6 @@ const ASPECT_RATIOS: readonly AspectRatio[] = [
   '16:9',
   '21:9',
 ]
-
-const SUPPORTED_INPUT_MIME_TYPES = ['image/png', 'image/jpeg'] as const
 
 const SEEDREAM_ROUTES = {
   fast: {
@@ -62,7 +61,7 @@ const SEEDREAM_ROUTES = {
 
 type ProviderCapabilityInput = Pick<
   ImageApiParams,
-  'inputImage' | 'inputImageMimeType' | 'aspectRatio' | 'imageSize' | 'useGoogleSearch' | 'quality'
+  'inputImages' | 'aspectRatio' | 'imageSize' | 'useGoogleSearch' | 'quality'
 >
 
 type SeedreamRoute = (typeof SEEDREAM_ROUTES)[ImageQuality]
@@ -77,7 +76,7 @@ type ResolvedCapabilities = Readonly<{
 type SeedreamImageWireRequest = Readonly<{
   model: 'dola-seedream-5-0-pro-260628'
   prompt: string
-  image?: string
+  image?: string | string[]
   size: ImageSize
   response_format: 'b64_json'
   output_format: ImageOutputFormat
@@ -169,19 +168,13 @@ function resolveCapabilities(
     return capabilityError('Unsupported Seedream image aspect ratio')
   }
 
-  const hasInputImage = input.inputImage !== undefined
-  const hasInputMimeType = input.inputImageMimeType !== undefined
-  if (hasInputImage !== hasInputMimeType) {
-    return capabilityError('Seedream image editing requires one image and its MIME type')
+  const inputResult = validateInputImages('seedream', input.inputImages)
+  if (!inputResult.success) {
+    return capabilityError(inputResult.error.message)
   }
-
-  if (hasInputImage && hasInputMimeType) {
-    if (!SUPPORTED_INPUT_MIME_TYPES.some((supported) => supported === input.inputImageMimeType)) {
-      return capabilityError('Unsupported Seedream input image MIME type')
-    }
-
-    if (!isStrictBase64(input.inputImage ?? '')) {
-      return capabilityError('Invalid Seedream input image data')
+  for (const [index, image] of (input.inputImages ?? []).entries()) {
+    if (typeof image.data !== 'string' || !isStrictBase64(image.data)) {
+      return capabilityError(`Input image ${index + 1}: invalid Seedream input image data`)
     }
   }
 
@@ -209,13 +202,14 @@ function buildWireRequest(
   params: ImageApiParams,
   resolved: ResolvedCapabilities
 ): SeedreamImageWireRequest {
+  const images = (params.inputImages ?? []).map(
+    ({ data, mimeType }) => `data:${mimeType};base64,${data}`
+  )
+  const [firstImage] = images
   const base = {
     model: resolved.route.model,
     prompt: appendAspectRatio(params.prompt, resolved.aspectRatio),
-    ...(params.inputImage &&
-      params.inputImageMimeType && {
-        image: `data:${params.inputImageMimeType};base64,${params.inputImage}`,
-      }),
+    ...(firstImage !== undefined && { image: images.length === 1 ? firstImage : images }),
     size: resolved.resolution,
     response_format: 'b64_json',
     output_format: params.preferredOutputFormat ?? 'png',
@@ -378,7 +372,7 @@ class SeedreamImageClientImpl implements ImageClient {
           prompt: request.prompt,
           mimeType: getMimeTypeForOutputFormat(request.output_format),
           timestamp: new Date(),
-          inputImageProvided: params.inputImage !== undefined,
+          inputImageProvided: (params.inputImages?.length ?? 0) > 0,
         },
       })
     } catch (error) {

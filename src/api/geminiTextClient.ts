@@ -1,10 +1,11 @@
+import type { GenerateContentConfig, GenerateContentParameters } from '@google/genai'
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
 import { GeminiAPIError, NetworkError } from '../utils/errors.js'
-import { DEFAULT_MIME_TYPE } from '../utils/mimeUtils.js'
 import { isNetworkError } from './errorClassification.js'
+import { buildGeminiContents, validateGeminiRequestSize } from './geminiRequest.js'
 import { type GenerationConfig, MAX_TEXT_PROMPT_LENGTH, type TextClient } from './textClient.js'
 
 export type GeminiTextClient = TextClient
@@ -25,51 +26,8 @@ interface GeminiTextResponse {
 
 interface GeminiAIInstance {
   models: {
-    generateContent(params: {
-      model: string
-      contents:
-        | string
-        | Array<{
-            role?: string
-            parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }>
-          }>
-      config?: {
-        systemInstruction?: string
-        maxOutputTokens?: number
-        thinkingConfig?: {
-          thinkingLevel: ThinkingLevel
-        }
-        abortSignal?: AbortSignal
-      }
-    }): Promise<GeminiTextResponse>
+    generateContent(params: GenerateContentParameters): Promise<GeminiTextResponse>
   }
-}
-
-type RequestContents =
-  | string
-  | Array<{
-      role?: string
-      parts: Array<{ text?: string; inlineData?: { data: string; mimeType: string } }>
-    }>
-
-/** A bare prompt, or an image part followed by the prompt when editing. */
-function buildRequestContents(prompt: string, config: GenerationConfig): RequestContents {
-  if (!config.inputImage) {
-    return prompt
-  }
-  return [
-    {
-      parts: [
-        {
-          inlineData: {
-            data: config.inputImage,
-            mimeType: config.inputImageMimeType ?? DEFAULT_MIME_TYPE,
-          },
-        },
-        { text: prompt },
-      ],
-    },
-  ]
 }
 
 class GeminiTextClientImpl implements GeminiTextClient {
@@ -96,30 +54,44 @@ class GeminiTextClientImpl implements GeminiTextClient {
       return validationResult
     }
 
+    const contents = mergedConfig.inputImages?.length
+      ? buildGeminiContents(prompt, mergedConfig.inputImages)
+      : prompt
+    const requestConfig: GenerateContentConfig = {
+      ...(mergedConfig.systemInstruction !== undefined && {
+        systemInstruction: mergedConfig.systemInstruction,
+      }),
+      maxOutputTokens: mergedConfig.maxTokens || 8192,
+      thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+    }
+    const sizeResult = validateGeminiRequestSize(
+      typeof contents === 'string' ? buildGeminiContents(contents) : contents,
+      requestConfig
+    )
+    if (!sizeResult.success) {
+      return sizeResult
+    }
     try {
-      const generatedText = await this.callGeminiAPI(prompt, mergedConfig)
+      const generatedText = await this.callGeminiAPI(contents, requestConfig, mergedConfig)
       return Ok(generatedText)
     } catch (error) {
       return this.handleError(error, 'text generation')
     }
   }
 
-  private async callGeminiAPI(prompt: string, config: GenerationConfig): Promise<string> {
+  private async callGeminiAPI(
+    contents: GenerateContentParameters['contents'],
+    requestConfig: GenerateContentConfig,
+    config: GenerationConfig
+  ): Promise<string> {
     try {
       const timeoutSignal = AbortSignal.timeout(config.timeout || 15000)
 
       const response = await this.genai.models.generateContent({
         model: this.modelName,
-        contents: buildRequestContents(prompt, config),
+        contents,
         config: {
-          ...(config.systemInstruction !== undefined && {
-            systemInstruction: config.systemInstruction,
-          }),
-          // Sampling parameters are not sent: Gemini 3 ignores them and future models reject them
-          maxOutputTokens: config.maxTokens || 8192,
-          thinkingConfig: {
-            thinkingLevel: ThinkingLevel.LOW,
-          },
+          ...requestConfig,
           abortSignal: config.signal
             ? AbortSignal.any([config.signal, timeoutSignal])
             : timeoutSignal,

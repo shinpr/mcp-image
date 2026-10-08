@@ -15,6 +15,7 @@ import {
   parseToolPayload,
   readPath,
 } from '../../tests/helpers/inspect'
+import { MAX_INPUT_IMAGES, type ReferenceImage } from '../../types/image.js'
 import type { ImageProvider } from '../../types/mcp.js'
 import { MCPServerImpl } from '../mcpServer.js'
 
@@ -68,6 +69,93 @@ function textResponse(provider: ImageProvider): Response {
   )
 }
 
+function serializedBody(call: Parameters<typeof fetch>): Record<string, unknown> {
+  return parseJsonObject(expectString(call[1]?.body, 'request body'), 'request JSON')
+}
+
+function assertTextReferences(
+  provider: ImageProvider,
+  call: Parameters<typeof fetch>,
+  images: ReferenceImage[]
+): void {
+  const body = serializedBody(call)
+  if (provider === 'gemini') {
+    const parts = expectArray(
+      readPath(expectArray(body['contents'], 'contents')[0], 'parts'),
+      'text parts'
+    )
+    expect(parts.filter((part) => readPath(part, 'inlineData'))).toEqual(
+      images.map((inlineData) => ({ inlineData }))
+    )
+    return
+  }
+  const content = expectArray(
+    readPath(expectArray(body['input'], 'text input')[0], 'content'),
+    'text content'
+  )
+  expect(content.filter((part) => readPath(part, 'type') === 'input_image')).toEqual(
+    images.map(({ data, mimeType }) => ({
+      type: 'input_image',
+      image_url: `data:${mimeType};base64,${data}`,
+      detail: 'auto',
+    }))
+  )
+}
+
+async function assertImageReferences(
+  provider: ImageProvider,
+  call: Parameters<typeof fetch>,
+  images: ReferenceImage[],
+  prompt: string
+): Promise<void> {
+  if (provider === 'openai') {
+    expect(String(call[0])).toMatch(/\/images\/edits$/)
+    const body = call[1]?.body
+    expect(body).toBeInstanceOf(FormData)
+    if (!(body instanceof FormData)) {
+      throw new Error('Expected multipart image request')
+    }
+    const files = body.getAll('image[]')
+    expect(files).toHaveLength(images.length)
+    for (const [index, file] of files.entries()) {
+      if (!(file instanceof File)) {
+        throw new Error('Expected an uploaded image file')
+      }
+      const image = expectDefined(images[index], 'expected reference')
+      expect(file.type).toBe(image.mimeType)
+      expect(Buffer.from(await file.arrayBuffer())).toEqual(Buffer.from(image.data, 'base64'))
+    }
+    expect(body.get('prompt')).toBe(prompt)
+    return
+  }
+  const body = serializedBody(call)
+  if (provider === 'gemini') {
+    const parts = expectArray(
+      readPath(expectArray(body['contents'], 'contents')[0], 'parts'),
+      'image parts'
+    )
+    expect(parts).toEqual([...images.map((inlineData) => ({ inlineData })), { text: prompt }])
+    return
+  }
+  const dataUris = images.map(({ data, mimeType }) => `data:${mimeType};base64,${data}`)
+  expect(body['image']).toEqual(images.length === 1 ? dataUris[0] : dataUris)
+  expect(body['prompt']).toBe(`${prompt}\n\nOutput aspect ratio: 1:1.`)
+}
+
+function truncatedTextResponse(provider: ImageProvider): Response {
+  return jsonResponse(
+    provider === 'gemini'
+      ? { candidates: [{ content: { parts: [{ text: 'partial' }] }, finishReason: 'MAX_TOKENS' }] }
+      : {
+          id: 'truncated',
+          object: 'response',
+          status: 'incomplete',
+          incomplete_details: { reason: 'max_output_tokens' },
+          output: [],
+        }
+  )
+}
+
 describe('request and output boundaries', () => {
   let outputDir: string
   let impl: MCPServerImpl
@@ -113,6 +201,14 @@ describe('request and output boundaries', () => {
     { prompt: 'test', purpose: { x: 1 } },
     { prompt: 'test', fileName: 42 },
     { prompt: 'test', inputImagePath: null },
+    { prompt: 'test', inputImagePath: '/old/image.png' },
+    { prompt: 'test', inputImagePaths: null },
+    { prompt: 'test', inputImagePaths: '/image.png' },
+    { prompt: 'test', inputImagePaths: [] },
+    { prompt: 'test', inputImagePaths: [''] },
+    { prompt: 'test', inputImagePaths: ['   '] },
+    { prompt: 'test', inputImagePaths: [42] },
+    { prompt: 'test', inputImagePaths: ['relative.png'] },
     { prompt: 'test', aspectRatio: '' },
     { prompt: 'test', imageSize: { toString: null } },
   ])('rejects invalid arguments before any provider request: %j', async (args) => {
@@ -122,6 +218,107 @@ describe('request and output boundaries', () => {
     expect(fetchMock).not.toHaveBeenCalled()
     expect(await readdir(outputDir)).toEqual([])
   })
+
+  it.each(['gemini', 'openai', 'seedream'] as const)(
+    'passes every reference in order through enhancement and the real %s transport',
+    async (provider) => {
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x01])
+      const firstPath = resolve(outputDir, 'first.png')
+      const secondPath = resolve(outputDir, 'second.jpg')
+      const paths = [firstPath, secondPath]
+      await writeFile(firstPath, PNG)
+      await writeFile(secondPath, jpeg)
+      const references = [
+        { data: PNG.toString('base64'), mimeType: 'image/png' },
+        { data: jpeg.toString('base64'), mimeType: 'image/jpeg' },
+      ]
+      for (const mode of [
+        { enhance: true, fail: false, count: 2 },
+        { enhance: true, fail: false, count: 1 },
+        { enhance: false, fail: false, count: 2 },
+        { enhance: true, fail: true, count: 2 },
+      ]) {
+        vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', String(!mode.enhance))
+        let requests = 0
+        fetchMock.mockReset().mockImplementation(async (url) => {
+          if (String(url) === 'data:,') {
+            return new Response('')
+          }
+          requests += 1
+          if (mode.enhance && requests === 1) {
+            return mode.fail ? truncatedTextResponse(provider) : textResponse(provider)
+          }
+          return imageResponse(provider)
+        })
+        const result = await client.callTool({
+          name: 'generate_image',
+          arguments: {
+            provider,
+            prompt: 'use the supplied references',
+            inputImagePaths: paths.slice(0, mode.count),
+          },
+        })
+        expect(result.isError).toBe(false)
+        const calls = fetchMock.mock.calls.filter(([url]) => String(url) !== 'data:,')
+        expect(calls).toHaveLength(mode.enhance ? 2 : 1)
+        const images = references.slice(0, mode.count)
+        if (mode.enhance) {
+          assertTextReferences(provider, expectDefined(calls[0], 'text request'), images)
+        }
+        await assertImageReferences(
+          provider,
+          expectDefined(calls.at(-1), 'image request'),
+          images,
+          mode.enhance && !mode.fail ? 'enhanced prompt' : 'use the supplied references'
+        )
+        const uri = expectString(readPath(parseToolPayload(result), 'resource', 'uri'), 'image URI')
+        expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
+      }
+
+      fetchMock.mockClear()
+      vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+      const tooMany = await client.callTool({
+        name: 'generate_image',
+        arguments: {
+          provider,
+          prompt: 'test',
+          inputImagePaths: Array.from({ length: MAX_INPUT_IMAGES[provider] + 1 }, () => firstPath),
+        },
+      })
+      expect(tooMany.isError).toBe(true)
+      expect(fetchMock).not.toHaveBeenCalled()
+
+      const missing = await client.callTool({
+        name: 'generate_image',
+        arguments: {
+          provider,
+          prompt: 'test',
+          inputImagePaths: [firstPath, resolve(outputDir, 'missing.png')],
+        },
+      })
+      expect(missing.isError).toBe(true)
+      expect(firstContentText(missing)).toContain('Input image 2')
+      expect(fetchMock).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['gemini', 'openai', 'seedream'] as const)(
+    'rejects an unreadable second reference before %s enhancement',
+    async (provider) => {
+      vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+      const firstPath = resolve(outputDir, 'first.png')
+      const secondPath = resolve(outputDir, 'directory.png')
+      await writeFile(firstPath, PNG)
+      await mkdir(secondPath)
+      const result = await client.callTool({
+        name: 'generate_image',
+        arguments: { provider, prompt: 'test', inputImagePaths: [firstPath, secondPath] },
+      })
+      expect(result.isError).toBe(true)
+      expect(firstContentText(result)).toContain('Input image 2')
+      expect(fetchMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([{ useGoogleSearch: true }, { aspectRatio: '8:1' }, { fileName: 'draft..png' }])(
     'preflights deterministic failures before enhancement: %j',
@@ -327,7 +524,7 @@ describe('request and output boundaries', () => {
             provider,
             prompt: 'test',
             fileName: 'cancelled.png',
-            ...(inputImagePath && { inputImagePath }),
+            ...(inputImagePath && { inputImagePaths: [inputImagePath] }),
           },
         },
         CallToolResultSchema,
