@@ -193,7 +193,7 @@ Your MCP client calls this tool for you. Open the reference when you need to che
 | `prompt` | string | Yes | Image description or editing instruction |
 | `quality` | string | No | `fast`, `balanced`, or `quality`; overrides `IMAGE_QUALITY` |
 | `provider` | string | No | `gemini`, `openai`, or `seedream`; overrides `IMAGE_PROVIDER` |
-| `inputImagePath` | string | No | Absolute path to an input image for editing |
+| `inputImagePaths` | string[] | No | Absolute paths to input images for editing |
 | `fileName` | string | No | Output filename; `.png`, `.jpg`, or `.jpeg` selects the format for OpenAI and Seedream |
 | `aspectRatio` | string | No | `1:1` (default), `2:3`, `3:2`, `3:4`, `4:3`, `4:5`, `5:4`, `9:16`, `16:9`, `21:9`, `1:4`, `1:8`, `4:1`, or `8:1` |
 | `imageSize` | string | No | `1K`, `2K`, or `4K`; availability depends on the provider |
@@ -219,7 +219,7 @@ Restart the MCP client after changing its configuration.
 
 ### Input image file not found
 
-Use an absolute path and make sure the MCP server can read the file. Input images can be PNG, JPEG, or WebP and must be no larger than 10 MB. Seedream editing accepts PNG and JPEG only.
+Use absolute paths and make sure the MCP server can read the files. Input images can be PNG, JPEG, or WebP and must be no larger than 10 MiB each. Seedream editing accepts PNG and JPEG only.
 
 ### Provider rejects a request
 

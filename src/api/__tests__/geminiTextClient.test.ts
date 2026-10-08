@@ -76,6 +76,21 @@ describe('GeminiTextClient', () => {
       }
     })
 
+    it('rejects combined image payloads over 20 MB before calling the SDK', async () => {
+      const data = Buffer.alloc(8 * 1024 * 1024).toString('base64')
+      const result = await client.generateText('use both references', {
+        inputImages: [
+          { data, mimeType: 'image/png' },
+          { data, mimeType: 'image/png' },
+        ],
+      })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.message).toContain('20 MB')
+      }
+      expect(mockGenerateContent).not.toHaveBeenCalled()
+    })
+
     it('passes generation configuration to the Gemini SDK', async () => {
       const result = await client.generateText('test prompt', {
         maxTokens: 384,

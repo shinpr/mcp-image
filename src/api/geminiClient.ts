@@ -1,25 +1,21 @@
-import type {
-  Content,
-  GenerateContentConfig,
-  GenerateContentParameters,
-  ImageConfig,
-} from '@google/genai'
+import type { GenerateContentConfig, GenerateContentParameters, ImageConfig } from '@google/genai'
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { ImageQuality } from '../types/mcp.js'
 import { GEMINI_MODELS } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import type { Config } from '../utils/config.js'
-import { GeminiAPIError, NetworkError } from '../utils/errors.js'
-import { DEFAULT_MIME_TYPE } from '../utils/mimeUtils.js'
+import { GeminiAPIError, type ImageAPIError, NetworkError } from '../utils/errors.js'
 import { extractStatusCode, isNetworkError } from './errorClassification.js'
 import { interpretGeminiImageResponse } from './geminiImageResponse.js'
+import { buildGeminiContents, validateGeminiRequestSize } from './geminiRequest.js'
 import type {
   GeneratedImageResult,
   ImageApiParams,
   ImageClient,
   ImageGenerationMetadata,
 } from './imageClient.js'
+import { validateInputImages } from './inputImages.js'
 
 interface GeminiClientInstance {
   models: {
@@ -44,33 +40,13 @@ class GeminiClientImpl implements ImageClient {
 
   async generateImage(
     params: ImageApiParams
-  ): Promise<Result<GeneratedImageResult, GeminiAPIError | NetworkError>> {
+  ): Promise<Result<GeneratedImageResult, GeminiAPIError | ImageAPIError | NetworkError>> {
     try {
-      const requestContent: Content[] = []
-
-      if (params.inputImage) {
-        requestContent.push({
-          parts: [
-            {
-              inlineData: {
-                data: params.inputImage,
-                mimeType: params.inputImageMimeType ?? DEFAULT_MIME_TYPE,
-              },
-            },
-            {
-              text: params.prompt,
-            },
-          ],
-        })
-      } else {
-        requestContent.push({
-          parts: [
-            {
-              text: params.prompt,
-            },
-          ],
-        })
+      const inputResult = validateInputImages('gemini', params.inputImages)
+      if (!inputResult.success) {
+        return inputResult
       }
+      const requestContent = buildGeminiContents(params.prompt, params.inputImages)
 
       const effectiveQuality = params.quality ?? this.defaultQuality
 
@@ -97,6 +73,10 @@ class GeminiClientImpl implements ImageClient {
         }),
       }
 
+      const sizeResult = validateGeminiRequestSize(requestContent, config)
+      if (!sizeResult.success) {
+        return sizeResult
+      }
       const rawResponse = await this.genai.models.generateContent({
         model: modelName,
         contents: requestContent,
@@ -114,7 +94,7 @@ class GeminiClientImpl implements ImageClient {
         prompt: params.prompt,
         mimeType,
         timestamp: new Date(),
-        inputImageProvided: !!params.inputImage,
+        inputImageProvided: (params.inputImages?.length ?? 0) > 0,
         ...(modelVersion && { modelVersion }),
         ...(responseId && { responseId }),
       }

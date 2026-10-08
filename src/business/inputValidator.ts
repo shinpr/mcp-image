@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
-import { extname } from 'node:path'
+import { extname, isAbsolute } from 'node:path'
+import { MAX_INPUT_IMAGES } from '../types/image.js'
 import type {
   AspectRatio,
   GenerateImageParams,
@@ -16,18 +17,13 @@ import {
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { InputValidationError } from '../utils/errors.js'
-import { SUPPORTED_EXTENSIONS, SUPPORTED_MIME_TYPES } from '../utils/mimeUtils.js'
+import { SUPPORTED_EXTENSIONS } from '../utils/mimeUtils.js'
 
 const PROMPT_MIN_LENGTH = 1
 const PROMPT_MAX_LENGTH = 4000
-export const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const SUPPORTED_ASPECT_RATIOS = ASPECT_RATIO_VALUES
 const SUPPORTED_QUALITY_VALUES = IMAGE_QUALITY_VALUES
 const SUPPORTED_PROVIDER_VALUES = IMAGE_PROVIDER_VALUES
-
-function formatFileSize(bytes: number): string {
-  return (bytes / (1024 * 1024)).toFixed(1)
-}
 
 export function validatePrompt(prompt: unknown): Result<string, InputValidationError> {
   if (typeof prompt !== 'string') {
@@ -61,64 +57,14 @@ export function validatePrompt(prompt: unknown): Result<string, InputValidationE
   return Ok(prompt)
 }
 
-export function validateBase64Image(
-  imageData?: string,
-  mimeType?: string
-): Result<Buffer | undefined, InputValidationError> {
-  if (!imageData) {
-    return Ok(undefined)
-  }
-
-  if (mimeType && !SUPPORTED_MIME_TYPES.includes(mimeType)) {
+function validateImagePath(imagePath: string): Result<string, InputValidationError> {
+  if (!isAbsolute(imagePath)) {
     return Err(
       new InputValidationError(
-        `Unsupported MIME type: ${mimeType}. Supported types: ${SUPPORTED_MIME_TYPES.join(', ')}`,
-        `Please provide an image with one of these MIME types: ${SUPPORTED_MIME_TYPES.join(', ')}`
+        'Input image path must be absolute',
+        'Provide an absolute path for every input image'
       )
     )
-  }
-
-  const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/
-  const cleanedData = imageData.replace(/^data:image\/[a-z]+;base64,/, '')
-
-  if (!base64Regex.test(cleanedData)) {
-    return Err(
-      new InputValidationError(
-        'Invalid base64 format',
-        'Please provide a valid base64 encoded image string'
-      )
-    )
-  }
-
-  let buffer: Buffer
-  try {
-    buffer = Buffer.from(cleanedData, 'base64')
-
-    if (buffer.length > MAX_IMAGE_SIZE) {
-      const sizeInMB = formatFileSize(buffer.length)
-      const limitInMB = formatFileSize(MAX_IMAGE_SIZE)
-      return Err(
-        new InputValidationError(
-          `Image size exceeds ${limitInMB}MB limit. Current size: ${sizeInMB}MB`,
-          `Please compress your image or reduce its resolution to stay below ${limitInMB}MB`
-        )
-      )
-    }
-  } catch (_error) {
-    return Err(
-      new InputValidationError(
-        'Failed to decode base64 image',
-        'Please ensure the image is properly base64 encoded'
-      )
-    )
-  }
-
-  return Ok(buffer)
-}
-
-function validateImagePath(imagePath?: string): Result<string | undefined, InputValidationError> {
-  if (!imagePath) {
-    return Ok(undefined)
   }
 
   if (!existsSync(imagePath)) {
@@ -143,6 +89,38 @@ function validateImagePath(imagePath?: string): Result<string | undefined, Input
   return Ok(imagePath)
 }
 
+function validateImagePaths(value: unknown): Result<string[] | undefined, InputValidationError> {
+  if (value === undefined) {
+    return Ok(undefined)
+  }
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_INPUT_IMAGES.openai) {
+    return Err(
+      new InputValidationError(
+        `inputImagePaths must be an array of 1 to ${MAX_INPUT_IMAGES.openai} image paths`,
+        'Omit inputImagePaths for text-only generation, or provide a non-empty array'
+      )
+    )
+  }
+  const paths: string[] = []
+  for (const [index, imagePath] of value.entries()) {
+    if (typeof imagePath !== 'string' || imagePath.trim().length === 0) {
+      return Err(
+        new InputValidationError(
+          `Input image ${index + 1}: path must be a non-empty string`,
+          'Provide an absolute image file path for every array element'
+        )
+      )
+    }
+    const result = validateImagePath(imagePath)
+    if (!result.success) {
+      result.error.message = `Input image ${index + 1}: ${result.error.message}`
+      return Err(result.error)
+    }
+    paths.push(result.data)
+  }
+  return Ok(paths)
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -160,10 +138,7 @@ function readOptionalBoolean(input: Record<string, unknown>, field: string): boo
 /** Fields whose only shared requirement is being a string when present. */
 const OPTIONAL_STRING_FIELDS = [
   'fileName',
-  'inputImagePath',
   'purpose',
-  'inputImage',
-  'inputImageMimeType',
   'aspectRatio',
   'imageSize',
   'quality',
@@ -318,6 +293,17 @@ export function validateGenerateImageParams(
     )
   }
 
+  for (const retiredField of ['inputImagePath', 'inputImage', 'inputImageMimeType']) {
+    if (input[retiredField] !== undefined) {
+      return Err(
+        new InputValidationError(
+          `${retiredField} is not supported; use inputImagePaths`,
+          'Provide inputImagePaths as an array of absolute image file paths'
+        )
+      )
+    }
+  }
+
   const stringFieldError = checkOptionalStringFields(input)
   if (stringFieldError) {
     return Err(stringFieldError)
@@ -328,24 +314,14 @@ export function validateGenerateImageParams(
     return Err(promptResult.error)
   }
 
-  const inputImagePath = readOptionalString(input, 'inputImagePath')
-  const imagePathResult = validateImagePath(inputImagePath)
-  if (!imagePathResult.success) {
-    return Err(imagePathResult.error)
+  const imagePathsResult = validateImagePaths(input['inputImagePaths'])
+  if (!imagePathsResult.success) {
+    return Err(imagePathsResult.error)
   }
 
   const booleanFieldError = checkOptionalBooleanFields(input)
   if (booleanFieldError) {
     return Err(booleanFieldError)
-  }
-
-  const inputImage = readOptionalString(input, 'inputImage')
-  const inputImageMimeType = readOptionalString(input, 'inputImageMimeType')
-  if (inputImage || inputImageMimeType) {
-    const imageResult = validateBase64Image(inputImage, inputImageMimeType)
-    if (!imageResult.success) {
-      return Err(imageResult.error)
-    }
   }
 
   const enumFieldsResult = validateEnumFields(input)
@@ -355,9 +331,7 @@ export function validateGenerateImageParams(
 
   const params: GenerateImageParams = { prompt: promptResult.data, ...enumFieldsResult.data }
   assignOptional(params, 'fileName', readOptionalString(input, 'fileName'))
-  assignOptional(params, 'inputImagePath', inputImagePath)
-  assignOptional(params, 'inputImage', inputImage)
-  assignOptional(params, 'inputImageMimeType', inputImageMimeType)
+  assignOptional(params, 'inputImagePaths', imagePathsResult.data)
   assignOptional(params, 'purpose', readOptionalString(input, 'purpose'))
   for (const { name } of OPTIONAL_BOOLEAN_FIELDS) {
     assignOptional(params, name, readOptionalBoolean(input, name))

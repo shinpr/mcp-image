@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
-import { MAX_IMAGE_SIZE } from '../../business/inputValidator.js'
 import { isRecord, parseJsonObject, recordOrEmpty } from '../../tests/helpers/inspect.js'
+import { MAX_IMAGE_SIZE } from '../../types/image.js'
 import { createMCPServer } from '../mcpServer.js'
 
 interface FileSystemStub {
@@ -451,7 +451,7 @@ function buildFailureRows(): FailureRow[] {
     },
     {
       name: 'unsupported-editing-input',
-      args: { inputImagePath: '__CREATE_UNSUPPORTED_INPUT__' },
+      args: { inputImagePaths: '__CREATE_UNSUPPORTED_INPUT__' },
       expectedCode: 'IMAGE_API_ERROR',
       expectedDecodeCalls: 0,
       expectedImageCalls: 0,
@@ -814,13 +814,13 @@ async function buildFailureArgs(
     ...row.args,
   }
 
-  if (row.args?.['inputImagePath'] !== '__CREATE_UNSUPPORTED_INPUT__') {
+  if (row.args?.['inputImagePaths'] !== '__CREATE_UNSUPPORTED_INPUT__') {
     return args
   }
 
   const unsupportedInputPath = join(outputDirectory, 'unsupported.gif')
   await writeFile(unsupportedInputPath, `${INPUT_IMAGE_MARKER}:${row.name}`)
-  return { ...args, inputImagePath: unsupportedInputPath }
+  return { ...args, inputImagePaths: [unsupportedInputPath] }
 }
 
 /** The base64 payload this failure row is expected to attempt to decode, if any. */
@@ -1314,7 +1314,7 @@ describe('BytePlus Seedream integration', () => {
       const result = await server.callTool('generate_image', {
         prompt: requestPrompt,
         fileName,
-        ...(inputImagePath && { inputImagePath }),
+        ...(inputImagePath && { inputImagePaths: [inputImagePath] }),
         ...row.args,
       })
 
@@ -1454,7 +1454,7 @@ describe('BytePlus Seedream integration', () => {
     const exactResult = await exactServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'exact-limit-output.png',
-      inputImagePath: exactInputPath,
+      inputImagePaths: [exactInputPath],
     })
     const exactAllocSizes = bufferAllocSpy.mock.calls
       .slice(beforeExactAllocCalls)
@@ -1510,7 +1510,7 @@ describe('BytePlus Seedream integration', () => {
     const oversizedResult = await oversizedServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'over-limit-output.png',
-      inputImagePath: oversizedInputPath,
+      inputImagePaths: [oversizedInputPath],
     })
     const oversizedAllocSizes = bufferAllocSpy.mock.calls
       .slice(beforeOversizedAllocCalls)
@@ -1577,7 +1577,7 @@ describe('BytePlus Seedream integration', () => {
     const growthResult = await growthServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'growth-output.png',
-      inputImagePath: growthInputPath,
+      inputImagePaths: [growthInputPath],
     })
     const growthAllocSizes = bufferAllocSpy.mock.calls
       .slice(beforeGrowthAllocCalls)
@@ -1639,7 +1639,7 @@ describe('BytePlus Seedream integration', () => {
     const nonRegularResult = await nonRegularServer.callTool('generate_image', {
       prompt: ORIGINAL_PROMPT,
       fileName: 'non-regular-output.png',
-      inputImagePath: nonRegularInputPath,
+      inputImagePaths: [nonRegularInputPath],
     })
     const nonRegularAllocSizes = bufferAllocSpy.mock.calls
       .slice(beforeNonRegularAllocCalls)
@@ -1695,7 +1695,7 @@ describe('BytePlus Seedream integration', () => {
       const fifoCall = fifoServer.callTool('generate_image', {
         prompt: ORIGINAL_PROMPT,
         fileName: 'fifo-output.png',
-        inputImagePath: fifoInputPath,
+        inputImagePaths: [fifoInputPath],
       })
       let deadlineTimer: ReturnType<typeof setTimeout> | undefined
       const completionState = await Promise.race([

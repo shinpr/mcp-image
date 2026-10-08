@@ -16,6 +16,7 @@ import {
   type FeatureFlags,
   type StructuredPromptGenerator,
 } from '../business/structuredPromptGenerator.js'
+import { MAX_INPUT_IMAGES, type ReferenceImage } from '../types/image.js'
 import type {
   GenerateImageParams,
   ImageOutputFormat,
@@ -31,7 +32,7 @@ import {
 } from '../types/mcp.js'
 import { unwrapOrThrow } from '../types/result.js'
 import { type Config, getConfig, validateProviderCredentials } from '../utils/config.js'
-import { toError } from '../utils/errors.js'
+import { InputValidationError, toError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import {
   reconcileFileNameExtension,
@@ -76,12 +77,11 @@ type ImageOptions = Omit<ImageApiParams, 'prompt'>
 /** Assemble the provider-facing image options from validated request params. */
 function buildImageOptions(
   params: GenerateImageParams,
-  inputImage: { data?: string; mimeType?: string },
+  inputImages: ReferenceImage[],
   preferredOutputFormat: ImageOutputFormat | undefined
 ): ImageOptions {
   return {
-    ...(inputImage.data && { inputImage: inputImage.data }),
-    ...(inputImage.mimeType && { inputImageMimeType: inputImage.mimeType }),
+    ...(inputImages.length > 0 && { inputImages }),
     ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
     ...(params.imageSize && { imageSize: params.imageSize }),
     ...(params.useGoogleSearch !== undefined && { useGoogleSearch: params.useGoogleSearch }),
@@ -152,7 +152,7 @@ export class MCPServerImpl {
         {
           name: 'generate_image',
           description:
-            'Generate a new image from a text prompt or edit an existing image using inputImagePath. Saves the result and returns a file resource.',
+            'Generate a new image from a text prompt or edit and combine reference images using inputImagePaths. Saves the result and returns a file resource.',
           inputSchema: {
             type: 'object' as const,
             properties: {
@@ -166,10 +166,13 @@ export class MCPServerImpl {
                 description:
                   'Use .png, .jpg, or .jpeg to request that output format from OpenAI or Seedream. Other or absent suffixes use the provider default; the saved filename is corrected to the actual image extension.',
               },
-              inputImagePath: {
-                type: 'string' as const,
+              inputImagePaths: {
+                type: 'array' as const,
+                items: { type: 'string' as const, minLength: 1 },
+                minItems: 1,
+                maxItems: MAX_INPUT_IMAGES.openai,
                 description:
-                  'Provide an absolute path to a source image when editing, creating a variation, or transferring style.',
+                  'Absolute paths to reference images in prompt order. Use a one-element array for one image. Limits: Gemini 14, OpenAI 16, Seedream 10. Omit for text-only generation.',
               },
               blendImages: {
                 type: 'boolean' as const,
@@ -287,15 +290,12 @@ export class MCPServerImpl {
   private async enhancePrompt(
     generator: StructuredPromptGenerator,
     params: GenerateImageParams,
-    context: { inputImageData?: string; inputImageMimeType?: string; signal?: AbortSignal }
+    context: { inputImages: ReferenceImage[]; signal?: AbortSignal }
   ): Promise<string> {
     const promptResult = await generator.generateStructuredPrompt(params.prompt, {
       features: buildFeatureFlags(params),
-      ...(context.inputImageData !== undefined && { inputImageData: context.inputImageData }),
+      ...(context.inputImages.length > 0 && { inputImages: context.inputImages }),
       ...(params.purpose !== undefined && { purpose: params.purpose }),
-      ...(context.inputImageMimeType !== undefined && {
-        inputImageMimeType: context.inputImageMimeType,
-      }),
       ...(context.signal !== undefined && { signal: context.signal }),
     })
     context.signal?.throwIfAborted()
@@ -360,22 +360,27 @@ export class MCPServerImpl {
       provider
     )
 
-    let inputImageData: string | undefined
-    let inputImageMimeType: string | undefined
-    if (params.inputImagePath) {
-      const inputImage = await readInputImage(params.inputImagePath)
-      inputImageData = inputImage.data.toString('base64')
-      inputImageMimeType = inputImage.mimeType
+    const inputPaths = params.inputImagePaths ?? []
+    if (inputPaths.length > MAX_INPUT_IMAGES[providerName]) {
+      throw new InputValidationError(
+        `${providerName} accepts at most ${MAX_INPUT_IMAGES[providerName]} input images`,
+        'Reduce the number of paths in inputImagePaths'
+      )
+    }
+    const inputImages: ReferenceImage[] = []
+    for (const [index, inputPath] of inputPaths.entries()) {
+      signal?.throwIfAborted()
+      try {
+        const image = await readInputImage(inputPath)
+        inputImages.push({ data: image.data.toString('base64'), mimeType: image.mimeType })
+      } catch (error) {
+        const readError = toError(error)
+        readError.message = `Input image ${index + 1}: ${readError.message}`
+        throw readError
+      }
     }
 
-    const imageOptions = buildImageOptions(
-      params,
-      {
-        ...(inputImageData && { data: inputImageData }),
-        ...(inputImageMimeType && { mimeType: inputImageMimeType }),
-      },
-      preferredOutputFormat
-    )
+    const imageOptions = buildImageOptions(params, inputImages, preferredOutputFormat)
 
     provider.validateImageOptions?.(imageOptions, config)
     signal?.throwIfAborted()
@@ -383,8 +388,7 @@ export class MCPServerImpl {
     let structuredPrompt = params.prompt
     if (!config.skipPromptEnhancement && structuredPromptGenerator) {
       structuredPrompt = await this.enhancePrompt(structuredPromptGenerator, params, {
-        ...(inputImageData !== undefined && { inputImageData }),
-        ...(inputImageMimeType !== undefined && { inputImageMimeType }),
+        inputImages,
         ...(signal !== undefined && { signal }),
       })
     } else if (config.skipPromptEnhancement) {

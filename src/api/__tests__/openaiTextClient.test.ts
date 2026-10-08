@@ -87,8 +87,7 @@ describe('openaiTextClient', () => {
     }
 
     await clientResult.data.generateText('make the lighting warmer', {
-      inputImage: Buffer.from('image-bytes').toString('base64'),
-      inputImageMimeType: 'image/png',
+      inputImages: [{ data: Buffer.from('image-bytes').toString('base64'), mimeType: 'image/png' }],
     })
 
     expect(mockResponsesCreate).toHaveBeenCalledWith(
