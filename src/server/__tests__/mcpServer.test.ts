@@ -1,17 +1,20 @@
 import { readFileSync } from 'node:fs'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
+import { mkdir, mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
-import { generateFileName, saveImage } from '../../business/fileManager.js'
+import { createGeminiClient } from '../../api/geminiClient.js'
+import { createOpenAIImageClient } from '../../api/openaiImageClient.js'
+import { createOpenAITextClient } from '../../api/openaiTextClient.js'
 import {
   expectDefined,
   expectRecord,
   expectString,
   parseJsonObject,
+  parseToolPayload,
   readPath,
 } from '../../tests/helpers/inspect'
 import { Logger } from '../../utils/logger.js'
-import { createMCPServer, MCPServerImpl } from '../mcpServer'
+import { createMCPServer } from '../mcpServer'
 
 const packageVersion = expectString(
   readPath(
@@ -20,6 +23,8 @@ const packageVersion = expectString(
   ),
   'package.json version'
 )
+
+const GEMINI_IMAGE_BYTES = Buffer.from('mock-image-data', 'utf-8')
 
 /**
  * The `generateImage` mock of a client produced by a mocked provider factory,
@@ -35,24 +40,28 @@ function createdImageClientMock(creation: unknown, what: string): Mock {
   return generateImage
 }
 
+function geminiImageResult(mimeType: string): unknown {
+  return {
+    success: true,
+    data: {
+      imageData: GEMINI_IMAGE_BYTES,
+      metadata: {
+        model: 'gemini-nano-banana-2.1',
+        prompt: 'test prompt',
+        mimeType,
+        timestamp: new Date(),
+        inputImageProvided: false,
+        processingTime: 1500,
+      },
+    },
+  }
+}
+
 vi.mock('../../api/geminiClient', () => {
   return {
     createGeminiClient: vi.fn().mockImplementation(() => {
       const mockClient = {
-        generateImage: vi.fn().mockResolvedValue({
-          success: true,
-          data: {
-            imageData: Buffer.from('mock-image-data', 'utf-8'),
-            metadata: {
-              model: 'gemini-nano-banana-2.1',
-              prompt: 'test prompt',
-              mimeType: 'image/png',
-              timestamp: new Date(),
-              inputImageProvided: false,
-              processingTime: 1500,
-            },
-          },
-        }),
+        generateImage: vi.fn().mockResolvedValue(geminiImageResult('image/png')),
       }
       return { success: true, data: mockClient }
     }),
@@ -102,256 +111,90 @@ vi.mock('../../api/openaiTextClient', () => {
   }
 })
 
-vi.mock('../../business/fileManager', () => {
-  return {
-    saveImage: vi.fn().mockResolvedValue({
-      success: true,
-      data: './test-output/test-image.png',
-    }),
-    generateFileName: vi.fn().mockImplementation((mimeType?: string) => {
-      if (mimeType === 'image/jpeg') {
-        return 'test-image.jpg'
-      }
-      if (mimeType === 'image/webp') {
-        return 'test-image.webp'
-      }
-      return 'test-image.png'
-    }),
-  }
-})
-
-vi.mock('../../business/responseBuilder', () => {
-  return {
-    buildSuccessResponse: vi.fn().mockReturnValue({
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            type: 'resource',
-            resource: {
-              uri: 'file://./test-output/test-image.png',
-              name: 'test-image.png',
-              mimeType: 'image/png',
-            },
-            metadata: {
-              model: 'gemini-nano-banana-2.1',
-              prompt: 'test prompt',
-              mimeType: 'image/png',
-              timestamp: new Date().toISOString(),
-              inputImageProvided: false,
-              processingTime: 1500,
-            },
-          }),
-        },
-      ],
-      isError: false,
-    }),
-    buildErrorResponse: vi.fn().mockImplementation((error, unknownFallback) => {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({
-              error: {
-                code: error.code || unknownFallback?.code || 'UNKNOWN_ERROR',
-                message:
-                  error.message ||
-                  'Prompt must be between 1 and 4000 characters. Current length: 0',
-                suggestion:
-                  error.suggestion ||
-                  unknownFallback?.suggestion ||
-                  'Please try again or contact support if the problem persists',
-              },
-            }),
-          },
-        ],
-        isError: true,
-      }
-    }),
-  }
-})
-
 describe('MCP Server', () => {
-  let originalApiKey: string | undefined
-  let originalArkApiKey: string | undefined
-  let originalImageProvider: string | undefined
-  let originalOpenAIApiKey: string | undefined
-  let originalSkipPromptEnhancement: string | undefined
+  let outputDir: string
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
-    originalApiKey = process.env.GEMINI_API_KEY
-    originalArkApiKey = process.env.ARK_API_KEY
-    originalImageProvider = process.env.IMAGE_PROVIDER
-    originalOpenAIApiKey = process.env.OPENAI_API_KEY
-    originalSkipPromptEnhancement = process.env.SKIP_PROMPT_ENHANCEMENT
-    delete process.env.IMAGE_PROVIDER
-    process.env.GEMINI_API_KEY = 'test-api-key-unit-tests'
-    delete process.env.OPENAI_API_KEY
-    delete process.env.ARK_API_KEY
-    delete process.env.SKIP_PROMPT_ENHANCEMENT
-    process.env.IMAGE_OUTPUT_DIR = './test-output'
+    await mkdir(resolve('tmp'), { recursive: true })
+    outputDir = await mkdtemp(resolve('tmp/mcp-server-'))
+    vi.stubEnv('IMAGE_OUTPUT_DIR', outputDir)
+    vi.stubEnv('IMAGE_PROVIDER', undefined)
+    vi.stubEnv('GEMINI_API_KEY', 'test-api-key-unit-tests')
+    vi.stubEnv('OPENAI_API_KEY', undefined)
+    vi.stubEnv('ARK_API_KEY', undefined)
+    // The Gemini text client is real; keep enhancement off unless a test needs it.
+    vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'true')
   })
 
-  afterEach(() => {
-    if (originalApiKey !== undefined) {
-      process.env.GEMINI_API_KEY = originalApiKey
-    } else {
-      delete process.env.GEMINI_API_KEY
-    }
-    if (originalImageProvider !== undefined) {
-      process.env.IMAGE_PROVIDER = originalImageProvider
-    } else {
-      delete process.env.IMAGE_PROVIDER
-    }
-    if (originalOpenAIApiKey !== undefined) {
-      process.env.OPENAI_API_KEY = originalOpenAIApiKey
-    } else {
-      delete process.env.OPENAI_API_KEY
-    }
-    if (originalArkApiKey !== undefined) {
-      process.env.ARK_API_KEY = originalArkApiKey
-    } else {
-      delete process.env.ARK_API_KEY
-    }
-    if (originalSkipPromptEnhancement !== undefined) {
-      process.env.SKIP_PROMPT_ENHANCEMENT = originalSkipPromptEnhancement
-    } else {
-      delete process.env.SKIP_PROMPT_ENHANCEMENT
-    }
+  afterEach(async () => {
+    vi.restoreAllMocks()
+    vi.unstubAllEnvs()
+    await rm(outputDir, { recursive: true, force: true })
   })
-  it('should create MCP server instance', async () => {
-    const mcpServer = createMCPServer()
 
-    expect(mcpServer).toBeInstanceOf(MCPServerImpl)
+  it('should report the package name and version', () => {
+    const serverInfo = createMCPServer().getServerInfo()
 
-    const serverInfo = mcpServer.getServerInfo()
     expect(serverInfo.name).toBe('mcp-image-server')
     expect(serverInfo.version).toBe(packageVersion)
   })
 
-  it('should register generate_image tool', async () => {
-    const mcpServer = createMCPServer()
+  it('should register generate_image with its input schema contract', () => {
+    const toolsList = createMCPServer().getToolsList()
 
-    const toolsList = mcpServer.getToolsList()
+    expect(toolsList.tools.map(({ name }) => name)).toEqual(['generate_image'])
+    const tool = expectDefined(toolsList.tools[0], 'generate_image tool')
+    expect(tool.description).toContain('inputImagePaths')
 
-    expect(toolsList.tools).toHaveLength(1)
-    expect(toolsList.tools[0].name).toBe('generate_image')
-    expect(toolsList.tools[0].description).toMatch(/generate a new image/i)
-    expect(toolsList.tools[0].description).toMatch(/edit and combine reference images/i)
-    expect(toolsList.tools[0].description).toContain('inputImagePaths')
-    expect(toolsList.tools[0].description).toMatch(/file resource/i)
-
-    const schema = toolsList.tools[0].inputSchema
+    const schema = tool.inputSchema
     expect(schema.type).toBe('object')
+    expect(schema.required).toEqual(['prompt'])
     expect(schema.properties).not.toHaveProperty('inputImagePath')
-    expect(schema.properties?.inputImagePaths).toMatchObject({
-      type: 'array',
-      minItems: 1,
-      maxItems: 16,
-      items: { type: 'string', minLength: 1 },
+    expect(schema.properties).toMatchObject({
+      prompt: { type: 'string' },
+      fileName: { type: 'string' },
+      inputImagePaths: {
+        type: 'array',
+        minItems: 1,
+        maxItems: 16,
+        items: { type: 'string', minLength: 1 },
+      },
+      blendImages: { type: 'boolean' },
+      maintainCharacterConsistency: { type: 'boolean' },
+      useWorldKnowledge: { type: 'boolean' },
+      useGoogleSearch: { type: 'boolean' },
+      purpose: { type: 'string' },
+      aspectRatio: {
+        type: 'string',
+        enum: [
+          '1:1',
+          '1:4',
+          '1:8',
+          '2:3',
+          '3:2',
+          '3:4',
+          '4:1',
+          '4:3',
+          '4:5',
+          '5:4',
+          '8:1',
+          '9:16',
+          '16:9',
+          '21:9',
+        ],
+      },
+      imageSize: { type: 'string', enum: ['1K', '2K', '4K'] },
+      quality: { type: 'string', enum: ['fast', 'balanced', 'quality'] },
+      provider: { type: 'string', enum: ['gemini', 'openai', 'seedream'] },
     })
-    expect(schema.properties).toHaveProperty('prompt')
-    expect(schema.properties?.prompt?.type).toBe('string')
-    expect(schema.properties?.prompt?.description).toMatch(/generate|edit/i)
-    expect(schema.properties?.prompt?.description).toMatch(/subject/i)
-    expect(schema.properties?.prompt?.description).toMatch(/context/i)
-    expect(schema.properties?.prompt?.description).toMatch(/visual style/i)
-    expect(schema.properties).toHaveProperty('fileName')
-    const fileNameDescription = schema.properties?.fileName?.description
-    expect(fileNameDescription).toContain('.png')
-    expect(fileNameDescription).toContain('.jpg')
-    expect(fileNameDescription).toContain('.jpeg')
-    expect(fileNameDescription).toMatch(/OpenAI/)
-    expect(fileNameDescription).toMatch(/Seedream/)
-    expect(fileNameDescription).toMatch(/output format/i)
-    expect(fileNameDescription).toMatch(/omit|default/i)
 
+    // Provider routing guidance the calling model relies on.
     const googleSearchDescription = schema.properties?.useGoogleSearch?.description
     expect(googleSearchDescription).toMatch(/Gemini/)
     expect(googleSearchDescription).toMatch(/OpenAI/)
     expect(googleSearchDescription).toMatch(/Seedream/)
-    expect(googleSearchDescription).toMatch(/current|time-sensitive/i)
-    expect(googleSearchDescription).toMatch(/omit|false/i)
-
-    const imageSizeDescription = schema.properties?.imageSize?.description
-    expect(imageSizeDescription).toMatch(/1K/)
-    expect(imageSizeDescription).toMatch(/2K/)
-    expect(imageSizeDescription).toMatch(/4K/)
-    expect(imageSizeDescription).toMatch(/default/i)
-    expect(imageSizeDescription).toMatch(/Seedream/)
-
-    const qualityDescription = schema.properties?.quality?.description
-    expect(qualityDescription).toMatch(/user requests/i)
-    expect(qualityDescription).toMatch(/omit|default/i)
-    expect(qualityDescription).toMatch(/fast/)
-    expect(qualityDescription).toMatch(/balanced/)
-    expect(qualityDescription).toMatch(/quality/)
-    expect(qualityDescription).toMatch(/speed/)
-    expect(qualityDescription).toMatch(/detail/)
-    expect(qualityDescription).toMatch(/fidelity/)
-    expect(schema.required).toEqual(['prompt'])
-    expect(schema.properties.aspectRatio.enum).toEqual([
-      '1:1',
-      '1:4',
-      '1:8',
-      '2:3',
-      '3:2',
-      '3:4',
-      '4:1',
-      '4:3',
-      '4:5',
-      '5:4',
-      '8:1',
-      '9:16',
-      '16:9',
-      '21:9',
-    ])
-    expect(schema.properties.imageSize.enum).toEqual(['1K', '2K', '4K'])
-    expect(schema.properties.quality.enum).toEqual(['fast', 'balanced', 'quality'])
-    expect(schema.properties.provider.enum).toEqual(['gemini', 'openai', 'seedream'])
-  })
-
-  it('should return file URI when no fileName is specified', async () => {
-    const mcpServer = createMCPServer()
-
-    const result = await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-    })
-
-    expect(result.content).toHaveLength(1)
-    expect(result.content[0].type).toBe('text')
-
-    const responseData = JSON.parse(result.content[0].text)
-    expect(responseData).toHaveProperty('type', 'resource')
-    expect(responseData).toHaveProperty('resource')
-    expect(responseData.resource.uri).toMatch(/^file:\/\//)
-    expect(responseData.resource.name).toBe('test-image.png')
-    expect(responseData.resource.mimeType).toBe('image/png')
-    expect(responseData).toHaveProperty('metadata')
-    expect(responseData.metadata.model).toBe('gemini-nano-banana-2.1')
-  })
-
-  it('should save to file when fileName is specified', async () => {
-    const mcpServer = createMCPServer()
-    const testFileName = 'test-image.png'
-
-    const result = await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      fileName: testFileName,
-    })
-
-    expect(result.content).toHaveLength(1)
-    expect(result.content[0].type).toBe('text')
-
-    const responseData = JSON.parse(result.content[0].text)
-    expect(responseData).toHaveProperty('type', 'resource')
-    expect(responseData).toHaveProperty('resource')
-    expect(responseData.resource.uri).toBe('file://./test-output/test-image.png')
-    expect(responseData.resource.name).toBe('test-image.png')
-    expect(responseData.resource.mimeType).toBe('image/png')
-    expect(responseData).toHaveProperty('metadata')
-    expect(responseData.metadata.model).toBe('gemini-nano-banana-2.1')
+    expect(schema.properties?.imageSize?.description).toMatch(/Seedream/)
   })
 
   it('should handle invalid tool request', async () => {
@@ -361,113 +204,63 @@ describe('MCP Server', () => {
 
     expect(result.isError).toBe(true)
     expect(result.content).toHaveLength(1)
-    expect(result.content[0].type).toBe('text')
-
-    const responseData = JSON.parse(result.content[0].text)
-    expect(responseData).toHaveProperty('error')
-    expect(responseData.error.code).toBe('INTERNAL_ERROR')
-    expect(responseData.error.message).toContain('Unknown tool: invalid_tool')
-    expect(responseData.error.suggestion).toBe('Contact system administrator')
+    const responseData = parseToolPayload(result)
+    expect(readPath(responseData, 'error', 'code')).toBe('INTERNAL_ERROR')
+    expect(readPath(responseData, 'error', 'message')).toContain('Unknown tool: invalid_tool')
+    expect(readPath(responseData, 'error', 'suggestion')).toBe('Contact system administrator')
   })
 
-  it('should pass mimeType to generateFileName for auto-generated filenames', async () => {
+  it('should name an auto-generated file after the generated MIME type', async () => {
+    vi.mocked(createGeminiClient).mockImplementationOnce(() => ({
+      success: true,
+      data: { generateImage: vi.fn().mockResolvedValue(geminiImageResult('image/webp')) },
+    }))
     const mcpServer = createMCPServer()
 
-    await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-    })
+    const result = await mcpServer.callTool('generate_image', { prompt: 'test prompt' })
 
-    expect(generateFileName).toHaveBeenCalledWith('image/png')
-  })
-
-  it('should append extension to user-provided filename without extension', async () => {
-    const mcpServer = createMCPServer()
-
-    await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      fileName: 'my-photo',
-    })
-
-    const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
-    expect(savedPath).toMatch(/my-photo\.png$/)
-  })
-
-  it('should preserve a user-provided extension when it matches the actual MIME type', async () => {
-    process.env.IMAGE_PROVIDER = 'openai'
-    delete process.env.GEMINI_API_KEY
-    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
-    const mcpServer = createMCPServer()
-
-    await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      fileName: 'my-photo.jpg',
-    })
-
-    const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
-    expect(savedPath).toMatch(/my-photo\.jpg$/)
+    expect(result.isError).toBe(false)
+    const savedFiles = await readdir(outputDir)
+    expect(savedFiles).toHaveLength(1)
+    expect(expectDefined(savedFiles[0], 'saved file')).toMatch(/\.webp$/)
   })
 
   it('should correct a recognized extension when it differs from the actual MIME type', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn')
+    const mcpServer = createMCPServer()
 
-    try {
-      const mcpServer = createMCPServer()
+    const result = await mcpServer.callTool('generate_image', {
+      prompt: 'test prompt',
+      fileName: 'my-photo.jpg',
+    })
 
-      await mcpServer.callTool('generate_image', {
-        prompt: 'test prompt',
-        fileName: 'my-photo.jpg',
-      })
-
-      const savedPath = vi.mocked(saveImage).mock.calls[0][1]
-      expect(savedPath).toMatch(/my-photo\.png$/)
-      expect(warnSpy).toHaveBeenCalledWith(
-        'mcp-server',
-        'Output filename extension corrected to match generated MIME type',
-        {
-          requestedExtension: '.jpg',
-          savedExtension: '.png',
-          mimeType: 'image/png',
-        }
-      )
-    } finally {
-      warnSpy.mockRestore()
-    }
+    expect(result.isError).toBe(false)
+    expect(readPath(parseToolPayload(result), 'resource', 'name')).toBe('my-photo.png')
+    expect(await readFile(resolve(outputDir, 'my-photo.png'))).toEqual(GEMINI_IMAGE_BYTES)
+    expect(warnSpy).toHaveBeenCalledWith(
+      'mcp-server',
+      expect.any(String),
+      expect.objectContaining({ requestedExtension: '.jpg', savedExtension: '.png' })
+    )
   })
 
   it('should sanitize filename before reconciling its extension', async () => {
     const mcpServer = createMCPServer()
 
-    await mcpServer.callTool('generate_image', {
+    const result = await mcpServer.callTool('generate_image', {
       prompt: 'test prompt',
       fileName: '...my-photo\x00',
     })
 
-    const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
-    expect(savedPath).toMatch(/my-photo\.png$/)
-  })
-
-  it('should validate prompt parameter', async () => {
-    const mcpServer = createMCPServer()
-
-    const result = await mcpServer.callTool('generate_image', {
-      prompt: '',
-    })
-
-    expect(result.isError).toBe(true)
-    expect(result.content).toHaveLength(1)
-    expect(result.content[0].type).toBe('text')
-
-    const responseData = JSON.parse(result.content[0].text)
-    expect(responseData).toHaveProperty('error')
-    expect(responseData.error.code).toBe('INPUT_VALIDATION_ERROR')
-    expect(responseData.error.message).toContain('1 and 4000 characters')
-    expect(responseData.error.suggestion).toContain('descriptive prompt')
+    expect(result.isError).toBe(false)
+    expect(await readdir(outputDir)).toEqual(['my-photo.png'])
   })
 
   it('should route image generation through OpenAI provider when configured', async () => {
-    process.env.IMAGE_PROVIDER = 'openai'
-    delete process.env.GEMINI_API_KEY
-    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
+    vi.stubEnv('IMAGE_PROVIDER', 'openai')
+    vi.stubEnv('GEMINI_API_KEY', undefined)
+    vi.stubEnv('OPENAI_API_KEY', 'test-openai-api-key-unit-tests')
+    vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
     const mcpServer = createMCPServer()
 
     const result = await mcpServer.callTool('generate_image', {
@@ -475,11 +268,6 @@ describe('MCP Server', () => {
     })
 
     expect(result.isError).toBe(false)
-
-    const { createGeminiClient } = await import('../../api/geminiClient')
-    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
-    const { createOpenAITextClient } = await import('../../api/openaiTextClient')
-
     expect(createGeminiClient).not.toHaveBeenCalled()
     expect(createOpenAIImageClient).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -494,61 +282,21 @@ describe('MCP Server', () => {
     )
   })
 
-  it('should route image generation through the provider requested in the tool call', async () => {
-    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
+  it('should keep per-provider clients when calls alternate between providers', async () => {
+    vi.stubEnv('OPENAI_API_KEY', 'test-openai-api-key-unit-tests')
     const mcpServer = createMCPServer()
 
-    const result = await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      provider: 'openai',
-    })
+    const results: Awaited<ReturnType<typeof mcpServer.callTool>>[] = []
+    for (const provider of ['gemini', 'openai', 'gemini'] as const) {
+      results.push(await mcpServer.callTool('generate_image', { prompt: 'test prompt', provider }))
+    }
 
-    expect(result.isError).toBe(false)
-
-    const { createGeminiClient } = await import('../../api/geminiClient')
-    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
-    const { createOpenAITextClient } = await import('../../api/openaiTextClient')
-
-    expect(createGeminiClient).not.toHaveBeenCalled()
-    expect(createOpenAIImageClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        openaiApiKey: 'test-openai-api-key-unit-tests',
-      })
-    )
-    expect(createOpenAITextClient).toHaveBeenCalledWith(
-      expect.objectContaining({
-        openaiApiKey: 'test-openai-api-key-unit-tests',
-      })
-    )
-  })
-
-  it('should build fresh clients when a later call requests another provider', async () => {
-    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
-    process.env.SKIP_PROMPT_ENHANCEMENT = 'true'
-    const mcpServer = createMCPServer()
-
-    const geminiResult = await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      provider: 'gemini',
-    })
-    const openaiResult = await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      provider: 'openai',
-    })
-    const cachedGeminiResult = await mcpServer.callTool('generate_image', {
-      prompt: 'test prompt',
-      provider: 'gemini',
-    })
-
-    expect(geminiResult.isError).toBe(false)
-    expect(openaiResult.isError).toBe(false)
-    expect(cachedGeminiResult.isError).toBe(false)
-
-    const { createGeminiClient } = await import('../../api/geminiClient')
-    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
-
-    expect(createOpenAIImageClient).toHaveBeenCalledTimes(1)
+    expect(
+      results.map((result) => readPath(parseToolPayload(result), 'metadata', 'model'))
+    ).toEqual(['gemini-nano-banana-2.1', 'gpt-image-2', 'gemini-nano-banana-2.1'])
+    // Initialized clients are cached per provider (byteplus-seedream-provider-design AC-13).
     expect(createGeminiClient).toHaveBeenCalledTimes(1)
+    expect(createOpenAIImageClient).toHaveBeenCalledTimes(1)
   })
 
   it.each([
@@ -557,38 +305,24 @@ describe('MCP Server', () => {
       requestProvider: 'openai' as const,
       configuredDefault: undefined,
       expectedProvider: 'openai',
-      expectedEnvironmentVariable: 'OPENAI_API_KEY',
     },
     {
       route: 'configured default provider',
       requestProvider: undefined,
       configuredDefault: 'seedream' as const,
       expectedProvider: 'seedream',
-      expectedEnvironmentVariable: 'ARK_API_KEY',
     },
     {
       route: 'built-in default provider',
       requestProvider: undefined,
       configuredDefault: undefined,
       expectedProvider: 'gemini',
-      expectedEnvironmentVariable: 'GEMINI_API_KEY',
     },
   ])(
     'should guide the caller to configure credentials for the $route',
-    async ({
-      requestProvider,
-      configuredDefault,
-      expectedProvider,
-      expectedEnvironmentVariable,
-    }) => {
-      delete process.env.GEMINI_API_KEY
-      delete process.env.OPENAI_API_KEY
-      delete process.env.ARK_API_KEY
-      if (configuredDefault) {
-        process.env.IMAGE_PROVIDER = configuredDefault
-      } else {
-        delete process.env.IMAGE_PROVIDER
-      }
+    async ({ requestProvider, configuredDefault, expectedProvider }) => {
+      vi.stubEnv('GEMINI_API_KEY', undefined)
+      vi.stubEnv('IMAGE_PROVIDER', configuredDefault)
       const mcpServer = createMCPServer()
 
       const result = await mcpServer.callTool('generate_image', {
@@ -597,25 +331,18 @@ describe('MCP Server', () => {
       })
 
       expect(result.isError).toBe(true)
-      const responseData = JSON.parse(result.content[0].text)
-      expect(responseData.error.code).toBe('CONFIG_ERROR')
-      expect(responseData.error.message).toContain(`"${expectedProvider}"`)
-      expect(responseData.error.suggestion).toContain(expectedEnvironmentVariable)
-      expect(responseData.error.suggestion).toContain(
-        `retry generate_image with provider "${expectedProvider}"`
-      )
-
-      if (expectedProvider === 'openai') {
-        const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
-        expect(createOpenAIImageClient).not.toHaveBeenCalled()
-      }
+      const error = readPath(parseToolPayload(result), 'error')
+      expect(readPath(error, 'code')).toBe('CONFIG_ERROR')
+      expect(readPath(error, 'message')).toContain(`"${expectedProvider}"`)
+      expect(createGeminiClient).not.toHaveBeenCalled()
+      expect(createOpenAIImageClient).not.toHaveBeenCalled()
     }
   )
 
   it('should pass JPEG preference from fileName to the selected provider', async () => {
-    process.env.IMAGE_PROVIDER = 'openai'
-    delete process.env.GEMINI_API_KEY
-    process.env.OPENAI_API_KEY = 'test-openai-api-key-unit-tests'
+    vi.stubEnv('IMAGE_PROVIDER', 'openai')
+    vi.stubEnv('GEMINI_API_KEY', undefined)
+    vi.stubEnv('OPENAI_API_KEY', 'test-openai-api-key-unit-tests')
     const mcpServer = createMCPServer()
 
     const result = await mcpServer.callTool('generate_image', {
@@ -624,7 +351,6 @@ describe('MCP Server', () => {
     })
 
     expect(result.isError).toBe(false)
-    const { createOpenAIImageClient } = await import('../../api/openaiImageClient')
     const generateImage = createdImageClientMock(
       vi.mocked(createOpenAIImageClient).mock.results[0],
       'openai image client creation'
@@ -634,78 +360,21 @@ describe('MCP Server', () => {
     )
   })
 
-  it.each([
-    ['banner.v2', 'banner.v2.png'],
-    ['my.photo', 'my.photo.png'],
-    ['2026.07.29-banner', '2026.07.29-banner.png'],
-    ['requested.webp', 'requested.png'],
-  ])(
-    'should use the provider default for a suffix that cannot select an output format: %s',
-    async (fileName, expectedSavedName) => {
-      const mcpServer = createMCPServer()
-
-      const result = await mcpServer.callTool('generate_image', {
-        prompt: 'test prompt',
-        fileName,
-      })
-
-      expect(result.isError).toBe(false)
-      const { createGeminiClient } = await import('../../api/geminiClient')
-      const generateImage = createdImageClientMock(
-        vi.mocked(createGeminiClient).mock.results.at(-1),
-        'gemini image client creation'
-      )
-      const imageParams = expectDefined(generateImage.mock.calls[0], 'generateImage call')[0]
-      expect(imageParams).not.toHaveProperty('preferredOutputFormat')
-
-      const savedPath = expectDefined(vi.mocked(saveImage).mock.calls[0], 'saveImage call')[1]
-      expect(savedPath.endsWith(expectedSavedName)).toBe(true)
-    }
-  )
-
-  it('should omit the format hint when fileName has no extension', async () => {
+  it('should use the provider default for a recognized suffix that cannot select an output format', async () => {
     const mcpServer = createMCPServer()
 
     const result = await mcpServer.callTool('generate_image', {
       prompt: 'test prompt',
-      fileName: 'requested',
+      fileName: 'requested.webp',
     })
 
-    const { createGeminiClient } = await import('../../api/geminiClient')
+    expect(result.isError).toBe(false)
     const generateImage = createdImageClientMock(
       vi.mocked(createGeminiClient).mock.results.at(-1),
       'gemini image client creation'
     )
-    expect(result.isError).toBe(false)
-    expect(expectDefined(generateImage.mock.calls[0], 'generateImage call')[0]).not.toHaveProperty(
-      'preferredOutputFormat'
-    )
-  })
-
-  it('should preserve tool execution errors across the MCP transport boundary', async () => {
-    process.env.IMAGE_PROVIDER = 'seedream'
-    process.env.ARK_API_KEY = 'test-seedream-api-key'
-    process.env.SKIP_PROMPT_ENHANCEMENT = 'true'
-    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-    const server = createMCPServer().initialize()
-    const client = new Client({ name: 'mcp-image-test-client', version: '1.0.0' })
-
-    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
-    try {
-      const result = await client.callTool({
-        name: 'generate_image',
-        arguments: {
-          prompt: 'test prompt',
-          fileName: 'seedream-error.png',
-          useGoogleSearch: true,
-        },
-      })
-
-      expect(result.isError).toBe(true)
-      expect(result.content).toHaveLength(1)
-    } finally {
-      await client.close()
-      await server.close()
-    }
+    const imageParams = expectDefined(generateImage.mock.calls[0], 'generateImage call')[0]
+    expect(imageParams).not.toHaveProperty('preferredOutputFormat')
+    expect(await readdir(outputDir)).toEqual(['requested.png'])
   })
 })

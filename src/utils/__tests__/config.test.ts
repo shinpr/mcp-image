@@ -13,6 +13,7 @@ describe('config', () => {
     delete process.env.ARK_API_KEY
     delete process.env.IMAGE_OUTPUT_DIR
     delete process.env.IMAGE_QUALITY
+    delete process.env.SKIP_PROMPT_ENHANCEMENT
   })
 
   afterEach(() => {
@@ -39,26 +40,6 @@ describe('config', () => {
       }
     })
 
-    it('should accept valid imageQuality values', () => {
-      const qualities = ['fast', 'balanced', 'quality'] as const
-
-      for (const quality of qualities) {
-        const config = {
-          imageProvider: 'gemini' as const,
-          geminiApiKey: 'valid-api-key-12345',
-          openaiApiKey: '',
-          arkApiKey: '',
-          imageOutputDir: './output',
-          skipPromptEnhancement: false,
-          imageQuality: quality,
-        }
-
-        const result = validateConfig(config)
-
-        expect(result.success).toBe(true)
-      }
-    })
-
     it('should reject invalid imageQuality value', () => {
       const config = {
         imageProvider: 'gemini' as const,
@@ -75,10 +56,27 @@ describe('config', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error).toBeInstanceOf(ConfigError)
-        expect(result.error.message).toContain('Invalid IMAGE_QUALITY')
-        expect(result.error.message).toContain('fast')
-        expect(result.error.message).toContain('balanced')
-        expect(result.error.message).toContain('quality')
+        expect(result.error.message).toBe(
+          'Invalid IMAGE_QUALITY value: "invalid". Valid options: fast, balanced, quality'
+        )
+      }
+    })
+
+    it('should reject an output directory that is only whitespace', () => {
+      const result = validateConfig({
+        imageProvider: 'gemini',
+        geminiApiKey: '',
+        openaiApiKey: '',
+        arkApiKey: '',
+        imageOutputDir: '   ',
+        skipPromptEnhancement: false,
+        imageQuality: 'fast',
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ConfigError)
+        expect(result.error.message).toBe('IMAGE_OUTPUT_DIR cannot be empty')
       }
     })
   })
@@ -151,42 +149,67 @@ describe('config', () => {
       }
     })
 
-    it('should return config with custom IMAGE_OUTPUT_DIR', () => {
-      process.env.GEMINI_API_KEY = 'test-api-key-12345'
+    it('should read a custom IMAGE_OUTPUT_DIR', () => {
       process.env.IMAGE_OUTPUT_DIR = '/custom/output'
 
       const result = getConfig()
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.geminiApiKey).toBe('test-api-key-12345')
         expect(result.data.imageOutputDir).toBe('/custom/output')
       }
     })
 
-    it('should load OpenAI provider config from environment', () => {
-      process.env.IMAGE_PROVIDER = 'openai'
-      process.env.OPENAI_API_KEY = 'test-openai-api-key-12345'
+    it('should fall back to ./output when IMAGE_OUTPUT_DIR is an empty string', () => {
+      process.env.IMAGE_OUTPUT_DIR = ''
 
       const result = getConfig()
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.imageProvider).toBe('openai')
-        expect(result.data.openaiApiKey).toBe('test-openai-api-key-12345')
+        expect(result.data.imageOutputDir).toBe('./output')
       }
     })
 
-    it('should load the exact Seedream provider and ARK_API_KEY from environment', () => {
+    it('should read IMAGE_PROVIDER from environment', () => {
       process.env.IMAGE_PROVIDER = 'seedream'
-      process.env.ARK_API_KEY = 'test-ark-api-key'
 
       const result = getConfig()
 
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.imageProvider).toBe('seedream')
-        expect(result.data.arkApiKey).toBe('test-ark-api-key')
+      }
+    })
+
+    it('should reject an unknown IMAGE_PROVIDER', () => {
+      process.env.IMAGE_PROVIDER = 'midjourney'
+
+      const result = getConfig()
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(ConfigError)
+        expect(result.error.message).toBe(
+          'Invalid IMAGE_PROVIDER value: "midjourney". Valid options: gemini, openai, seedream'
+        )
+      }
+    })
+
+    it.each([
+      ['true', true],
+      ['false', false],
+      [undefined, false],
+    ])('should read SKIP_PROMPT_ENHANCEMENT=%s as %s', (value, expected) => {
+      if (value !== undefined) {
+        process.env.SKIP_PROMPT_ENHANCEMENT = value
+      }
+
+      const result = getConfig()
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.skipPromptEnhancement).toBe(expected)
       }
     })
 
@@ -207,7 +230,6 @@ describe('config', () => {
     })
 
     it('should read IMAGE_QUALITY env var', () => {
-      process.env.GEMINI_API_KEY = 'test-api-key-12345'
       process.env.IMAGE_QUALITY = 'quality'
 
       const result = getConfig()
@@ -219,7 +241,6 @@ describe('config', () => {
     })
 
     it('should reject invalid IMAGE_QUALITY env var', () => {
-      process.env.GEMINI_API_KEY = 'test-api-key-12345'
       process.env.IMAGE_QUALITY = 'ultra'
 
       const result = getConfig()

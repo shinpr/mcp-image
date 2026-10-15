@@ -101,47 +101,68 @@ describe('openaiImageClient', () => {
       }
     })
 
-    it('should edit image successfully with input image data', async () => {
-      mockEdit.mockResolvedValue({
-        data: [
-          {
-            b64_json: PNG_BYTES.toString('base64'),
-          },
+    it('names each multipart input file by its order and MIME extension', async () => {
+      mockEdit.mockResolvedValue({ data: [{ b64_json: PNG_BYTES.toString('base64') }] })
+      mockToFile.mockImplementation(
+        async (_data: Buffer, name: string, options: { type: string }) => ({
+          name,
+          type: options.type,
+        })
+      )
+      const clientResult = createOpenAIImageClient(testConfig)
+      if (!clientResult.success) {
+        throw clientResult.error
+      }
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Combine these images',
+        inputImages: [
+          { data: PNG_BYTES.toString('base64'), mimeType: 'image/png' },
+          { data: JPEG_BYTES.toString('base64'), mimeType: 'image/jpeg' },
+          { data: Buffer.from('webp-bytes').toString('base64'), mimeType: 'image/webp' },
         ],
       })
 
-      const clientResult = createOpenAIImageClient(testConfig)
-      expect(clientResult.success).toBe(true)
-      if (!clientResult.success) {
-        return
-      }
-
-      const inputImage = Buffer.from('input-image-data').toString('base64')
-      const result = await clientResult.data.generateImage({
-        prompt: 'Make this image warmer',
-        inputImages: [{ data: inputImage, mimeType: 'image/png' }],
-      })
-
       expect(result.success).toBe(true)
-      expect(mockToFile).toHaveBeenCalledWith(Buffer.from('input-image-data'), 'input-1.png', {
-        type: 'image/png',
-      })
-      expect(expectDefined(mockEdit.mock.calls[0], 'images.edit call')[0]).toEqual({
-        model: 'gpt-image-2.5-flare',
-        prompt: 'Make this image warmer',
-        image: [{ name: 'input.png', type: 'image/png' }],
-        n: 1,
-        output_format: 'png',
-        quality: 'low',
-        size: '1024x1024',
-      })
+      expect(mockToFile.mock.calls).toEqual([
+        [PNG_BYTES, 'input-1.png', { type: 'image/png' }],
+        [JPEG_BYTES, 'input-2.jpg', { type: 'image/jpeg' }],
+        [Buffer.from('webp-bytes'), 'input-3.webp', { type: 'image/webp' }],
+      ])
+      expect(expectDefined(mockEdit.mock.calls[0], 'images.edit call')[0]).toEqual(
+        expect.objectContaining({
+          prompt: 'Combine these images',
+          image: [
+            { name: 'input-1.png', type: 'image/png' },
+            { name: 'input-2.jpg', type: 'image/jpeg' },
+            { name: 'input-3.webp', type: 'image/webp' },
+          ],
+        })
+      )
     })
 
+    // `configured` is a different preset from the row, so a request override is
+    // distinguishable from the client's configured default.
     describe.each([
-      ['fast', 'gpt-image-2.5-flare', 'low'],
-      ['balanced', 'gpt-image-2.5-flare', 'high'],
-      ['quality', 'gpt-image-2.5-sunburst', 'max'],
-    ] as const)('%s preset', (preset, model, quality) => {
+      {
+        preset: 'fast',
+        model: 'gpt-image-2.5-flare',
+        quality: 'low',
+        configured: { preset: 'quality', model: 'gpt-image-2.5-sunburst', quality: 'max' },
+      },
+      {
+        preset: 'balanced',
+        model: 'gpt-image-2.5-flare',
+        quality: 'high',
+        configured: { preset: 'quality', model: 'gpt-image-2.5-sunburst', quality: 'max' },
+      },
+      {
+        preset: 'quality',
+        model: 'gpt-image-2.5-sunburst',
+        quality: 'max',
+        configured: { preset: 'fast', model: 'gpt-image-2.5-flare', quality: 'low' },
+      },
+    ] as const)('$preset preset', ({ preset, model, quality, configured }) => {
       it.each([
         ['generate', mockGenerate, mockEdit, undefined],
         ['edit', mockEdit, mockGenerate, PNG_BYTES.toString('base64')],
@@ -173,7 +194,7 @@ describe('openaiImageClient', () => {
 
       it('lets the request override the configured preset without changing the next request', async () => {
         mockGenerate.mockResolvedValue({ data: [{ b64_json: PNG_BYTES.toString('base64') }] })
-        const client = createOpenAIImageClient({ ...testConfig, imageQuality: 'quality' })
+        const client = createOpenAIImageClient({ ...testConfig, imageQuality: configured.preset })
         if (!client.success) {
           throw client.error
         }
@@ -192,7 +213,7 @@ describe('openaiImageClient', () => {
         await client.data.generateImage({ prompt: 'Default again' })
         expect(mockGenerate).toHaveBeenNthCalledWith(
           2,
-          expect.objectContaining({ model: 'gpt-image-2.5-sunburst', quality: 'max' }),
+          expect.objectContaining({ model: configured.model, quality: configured.quality }),
           expect.anything()
         )
       })
@@ -275,8 +296,11 @@ describe('openaiImageClient', () => {
       }
     )
 
-    it('should return ImageAPIError when response data array is empty', async () => {
-      mockGenerate.mockResolvedValue({ data: [] })
+    it.each([
+      ['an empty data array', { data: [] }],
+      ['an entry without b64_json', { data: [{}] }],
+    ])('should return ImageAPIError when the response has %s', async (_case, response) => {
+      mockGenerate.mockResolvedValue(response)
 
       const clientResult = createOpenAIImageClient(testConfig)
       expect(clientResult.success).toBe(true)
@@ -432,28 +456,6 @@ describe('openaiImageClient', () => {
           size: '2160x3840',
         })
       )
-    })
-
-    it('should return ImageAPIError when response has no base64 image data', async () => {
-      mockGenerate.mockResolvedValue({
-        data: [{}],
-      })
-
-      const clientResult = createOpenAIImageClient(testConfig)
-      expect(clientResult.success).toBe(true)
-      if (!clientResult.success) {
-        return
-      }
-
-      const result = await clientResult.data.generateImage({
-        prompt: 'Generate image',
-      })
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(ImageAPIError)
-        expect(result.error.message).toContain('No image data returned')
-      }
     })
 
     it('should return NetworkError for network failures', async () => {

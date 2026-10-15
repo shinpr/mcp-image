@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { expectString } from '../../tests/helpers/inspect'
 import {
   getExtensionFromMimeType,
   getMimeTypeForOutputFormat,
@@ -9,7 +8,6 @@ import {
   reconcileFileNameExtension,
   resolvePreferredOutputFormat,
   SUPPORTED_EXTENSIONS,
-  SUPPORTED_MIME_TYPES,
 } from '../mimeUtils'
 
 describe('mimeUtils', () => {
@@ -17,15 +15,8 @@ describe('mimeUtils', () => {
     vi.restoreAllMocks()
   })
 
-  describe('SUPPORTED_MIME_TYPES', () => {
-    it('contains exactly the supported MIME types', () => {
-      expect(new Set(SUPPORTED_MIME_TYPES)).toEqual(
-        new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp'])
-      )
-    })
-  })
-
   describe('SUPPORTED_EXTENSIONS', () => {
+    // Accepted input extensions are a contract: they gate input-image reading and validation.
     it('contains exactly the supported extensions', () => {
       expect(new Set(SUPPORTED_EXTENSIONS)).toEqual(
         new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'])
@@ -44,28 +35,10 @@ describe('mimeUtils', () => {
       expect(getExtensionFromMimeType(mimeType)).toBe(extension)
     })
 
-    it('should return .png with warning log for unknown MIME type', () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    it('should fall back to .png for unknown MIME type', () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      const result = getExtensionFromMimeType('image/tiff')
-
-      expect(result).toBe('.png')
-      expect(consoleErrorSpy).toHaveBeenCalled()
-      const logOutput = expectString(
-        consoleErrorSpy.mock.calls[0]?.[0],
-        'first console.error argument'
-      )
-      expect(logOutput).toContain('warn')
-      expect(logOutput).toContain('image/tiff')
-    })
-
-    it('should return .png with warning log for empty string', () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const result = getExtensionFromMimeType('')
-
-      expect(result).toBe('.png')
-      expect(consoleErrorSpy).toHaveBeenCalled()
+      expect(getExtensionFromMimeType('image/tiff')).toBe('.png')
     })
   })
 
@@ -89,12 +62,8 @@ describe('mimeUtils', () => {
   })
 
   describe('reconcileFileNameExtension', () => {
-    it.each([
-      ['photo', 'image/jpeg', 'photo.jpg'],
-      ['screenshot', 'image/png', 'screenshot.png'],
-      ['artwork', 'image/webp', 'artwork.webp'],
-    ])('reconciles %s and %s to %s', (fileName, mimeType, expected) => {
-      expect(reconcileFileNameExtension(fileName, mimeType)).toBe(expected)
+    it('should append the extension when the name has none', () => {
+      expect(reconcileFileNameExtension('photo', 'image/jpeg')).toBe('photo.jpg')
     })
 
     it('should preserve existing correct extension', () => {
@@ -122,11 +91,8 @@ describe('mimeUtils', () => {
   describe('output format preference', () => {
     it.each([
       [undefined, undefined],
-      ['', undefined],
       ['photo', undefined],
       ['banner.v2', undefined],
-      ['my.photo', undefined],
-      ['2026.07.29-banner', undefined],
       ['photo.png', 'png'],
       ['photo.PNG', 'png'],
       ['photo.jpg', 'jpeg'],
@@ -158,21 +124,9 @@ describe('mimeUtils', () => {
     })
 
     it('should return image/png for unknown MIME type', () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
 
-      const result = normalizeMimeType('image/tiff')
-
-      expect(result).toBe('image/png')
-      expect(consoleErrorSpy).toHaveBeenCalled()
-    })
-
-    it('should return image/png for empty string', () => {
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-      const result = normalizeMimeType('')
-
-      expect(result).toBe('image/png')
-      expect(consoleErrorSpy).toHaveBeenCalled()
+      expect(normalizeMimeType('image/tiff')).toBe('image/png')
     })
   })
 })

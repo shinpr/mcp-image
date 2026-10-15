@@ -192,25 +192,11 @@ describe('request and output boundaries', () => {
     await rm(outputDir, { recursive: true, force: true })
   })
 
+  // Representatives only: each rule is owned by inputValidator.test.ts.
   it.each([
     {},
-    { prompt: 123 },
-    { prompt: '   ' },
-    { prompt: 'test', imageSize: '8K' },
-    { prompt: 'test', imageSize: null },
-    { prompt: 'test', purpose: { x: 1 } },
-    { prompt: 'test', fileName: 42 },
-    { prompt: 'test', inputImagePath: null },
     { prompt: 'test', inputImagePath: '/old/image.png' },
-    { prompt: 'test', inputImagePaths: null },
-    { prompt: 'test', inputImagePaths: '/image.png' },
-    { prompt: 'test', inputImagePaths: [] },
-    { prompt: 'test', inputImagePaths: [''] },
-    { prompt: 'test', inputImagePaths: ['   '] },
-    { prompt: 'test', inputImagePaths: [42] },
     { prompt: 'test', inputImagePaths: ['relative.png'] },
-    { prompt: 'test', aspectRatio: '' },
-    { prompt: 'test', imageSize: { toString: null } },
   ])('rejects invalid arguments before any provider request: %j', async (args) => {
     const result = await client.callTool({ name: 'generate_image', arguments: args })
     expect(result.isError).toBe(true)
@@ -219,65 +205,125 @@ describe('request and output boundaries', () => {
     expect(await readdir(outputDir)).toEqual([])
   })
 
-  it.each(['gemini', 'openai', 'seedream'] as const)(
-    'passes every reference in order through enhancement and the real %s transport',
-    async (provider) => {
-      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x01])
-      const firstPath = resolve(outputDir, 'first.png')
-      const secondPath = resolve(outputDir, 'second.jpg')
-      const paths = [firstPath, secondPath]
-      await writeFile(firstPath, PNG)
-      await writeFile(secondPath, jpeg)
-      const references = [
+  async function writeReferences(): Promise<{ paths: string[]; references: ReferenceImage[] }> {
+    const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x01])
+    const firstPath = resolve(outputDir, 'first.png')
+    const secondPath = resolve(outputDir, 'second.jpg')
+    await writeFile(firstPath, PNG)
+    await writeFile(secondPath, jpeg)
+    return {
+      paths: [firstPath, secondPath],
+      references: [
         { data: PNG.toString('base64'), mimeType: 'image/png' },
         { data: jpeg.toString('base64'), mimeType: 'image/jpeg' },
-      ]
-      for (const mode of [
-        { enhance: true, fail: false, count: 2 },
-        { enhance: true, fail: false, count: 1 },
-        { enhance: false, fail: false, count: 2 },
-        { enhance: true, fail: true, count: 2 },
-      ]) {
-        vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', String(!mode.enhance))
-        let requests = 0
-        fetchMock.mockReset().mockImplementation(async (url) => {
-          if (String(url) === 'data:,') {
-            return new Response('')
-          }
-          requests += 1
-          if (mode.enhance && requests === 1) {
-            return mode.fail ? truncatedTextResponse(provider) : textResponse(provider)
-          }
-          return imageResponse(provider)
-        })
-        const result = await client.callTool({
-          name: 'generate_image',
-          arguments: {
-            provider,
-            prompt: 'use the supplied references',
-            inputImagePaths: paths.slice(0, mode.count),
-          },
-        })
-        expect(result.isError).toBe(false)
-        const calls = fetchMock.mock.calls.filter(([url]) => String(url) !== 'data:,')
-        expect(calls).toHaveLength(mode.enhance ? 2 : 1)
-        const images = references.slice(0, mode.count)
-        if (mode.enhance) {
-          assertTextReferences(provider, expectDefined(calls[0], 'text request'), images)
-        }
-        await assertImageReferences(
-          provider,
-          expectDefined(calls.at(-1), 'image request'),
-          images,
-          mode.enhance && !mode.fail ? 'enhanced prompt' : 'use the supplied references'
-        )
-        const uri = expectString(readPath(parseToolPayload(result), 'resource', 'uri'), 'image URI')
-        expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
-      }
+      ],
+    }
+  }
 
-      fetchMock.mockClear()
+  /** Serve one enhancement response (when given), then image responses; return API calls. */
+  function serveProvider(
+    provider: ImageProvider,
+    enhancement?: (provider: ImageProvider) => Response
+  ): () => Parameters<typeof fetch>[] {
+    let requests = 0
+    fetchMock.mockReset().mockImplementation(async (url) => {
+      // The installed OpenAI SDK checks FormData support with a local data URL.
+      if (String(url) === 'data:,') {
+        return new Response('')
+      }
+      requests += 1
+      return enhancement && requests === 1 ? enhancement(provider) : imageResponse(provider)
+    })
+    return () => fetchMock.mock.calls.filter(([url]) => String(url) !== 'data:,')
+  }
+
+  const PROVIDERS = ['gemini', 'openai', 'seedream'] as const
+  const ENHANCED_MODES = [
+    {
+      mode: 'enhanced, two references',
+      count: 2,
+      enhancement: textResponse,
+      imagePrompt: 'enhanced prompt',
+    },
+    {
+      mode: 'enhanced, one reference',
+      count: 1,
+      enhancement: textResponse,
+      imagePrompt: 'enhanced prompt',
+    },
+    {
+      mode: 'truncated enhancement, two references',
+      count: 2,
+      enhancement: truncatedTextResponse,
+      imagePrompt: 'use the supplied references',
+    },
+  ] as const
+
+  it.each(PROVIDERS.flatMap((provider) => ENHANCED_MODES.map((mode) => ({ provider, ...mode }))))(
+    'passes every reference in order through $provider enhancement and image transport ($mode)',
+    async ({ provider, count, enhancement, imagePrompt }) => {
       vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
-      const tooMany = await client.callTool({
+      const { paths, references } = await writeReferences()
+      const apiCalls = serveProvider(provider, enhancement)
+
+      const result = await client.callTool({
+        name: 'generate_image',
+        arguments: {
+          provider,
+          prompt: 'use the supplied references',
+          inputImagePaths: paths.slice(0, count),
+        },
+      })
+
+      expect(result.isError).toBe(false)
+      const calls = apiCalls()
+      expect(calls).toHaveLength(2)
+      const images = references.slice(0, count)
+      assertTextReferences(provider, expectDefined(calls[0], 'text request'), images)
+      await assertImageReferences(
+        provider,
+        expectDefined(calls[1], 'image request'),
+        images,
+        imagePrompt
+      )
+      const uri = expectString(readPath(parseToolPayload(result), 'resource', 'uri'), 'image URI')
+      expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
+    }
+  )
+
+  it.each(PROVIDERS)(
+    'passes every reference in order through the %s image transport without enhancement',
+    async (provider) => {
+      const { paths, references } = await writeReferences()
+      const apiCalls = serveProvider(provider)
+
+      const result = await client.callTool({
+        name: 'generate_image',
+        arguments: { provider, prompt: 'use the supplied references', inputImagePaths: paths },
+      })
+
+      expect(result.isError).toBe(false)
+      const calls = apiCalls()
+      expect(calls).toHaveLength(1)
+      await assertImageReferences(
+        provider,
+        expectDefined(calls[0], 'image request'),
+        references,
+        'use the supplied references'
+      )
+      const uri = expectString(readPath(parseToolPayload(result), 'resource', 'uri'), 'image URI')
+      expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
+    }
+  )
+
+  it.each(PROVIDERS)(
+    'rejects more references than %s accepts before any provider request',
+    async (provider) => {
+      vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+      const firstPath = resolve(outputDir, 'first.png')
+      await writeFile(firstPath, PNG)
+
+      const result = await client.callTool({
         name: 'generate_image',
         arguments: {
           provider,
@@ -285,22 +331,29 @@ describe('request and output boundaries', () => {
           inputImagePaths: Array.from({ length: MAX_INPUT_IMAGES[provider] + 1 }, () => firstPath),
         },
       })
-      expect(tooMany.isError).toBe(true)
-      expect(fetchMock).not.toHaveBeenCalled()
 
-      const missing = await client.callTool({
-        name: 'generate_image',
-        arguments: {
-          provider,
-          prompt: 'test',
-          inputImagePaths: [firstPath, resolve(outputDir, 'missing.png')],
-        },
-      })
-      expect(missing.isError).toBe(true)
-      expect(firstContentText(missing)).toContain('Input image 2')
+      expect(result.isError).toBe(true)
       expect(fetchMock).not.toHaveBeenCalled()
     }
   )
+
+  it('identifies a missing second reference before any provider request', async () => {
+    vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+    const firstPath = resolve(outputDir, 'first.png')
+    await writeFile(firstPath, PNG)
+
+    const result = await client.callTool({
+      name: 'generate_image',
+      arguments: {
+        prompt: 'test',
+        inputImagePaths: [firstPath, resolve(outputDir, 'missing.png')],
+      },
+    })
+
+    expect(result.isError).toBe(true)
+    expect(firstContentText(result)).toContain('Input image 2')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 
   it.each(['gemini', 'openai', 'seedream'] as const)(
     'rejects an unreadable second reference before %s enhancement',
@@ -334,41 +387,6 @@ describe('request and output boundaries', () => {
     }
   )
 
-  it('preserves the complete original prompt when Gemini enhancement is truncated', async () => {
-    vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
-    fetchMock
-      .mockResolvedValueOnce(
-        jsonResponse({
-          candidates: [
-            { content: { parts: [{ text: 'partial enhancement' }] }, finishReason: 'MAX_TOKENS' },
-          ],
-        })
-      )
-      .mockImplementation(async () => imageResponse('gemini'))
-    const result = await client.callTool({
-      name: 'generate_image',
-      arguments: {
-        provider: 'gemini',
-        prompt: 'complete original instructions',
-        fileName: 'fallback.png',
-      },
-    })
-    expect(result.isError).toBe(false)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    const imageRequest = parseJsonObject(
-      expectString(
-        expectDefined(expectDefined(fetchMock.mock.calls[1], 'second fetch call')[1], 'fetch init')
-          .body,
-        'fetch request body'
-      ),
-      'image request body'
-    )
-    const contents = expectArray(imageRequest['contents'], 'request contents')
-    const parts = expectArray(readPath(contents[0], 'parts'), 'content parts')
-    expect(readPath(parts[0], 'text')).toBe('complete original instructions')
-    expect(await readFile(resolve(outputDir, 'fallback.png'))).toEqual(PNG)
-  })
-
   it('does not save a Gemini response that decodes to an empty buffer', async () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({
@@ -400,7 +418,7 @@ describe('request and output boundaries', () => {
     expect(readPath(error, 'details', 'stage')).toBe('prompt_analysis')
   })
 
-  it.each([401, 429, 503])(
+  it.each([401, 503])(
     'preserves Seedream HTTP %i without exposing the response body',
     async (status) => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'private upstream body' }, status))

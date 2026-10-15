@@ -12,25 +12,6 @@ describe('Logger', () => {
   })
 
   describe('info logging', () => {
-    it('should log info message with structured format', () => {
-      const context = 'test-context'
-      const message = 'Test info message'
-      const metadata = { key: 'value', count: 42 }
-
-      logger.info(context, message, metadata)
-
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"level":"info"'))
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('"context":"test-context"')
-      )
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('"message":"Test info message"')
-      )
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        expect.stringContaining('"metadata":{"key":"value","count":42}')
-      )
-    })
-
     it('should log info message without metadata', () => {
       const context = 'test-context'
       const message = 'Test info message'
@@ -88,38 +69,15 @@ describe('Logger', () => {
   })
 
   describe('sensitive data filtering', () => {
-    it('should redact all sensitive field patterns', () => {
-      const sensitiveFields = [
-        'API_KEY',
-        'apiKey',
-        'api_key',
-        'SECRET',
-        'secret',
-        'PASSWORD',
-        'password',
-        'TOKEN',
-        'token',
-        'CREDENTIAL',
-        'credential',
-      ]
+    it.each(['API_KEY', 'clientSecret', 'password', 'accessToken', 'credential'])(
+      'should redact the value of metadata key %s',
+      (field) => {
+        logger.info('test', 'message', { [field]: 'sensitive-value', normalField: 'normal-value' })
 
-      for (const field of sensitiveFields) {
-        const metadata = {
-          [field]: 'sensitive-value',
-          normalField: 'normal-value',
-        }
-
-        logger.info('test', 'message', metadata)
-
-        expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"[REDACTED]"'))
-        expect(mockConsoleError).toHaveBeenCalledWith(
-          expect.not.stringContaining('sensitive-value')
-        )
-        expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('normal-value'))
-
-        vi.clearAllMocks()
+        const parsedLog = JSON.parse(mockConsoleError.mock.calls[0][0])
+        expect(parsedLog.metadata).toEqual({ [field]: '[REDACTED]', normalField: 'normal-value' })
       }
-    })
+    )
 
     it('should handle nested sensitive data', () => {
       const metadata = {
@@ -230,19 +188,19 @@ describe('Logger', () => {
   })
 
   describe('trace and session IDs', () => {
-    it('should include traceId and sessionId in log entries', () => {
-      const context = 'trace-test'
-      const message = 'Test message with trace'
+    it('should keep one session ID per logger instance', () => {
+      const otherLogger = new Logger()
 
-      logger.info(context, message)
+      logger.info('trace-test', 'first')
+      logger.info('trace-test', 'second')
+      otherLogger.info('trace-test', 'other')
 
-      const logOutput = mockConsoleError.mock.calls[0][0]
-      const parsedLog = JSON.parse(logOutput)
-
-      expect(parsedLog).toHaveProperty('traceId')
-      expect(parsedLog).toHaveProperty('sessionId')
-      expect(typeof parsedLog.traceId).toBe('string')
-      expect(typeof parsedLog.sessionId).toBe('string')
+      const [first, second, other] = mockConsoleError.mock.calls.map(([output]) =>
+        JSON.parse(output)
+      )
+      expect(first.sessionId).toMatch(/^[0-9a-f]{8}$/)
+      expect(second.sessionId).toBe(first.sessionId)
+      expect(other.sessionId).not.toBe(first.sessionId)
     })
   })
 
@@ -281,27 +239,14 @@ describe('Logger', () => {
     })
   })
 
-  describe('timestamp format', () => {
-    it('should include ISO timestamp in log entries', () => {
-      const beforeTime = new Date().toISOString()
-
-      logger.info('test', 'timestamp test')
-
-      expect(mockConsoleError).toHaveBeenCalledWith(expect.stringContaining('"timestamp":"'))
-
-      const logCall = mockConsoleError.mock.calls[0][0]
-      const timestampMatch = logCall.match(/"timestamp":"([^"]+)"/)
-      expect(timestampMatch).not.toBeNull()
-
-      if (timestampMatch) {
-        const timestamp = timestampMatch[1]
-        expect(new Date(timestamp).getTime()).toBeGreaterThanOrEqual(new Date(beforeTime).getTime())
-      }
-    })
-  })
-
   describe('log entry structure', () => {
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
     it('should produce valid JSON log entries', () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-01-02T03:04:05.678Z'))
       const context = 'json-test'
       const message = 'Valid JSON test'
       const metadata = { test: true, count: 1 }
@@ -311,7 +256,7 @@ describe('Logger', () => {
       const logOutput = mockConsoleError.mock.calls[0][0]
       const parsedLog = JSON.parse(logOutput)
       expect(parsedLog).toMatchObject({
-        timestamp: expect.any(String),
+        timestamp: '2026-01-02T03:04:05.678Z',
         level: 'info',
         context: 'json-test',
         message: 'Valid JSON test',

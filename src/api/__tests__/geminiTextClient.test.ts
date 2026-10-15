@@ -64,15 +64,14 @@ describe('GeminiTextClient', () => {
   })
 
   describe('Public API Contract', () => {
-    it('should generate text with proper response format', async () => {
+    it('returns the generated text with surrounding whitespace trimmed', async () => {
+      mockGenerateContent.mockResolvedValueOnce({ text: '  Enhanced logo prompt\n' })
+
       const result = await client.generateText('create a logo')
 
       expect(result.success).toBe(true)
-
       if (result.success) {
-        expect(typeof result.data).toBe('string')
-        expect(result.data).toContain('Enhanced')
-        expect(result.data.length).toBeGreaterThan(0)
+        expect(result.data).toBe('Enhanced logo prompt')
       }
     })
 
@@ -137,34 +136,28 @@ describe('GeminiTextClient', () => {
       }
     })
 
-    it('should handle rate limit errors', async () => {
-      const result = await client.generateText('rate limit')
+    it.each(['rate limit', 'quota'])(
+      'should suggest waiting or upgrading when the API reports a %s error',
+      async (prompt) => {
+        const result = await client.generateText(prompt)
 
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(GeminiAPIError)
-        const upstream = String(result.error.context?.upstreamMessage ?? '').toLowerCase()
-        expect(upstream).toContain('rate limit')
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error).toBeInstanceOf(GeminiAPIError)
+          expect(result.error.suggestion).toBe(
+            'You have exceeded your API quota or rate limit. Wait before making more requests or upgrade your plan'
+          )
+        }
       }
-    })
+    )
 
-    it('should handle quota exceeded scenarios', async () => {
-      const result = await client.generateText('quota')
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(GeminiAPIError)
-        expect(result.error.suggestion.toLowerCase()).toContain('quota')
-      }
-    })
-
-    it('should handle service degradation', async () => {
+    it('should fall back to the generic suggestion for unclassified failures', async () => {
       const result = await client.generateText('degradation')
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.message.toLowerCase()).toContain('failed')
-        expect(result.error.suggestion).toBeTruthy()
+        expect(result.error).toBeInstanceOf(GeminiAPIError)
+        expect(result.error.suggestion).toBe('Check your API configuration and try again')
       }
     })
   })
