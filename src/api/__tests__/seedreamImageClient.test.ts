@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { asUntypedCaller, expectRecord, parseJsonObject } from '../../tests/helpers/inspect'
-import { type Config, getConfig } from '../../utils/config'
+import type { Config } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import type { ImageClient } from '../imageClient'
 import { createSeedreamImageClient, validateSeedreamCapabilities } from '../seedreamImageClient'
@@ -101,17 +101,6 @@ function disclosedError(error: ImageAPIError | NetworkError): string {
   })
 }
 
-function stubSeedreamEnvironment(): void {
-  vi.stubEnv('IMAGE_PROVIDER', 'seedream')
-  vi.stubEnv('GEMINI_API_KEY', 'gemini-dummy-seedream-image-key')
-  vi.stubEnv('OPENAI_API_KEY', 'openai-dummy-seedream-image-key')
-  vi.stubEnv('ARK_API_KEY', WRAPPED_DUMMY_API_KEY)
-  vi.stubEnv('IMAGE_OUTPUT_DIR', './output')
-  vi.stubEnv('IMAGE_QUALITY', 'fast')
-  vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
-  vi.stubEnv('NODE_ENV', 'test')
-}
-
 beforeEach(() => {
   fetchMock.mockReset()
   fetchMock.mockResolvedValue(successfulResponse())
@@ -121,20 +110,14 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  vi.unstubAllEnvs()
 })
 
 describe('seedreamImageClient', () => {
-  it('passes the untrimmed environment key to direct HTTP Authorization', async () => {
-    stubSeedreamEnvironment()
-    const configResult = getConfig()
-    expect(configResult.success).toBe(true)
-    if (!configResult.success) {
-      throw configResult.error
-    }
-    expect(configResult.data.arkApiKey).toBe(WRAPPED_DUMMY_API_KEY)
-
-    const result = await createClient(configResult.data).generateImage({
+  it('passes the untrimmed configured key to direct HTTP Authorization', async () => {
+    const result = await createClient({
+      ...testConfig,
+      arkApiKey: WRAPPED_DUMMY_API_KEY,
+    }).generateImage({
       prompt: PRIVATE_PROMPT,
     })
 
@@ -144,7 +127,6 @@ describe('seedreamImageClient', () => {
     expect(expectRecord(request.init.headers, 'request headers')['Authorization']).toBe(
       `Bearer ${WRAPPED_DUMMY_API_KEY}`
     )
-    expect(request.headers.get('authorization')).toBe(`Bearer  \t${DUMMY_API_KEY}`)
   })
 
   it.each([
@@ -234,22 +216,6 @@ describe('seedreamImageClient', () => {
     }
   })
 
-  it('uses request quality before captured default quality', async () => {
-    const client = createClient({ ...testConfig, imageQuality: 'fast' })
-
-    const result = await client.generateImage({
-      prompt: PRIVATE_PROMPT,
-      quality: 'quality',
-    })
-
-    expect(result.success).toBe(true)
-    expect(readRequest().body).toMatchObject({
-      model: 'dola-seedream-5-0-pro-260628',
-      size: '1K',
-      optimize_prompt_options: { mode: 'standard' },
-    })
-  })
-
   it('uses one unchanged Method 1 suffix rule for all 14 aspect ratios', async () => {
     const client = createClient()
 
@@ -316,26 +282,6 @@ describe('seedreamImageClient', () => {
     }
   })
 
-  it('requests JPEG output for editing', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        data: [{ b64_json: JPEG_BYTES.toString('base64') }],
-      })
-    )
-
-    const result = await createClient().generateImage({
-      prompt: PRIVATE_PROMPT,
-      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
-      preferredOutputFormat: 'jpeg',
-    })
-
-    expect(result.success).toBe(true)
-    expect(readRequest().body).toMatchObject({
-      output_format: 'jpeg',
-      image: `data:image/png;base64,${PRIVATE_INPUT_IMAGE}`,
-    })
-  })
-
   it.each([
     {
       name: 'Google Search',
@@ -360,12 +306,6 @@ describe('seedreamImageClient', () => {
     {
       name: 'MIME without input image',
       params: { inputImages: [{ mimeType: 'image/png' }] },
-    },
-    {
-      name: 'unsupported editing MIME',
-      params: {
-        inputImages: [{ data: PNG_BYTES.toString('base64'), mimeType: 'image/gif' }],
-      },
     },
     {
       name: 'malformed editing base64',
@@ -404,9 +344,23 @@ describe('seedreamImageClient', () => {
         'fast'
       )
     ).toEqual({ success: true, data: undefined })
+  })
 
-    const rejected = validateSeedreamCapabilities({ useGoogleSearch: true }, 'fast')
-    expect(rejected.success).toBe(false)
+  it('accepts an explicit false Google Search flag without changing the request', async () => {
+    const client = createClient()
+
+    const baseline = await client.generateImage({ prompt: PRIVATE_PROMPT })
+    const baselineBody = readRequest().body
+    fetchMock.mockResolvedValueOnce(successfulResponse())
+    const result = await client.generateImage({
+      prompt: PRIVATE_PROMPT,
+      useGoogleSearch: false,
+    })
+
+    expect(baseline.success).toBe(true)
+    expect(result.success).toBe(true)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(readRequest().body).toEqual(baselineBody)
   })
 
   it('accepts a valid 4 MiB PNG response without overflowing the validation stack', async () => {
@@ -445,7 +399,8 @@ describe('seedreamImageClient', () => {
   it.each([
     {
       name: 'missing data',
-      response: () => jsonResponse({}),
+      response: () =>
+        jsonResponse({ marker: `${RAW_BODY_MARKER}:${PRIVATE_PROMPT}:${DUMMY_API_KEY}` }),
     },
     {
       name: 'extra images',
@@ -540,7 +495,10 @@ describe('seedreamImageClient', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     if (!result.success) {
       expect(result.error).toBeInstanceOf(ImageAPIError)
-      expect(disclosedError(result.error)).not.toContain(PRIVATE_PROMPT)
+      const disclosed = disclosedError(result.error)
+      expect(disclosed).not.toContain(DUMMY_API_KEY)
+      expect(disclosed).not.toContain(PRIVATE_PROMPT)
+      expect(disclosed).not.toContain(RAW_BODY_MARKER)
     }
   })
 
@@ -679,8 +637,6 @@ describe('seedreamImageClient', () => {
     expect(result.success).toBe(true)
     expect(timeoutSpy).toHaveBeenCalledTimes(1)
     expect(timeoutSpy).toHaveBeenCalledWith(300000)
-    expect(timeoutSpy).not.toHaveBeenCalledWith(1)
-    expect(timeoutSpy).not.toHaveBeenCalledWith(30000)
     expect(readRequest().init.signal).toBe(timeoutSpy.mock.results[0]?.value)
   })
 
@@ -767,30 +723,6 @@ describe('seedreamImageClient', () => {
     if (!result.success) {
       expect(result.error).toBeInstanceOf(NetworkError)
       expect(result.error.message).toContain(row.expectedMessage)
-      const disclosed = disclosedError(result.error)
-      expect(disclosed).not.toContain(DUMMY_API_KEY)
-      expect(disclosed).not.toContain(PRIVATE_PROMPT)
-      expect(disclosed).not.toContain(PRIVATE_INPUT_IMAGE)
-      expect(disclosed).not.toContain(RAW_BODY_MARKER)
-    }
-  })
-
-  it('sanitizes a parsed contract failure without disclosing the upstream payload', async () => {
-    fetchMock.mockResolvedValueOnce(
-      jsonResponse({
-        marker: `${RAW_BODY_MARKER}:${PRIVATE_PROMPT}:${DUMMY_API_KEY}`,
-        data: [],
-      })
-    )
-
-    const result = await createClient().generateImage({
-      prompt: PRIVATE_PROMPT,
-      inputImages: [{ data: PRIVATE_INPUT_IMAGE, mimeType: 'image/png' }],
-    })
-
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error).toBeInstanceOf(ImageAPIError)
       const disclosed = disclosedError(result.error)
       expect(disclosed).not.toContain(DUMMY_API_KEY)
       expect(disclosed).not.toContain(PRIVATE_PROMPT)

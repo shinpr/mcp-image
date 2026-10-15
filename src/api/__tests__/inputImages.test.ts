@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { MAX_INPUT_IMAGES } from '../../types/image.js'
 import { validateInputImages } from '../inputImages.js'
 
 describe('reference image preflight', () => {
-  it.each(['gemini', 'openai', 'seedream'] as const)(
-    'accepts the %s count limit and rejects one more',
-    (provider) => {
-      const images = Array.from({ length: MAX_INPUT_IMAGES[provider] }, () => ({
-        data: 'aW1hZ2U=',
-        mimeType: 'image/png',
-      }))
-      expect(validateInputImages(provider, images).success).toBe(true)
-      expect(
-        validateInputImages(provider, [...images, { data: 'aW1hZ2U=', mimeType: 'image/png' }])
-          .success
-      ).toBe(false)
-    }
-  )
+  it.each([
+    ['gemini', 14],
+    ['openai', 16],
+    ['seedream', 10],
+  ] as const)('accepts the %s count limit of %i images and rejects one more', (provider, limit) => {
+    const images = Array.from({ length: limit }, () => ({
+      data: 'aW1hZ2U=',
+      mimeType: 'image/png',
+    }))
+    expect(validateInputImages(provider, images).success).toBe(true)
+    expect(
+      validateInputImages(provider, [...images, { data: 'aW1hZ2U=', mimeType: 'image/png' }])
+        .success
+    ).toBe(false)
+  })
 
   it.each(['gemini', 'openai', 'seedream'] as const)(
     'identifies an unsupported second reference for %s',

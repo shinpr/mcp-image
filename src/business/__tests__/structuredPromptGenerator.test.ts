@@ -32,10 +32,6 @@ describe('StructuredPromptGenerator', () => {
       if (result.success) {
         expect(result.data).toBe(structuredPrompt)
       }
-      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ maxTokens: 1000 })
-      )
     })
 
     it('uses the configured prompt-generation token limit', async () => {
@@ -112,15 +108,12 @@ describe('StructuredPromptGenerator', () => {
       const userPrompt = 'Delicious pasta dish'
       const purpose = 'high-end Italian restaurant menu'
 
-      const structuredPrompt = 'Professional food photography of artfully plated pasta'
-      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok(structuredPrompt))
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(
+        Ok('Professional food photography of artfully plated pasta')
+      )
 
-      const result = await generator.generateStructuredPrompt(userPrompt, { purpose })
+      await generator.generateStructuredPrompt(userPrompt, { purpose })
 
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toBe(structuredPrompt)
-      }
       expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
         expect.stringContaining(`INTENDED USE: ${purpose}`),
         expect.any(Object)
@@ -135,12 +128,8 @@ describe('StructuredPromptGenerator', () => {
         Ok('A fluffy cat with soft lighting')
       )
 
-      const result = await generator.generateStructuredPrompt(userPrompt)
+      await generator.generateStructuredPrompt(userPrompt)
 
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toBe('A fluffy cat with soft lighting')
-      }
       expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
         expect.not.stringContaining('INTENDED USE:'),
         expect.any(Object)

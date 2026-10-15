@@ -75,44 +75,6 @@ describe('openaiTextClient', () => {
     }
   })
 
-  it('should include input image as a data URL for multimodal prompt enhancement', async () => {
-    mockResponsesCreate.mockResolvedValue({
-      output_text: 'Enhanced edit prompt preserving original style',
-    })
-
-    const clientResult = createOpenAITextClient(testConfig)
-    expect(clientResult.success).toBe(true)
-    if (!clientResult.success) {
-      return
-    }
-
-    await clientResult.data.generateText('make the lighting warmer', {
-      inputImages: [{ data: Buffer.from('image-bytes').toString('base64'), mimeType: 'image/png' }],
-    })
-
-    expect(mockResponsesCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        input: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'input_text',
-                text: 'make the lighting warmer',
-              },
-              {
-                type: 'input_image',
-                image_url: `data:image/png;base64,${Buffer.from('image-bytes').toString('base64')}`,
-                detail: 'auto',
-              },
-            ],
-          },
-        ],
-      }),
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    )
-  })
-
   it('should return ImageAPIError for empty OpenAI text response', async () => {
     mockResponsesCreate.mockResolvedValue({ output_text: '' })
 

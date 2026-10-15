@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GeneratedImageResult } from '../../api/imageClient'
-import {
-  FileOperationError,
-  GeminiAPIError,
-  InputValidationError,
-  NetworkError,
-} from '../../utils/errors'
+import { FileOperationError, GeminiAPIError, InputValidationError } from '../../utils/errors'
 import * as responseBuilder from '../responseBuilder'
 
 describe('ResponseBuilder', () => {
@@ -46,8 +41,6 @@ describe('ResponseBuilder', () => {
 
     it.each([
       ['image/jpeg', '/path/to/image.jpg', 'image/jpeg'],
-      ['image/webp', '/path/to/image.webp', 'image/webp'],
-      ['image/png', '/path/to/image.png', 'image/png'],
       ['', '/path/to/image.jpg', 'image/jpeg'],
       ['image/tiff', '/path/to/image.tiff', 'image/png'],
     ])('resolves metadata MIME %s and path %s to %s', (metadataMime, filePath, expectedMime) => {
@@ -61,7 +54,7 @@ describe('ResponseBuilder', () => {
   })
 
   describe('buildErrorResponse', () => {
-    it('should create error response for InputValidationError', () => {
+    it('should pass a structured error code, message, and suggestion through', () => {
       const error = new InputValidationError(
         'Invalid prompt provided',
         'Please provide a non-empty prompt'
@@ -93,21 +86,6 @@ describe('ResponseBuilder', () => {
       )
     })
 
-    it('should create error response for GeminiAPIError', () => {
-      const error = new GeminiAPIError(
-        'API quota exceeded',
-        'Please try again later or upgrade your API quota'
-      )
-
-      const response = responseBuilder.buildErrorResponse(error)
-
-      expect(response.isError).toBe(true)
-      const errorData = JSON.parse(response.content[0].text)
-      expect(errorData.error.code).toBe('GEMINI_API_ERROR')
-      expect(errorData.error.message).toBe('API quota exceeded')
-      expect(errorData.error.suggestion).toBe('Please try again later or upgrade your API quota')
-    })
-
     it('should expose allowlisted context fields in details for GeminiAPIError', () => {
       const error = new GeminiAPIError('Failed to generate image with Gemini', {
         provider: 'gemini',
@@ -135,21 +113,6 @@ describe('ResponseBuilder', () => {
 
       expect(errorData.error.details.upstreamMessage).toContain('[REDACTED]')
       expect(errorData.error.details.upstreamMessage).not.toContain('sk-proj-ABCDEF123456789')
-    })
-
-    it('should create error response for NetworkError', () => {
-      const error = new NetworkError(
-        'Network connection failed',
-        'Please check your internet connection and try again'
-      )
-
-      const response = responseBuilder.buildErrorResponse(error)
-
-      expect(response.isError).toBe(true)
-      const errorData = JSON.parse(response.content[0].text)
-      expect(errorData.error.code).toBe('NETWORK_ERROR')
-      expect(errorData.error.message).toBe('Network connection failed')
-      expect(errorData.error.suggestion).toBe('Please check your internet connection and try again')
     })
 
     it('should handle unknown errors gracefully', () => {

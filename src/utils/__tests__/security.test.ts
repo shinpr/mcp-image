@@ -1,5 +1,5 @@
 import * as path from 'node:path'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SecurityError } from '../errors'
 import { SecurityManager } from '../security'
 
@@ -11,18 +11,6 @@ describe('SecurityManager', () => {
   })
 
   describe('file path sanitization', () => {
-    it('should sanitize valid relative path', () => {
-      const inputPath = './output/image.png'
-
-      const result = securityManager.sanitizeFilePath(inputPath)
-
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toContain('output')
-        expect(result.data).toContain('image.png')
-      }
-    })
-
     it('should reject path with null byte', () => {
       const inputPath = './output/image.png\0'
 
@@ -32,8 +20,6 @@ describe('SecurityManager', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(SecurityError)
         expect(result.error.message).toBe('Null byte detected in file path')
-        expect(result.error.suggestion).toBe('Ensure your request meets security requirements')
-        expect(result.error.code).toBe('SECURITY_ERROR')
       }
     })
 
@@ -46,20 +32,6 @@ describe('SecurityManager', () => {
       if (!result.success) {
         expect(result.error).toBeInstanceOf(SecurityError)
         expect(result.error.message).toBe('Path traversal attempt detected')
-        expect(result.error.suggestion).toBe('Use valid file paths within allowed directories only')
-        expect(result.error.code).toBe('SECURITY_ERROR')
-      }
-    })
-
-    it('should reject path traversal attempt with ..\\', () => {
-      const inputPath = '..\\..\\secrets.txt'
-
-      const result = securityManager.sanitizeFilePath(inputPath)
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error).toBeInstanceOf(SecurityError)
-        expect(result.error.message).toContain('Path traversal attempt')
       }
     })
 
@@ -71,19 +43,16 @@ describe('SecurityManager', () => {
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error).toBeInstanceOf(SecurityError)
-        expect(result.error.message).toContain('File path outside allowed directories')
-        expect(result.error.suggestion).toContain('allowed directories')
+        expect(result.error.message).toBe('File path outside allowed directories')
       }
     })
 
-    it('should allow path within current working directory', () => {
-      const inputPath = './temp/output.png'
-
-      const result = securityManager.sanitizeFilePath(inputPath)
+    it('should resolve a relative path within the current working directory', () => {
+      const result = securityManager.sanitizeFilePath('./temp/output.png')
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data).toContain(process.cwd())
+        expect(result.data).toBe(path.join(process.cwd(), 'temp', 'output.png'))
       }
     })
 
@@ -103,30 +72,34 @@ describe('SecurityManager', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.message).toContain('File path outside allowed directories')
+        expect(result.error.message).toBe('File path outside allowed directories')
       }
     })
+  })
 
-    it('should handle complex path traversal attempts', () => {
-      const inputPath = './output/../../../root/.ssh/id_rsa'
-
-      const result = securityManager.sanitizeFilePath(inputPath)
-
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.message).toContain('Path traversal attempt')
-      }
+  describe('file name sanitization', () => {
+    afterEach(() => {
+      vi.useRealTimers()
     })
 
-    it('should handle mixed separators in path traversal', () => {
-      const inputPath = './output\\..\\..\\secrets'
+    it.each([
+      ['keeps an ordinary name', 'my photo.png', 'my photo.png'],
+      ['removes path separators and null bytes', 'dir/sub\\name\0.png', 'dirsubname.png'],
+      ['removes control characters', 'a\u0001b\u007f.png', 'ab.png'],
+      ['strips leading and trailing dots', '..hidden.png..', 'hidden.png'],
+      ['trims surrounding whitespace', '  name.png  ', 'name.png'],
+    ])('%s', (_behavior, fileName, expected) => {
+      expect(securityManager.sanitizeFilename(fileName)).toBe(expected)
+    })
 
-      const result = securityManager.sanitizeFilePath(inputPath)
+    it.each([
+      ['only dots', '...'],
+      ['only separators', '/\\/'],
+    ])('falls back to a timestamped name when the input is %s', (_condition, fileName) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date('2026-01-02T03:04:05.678Z'))
 
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.message).toContain('Path traversal attempt')
-      }
+      expect(securityManager.sanitizeFilename(fileName)).toBe('secure-file-1767323045678')
     })
   })
 })

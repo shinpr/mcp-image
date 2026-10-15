@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { parseJsonObject } from '../../tests/helpers/inspect'
-import { type Config, getConfig } from '../../utils/config'
+import type { Config } from '../../utils/config'
 import { ImageAPIError, NetworkError } from '../../utils/errors'
 import { createSeedreamTextClient } from '../seedreamTextClient'
 import type { TextClient } from '../textClient'
@@ -32,8 +32,8 @@ function readSerializedBody(init: RequestInit | undefined): Record<string, unkno
   return parseJsonObject(String(init?.body), 'request body')
 }
 
-function createClient(): TextClient {
-  const clientResult = createSeedreamTextClient(testConfig)
+function createClient(config: Config = testConfig): TextClient {
+  const clientResult = createSeedreamTextClient(config)
   expect(clientResult.success).toBe(true)
   if (!clientResult.success) {
     throw clientResult.error
@@ -41,44 +41,22 @@ function createClient(): TextClient {
   return clientResult.data
 }
 
-function stubSeedreamEnvironment(): void {
-  vi.stubEnv('IMAGE_PROVIDER', 'seedream')
-  vi.stubEnv('GEMINI_API_KEY', 'gemini-dummy-seedream-text-key')
-  vi.stubEnv('OPENAI_API_KEY', 'openai-dummy-seedream-text-key')
-  vi.stubEnv('ARK_API_KEY', WRAPPED_DUMMY_API_KEY)
-  vi.stubEnv('IMAGE_OUTPUT_DIR', './output')
-  vi.stubEnv('IMAGE_QUALITY', 'fast')
-  vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
-  vi.stubEnv('NODE_ENV', 'test')
-}
-
 afterEach(() => {
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  vi.unstubAllEnvs()
 })
 
 describe('seedreamTextClient', () => {
-  it('preserves the environment key before SDK Authorization normalization', async () => {
-    stubSeedreamEnvironment()
-    const configResult = getConfig()
-    expect(configResult.success).toBe(true)
-    if (!configResult.success) {
-      throw configResult.error
-    }
-    expect(configResult.data.arkApiKey).toBe(WRAPPED_DUMMY_API_KEY)
-
+  it('passes the untrimmed configured key to the SDK Authorization header', async () => {
     const transport = vi
       .fn<typeof fetch>()
       .mockResolvedValue(successfulResponse('exact authorization response'))
     vi.stubGlobal('fetch', transport)
-    const clientResult = createSeedreamTextClient(configResult.data)
-    expect(clientResult.success).toBe(true)
-    if (!clientResult.success) {
-      throw clientResult.error
-    }
 
-    const result = await clientResult.data.generateText(PRIVATE_PROMPT)
+    const result = await createClient({
+      ...testConfig,
+      arkApiKey: WRAPPED_DUMMY_API_KEY,
+    }).generateText(PRIVATE_PROMPT)
 
     expect(result).toEqual({ success: true, data: 'exact authorization response' })
     expect(transport).toHaveBeenCalledTimes(1)
