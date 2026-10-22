@@ -44,7 +44,7 @@ Set `SKIP_PROMPT_ENHANCEMENT=true` to send the original prompt to the image mode
 
 ## Quick Start
 
-You need Node.js 22.23.4+ (22.x), 24.22.1+ (24.x), or 26.12.1+, an MCP-compatible client, and an API key for one image provider. Use the latest patch release in your Node.js release line to receive security fixes.
+You need Node.js 22 or later, an MCP-compatible client, and an API key for one image provider.
 
 ### 1. Get an API key
 
