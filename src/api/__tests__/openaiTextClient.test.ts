@@ -27,6 +27,7 @@ describe('openaiTextClient', () => {
     imageOutputDir: './output',
     skipPromptEnhancement: false,
     imageQuality: 'fast',
+    imageTimeoutMs: 300_000,
   }
 
   beforeEach(() => {

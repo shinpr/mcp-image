@@ -177,6 +177,7 @@ All three providers support these presets for generation and editing. You can ov
 | `ARK_API_KEY` | - | ModelArk AP API key for Seedream |
 | `IMAGE_OUTPUT_DIR` | `./output` | Directory where generated images are saved; use an absolute path in MCP configuration |
 | `IMAGE_QUALITY` | `fast` | Default quality preset: `fast`, `balanced`, or `quality` |
+| `IMAGE_TIMEOUT_MS` | `300000` | Default request timeout in milliseconds, from `1` to `2147483647` |
 | `SKIP_PROMPT_ENHANCEMENT` | `false` | Set to `true` to send prompts through unchanged |
 
 You can configure keys for more than one provider and switch per request. A request-level `provider` option takes precedence over `IMAGE_PROVIDER`.
@@ -192,6 +193,7 @@ Your MCP client calls this tool for you. Open the reference when you need to che
 |-----------|------|----------|-------------|
 | `prompt` | string | Yes | Image description or editing instruction |
 | `quality` | string | No | `fast`, `balanced`, or `quality`; overrides `IMAGE_QUALITY` |
+| `timeoutMs` | integer | No | Request timeout in milliseconds; overrides `IMAGE_TIMEOUT_MS` for prompt enhancement and image generation |
 | `provider` | string | No | `gemini`, `openai`, or `seedream`; overrides `IMAGE_PROVIDER` |
 | `inputImagePaths` | string[] | No | Absolute paths to input images for editing |
 | `fileName` | string | No | Output filename; `.png`, `.jpg`, or `.jpeg` selects the format for OpenAI and Seedream |

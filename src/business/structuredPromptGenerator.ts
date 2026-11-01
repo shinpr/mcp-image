@@ -52,6 +52,7 @@ export interface StructuredPromptOptions {
   inputImages?: ReferenceImage[]
   purpose?: string
   signal?: AbortSignal
+  timeoutMs?: number
 }
 
 export interface StructuredPromptGenerator {
@@ -71,7 +72,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
     userPrompt: string,
     options: StructuredPromptOptions = {}
   ): Promise<Result<string, Error>> {
-    const { features = {}, inputImages = [], purpose, signal } = options
+    const { features = {}, inputImages = [], purpose, signal, timeoutMs } = options
     try {
       if (!userPrompt || userPrompt.trim().length === 0) {
         return Err(new GeminiAPIError('User prompt cannot be empty'))
@@ -89,6 +90,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
 
       const config = {
         ...(signal && { signal }),
+        ...(timeoutMs !== undefined && { timeout: timeoutMs }),
         temperature: 0.7,
         maxTokens: this.maxTokens,
         systemInstruction,

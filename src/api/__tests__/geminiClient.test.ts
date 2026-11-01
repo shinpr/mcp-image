@@ -35,6 +35,7 @@ describe('geminiClient', () => {
     imageOutputDir: './output',
     skipPromptEnhancement: false,
     imageQuality: 'fast',
+    imageTimeoutMs: 300_000,
   }
 
   beforeEach(() => {

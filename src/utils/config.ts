@@ -1,5 +1,5 @@
 import type { ImageProvider, ImageQuality } from '../types/mcp.js'
-import { IMAGE_PROVIDER_VALUES, IMAGE_QUALITY_VALUES } from '../types/mcp.js'
+import { IMAGE_PROVIDER_VALUES, IMAGE_QUALITY_VALUES, MAX_IMAGE_TIMEOUT_MS } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
 import { ConfigError } from './errors.js'
@@ -12,6 +12,7 @@ export interface Config {
   imageOutputDir: string
   skipPromptEnhancement: boolean
   imageQuality: ImageQuality
+  imageTimeoutMs: number
 }
 
 /**
@@ -34,6 +35,7 @@ function isImageQuality(value: string): value is ImageQuality {
 const DEFAULT_CONFIG = {
   imageProvider: 'gemini',
   imageOutputDir: './output',
+  imageTimeoutMs: 300_000,
 } as const
 
 function readEnv(name: string): string | undefined {
@@ -119,6 +121,19 @@ export function validateConfig(config: UnvalidatedConfig): Result<Config, Config
     )
   }
 
+  if (
+    !Number.isSafeInteger(config.imageTimeoutMs) ||
+    config.imageTimeoutMs < 1 ||
+    config.imageTimeoutMs > MAX_IMAGE_TIMEOUT_MS
+  ) {
+    return Err(
+      new ConfigError(
+        `Invalid IMAGE_TIMEOUT_MS value: "${config.imageTimeoutMs}". Expected an integer from 1 to ${MAX_IMAGE_TIMEOUT_MS}.`,
+        `Set IMAGE_TIMEOUT_MS to an integer number of milliseconds from 1 to ${MAX_IMAGE_TIMEOUT_MS}`
+      )
+    )
+  }
+
   return Ok({ ...config, imageProvider, imageQuality })
 }
 
@@ -131,6 +146,7 @@ export function getConfig(): Result<Config, ConfigError> {
     imageOutputDir: readEnv('IMAGE_OUTPUT_DIR') || DEFAULT_CONFIG.imageOutputDir,
     skipPromptEnhancement: readEnv('SKIP_PROMPT_ENHANCEMENT') === 'true',
     imageQuality: readEnv('IMAGE_QUALITY') || 'fast',
+    imageTimeoutMs: Number(readEnv('IMAGE_TIMEOUT_MS') ?? DEFAULT_CONFIG.imageTimeoutMs),
   }
 
   return validateConfig(config)

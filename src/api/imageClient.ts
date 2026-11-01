@@ -18,6 +18,7 @@ export interface ImageGenerationMetadata {
 export interface ImageApiParams {
   prompt: string
   signal?: AbortSignal
+  timeoutMs?: number
   inputImages?: ReferenceImage[]
   aspectRatio?: AspectRatio
   imageSize?: ImageSize

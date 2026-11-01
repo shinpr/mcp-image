@@ -43,6 +43,7 @@ const testConfig: Config = {
   imageOutputDir: './output',
   skipPromptEnhancement: false,
   imageQuality: 'fast',
+  imageTimeoutMs: 300_000,
 }
 
 const fetchMock = vi.fn<typeof fetch>()
@@ -637,6 +638,19 @@ describe('seedreamImageClient', () => {
     expect(result.success).toBe(true)
     expect(timeoutSpy).toHaveBeenCalledTimes(1)
     expect(timeoutSpy).toHaveBeenCalledWith(300000)
+    expect(readRequest().init.signal).toBe(timeoutSpy.mock.results[0]?.value)
+  })
+
+  it('uses the request timeout when one is provided', async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+
+    const result = await createClient(testConfig).generateImage({
+      prompt: PRIVATE_PROMPT,
+      timeoutMs: 45000,
+    })
+
+    expect(result.success).toBe(true)
+    expect(timeoutSpy).toHaveBeenCalledWith(45000)
     expect(readRequest().init.signal).toBe(timeoutSpy.mock.results[0]?.value)
   })
 

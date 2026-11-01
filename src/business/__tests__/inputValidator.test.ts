@@ -102,6 +102,7 @@ describe('inputValidator', () => {
         imageSize: '2K',
         quality: 'quality',
         provider: 'seedream',
+        timeoutMs: 45000,
         blendImages: true,
         maintainCharacterConsistency: false,
         useWorldKnowledge: true,
@@ -287,5 +288,26 @@ describe('inputValidator', () => {
         'Invalid provider value: "midjourney". Supported values: gemini, openai, seedream'
       )
     })
+  })
+
+  describe('validateGenerateImageParams with timeoutMs', () => {
+    it.each([1, 45000, 2147483647])('should accept timeoutMs %s', (timeoutMs) => {
+      const result = validateGenerateImageParams({ prompt: 'test', timeoutMs })
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.timeoutMs).toBe(timeoutMs)
+      }
+    })
+
+    it.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2147483648, '45000', null])(
+      'should reject invalid timeoutMs value %s',
+      (timeoutMs) => {
+        expectRejection(
+          { prompt: 'test', timeoutMs },
+          'timeoutMs must be an integer from 1 to 2147483647'
+        )
+      }
+    )
   })
 })
