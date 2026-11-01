@@ -338,7 +338,7 @@ class SeedreamImageClientImpl implements ImageClient {
     const request = buildWireRequest(params, resolvedResult.data)
 
     try {
-      const timeoutSignal = AbortSignal.timeout(SEEDREAM_IMAGE_TIMEOUT_MS)
+      const timeoutSignal = AbortSignal.timeout(params.timeoutMs ?? SEEDREAM_IMAGE_TIMEOUT_MS)
       const response = await fetch(SEEDREAM_IMAGE_ENDPOINT, {
         method: 'POST',
         headers: {

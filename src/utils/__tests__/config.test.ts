@@ -13,6 +13,7 @@ describe('config', () => {
     delete process.env.ARK_API_KEY
     delete process.env.IMAGE_OUTPUT_DIR
     delete process.env.IMAGE_QUALITY
+    delete process.env.IMAGE_TIMEOUT_MS
     delete process.env.SKIP_PROMPT_ENHANCEMENT
   })
 
@@ -30,6 +31,7 @@ describe('config', () => {
         imageOutputDir: './output',
         skipPromptEnhancement: false,
         imageQuality: 'fast' as const,
+        imageTimeoutMs: 300_000,
       }
 
       const result = validateConfig(config)
@@ -49,6 +51,7 @@ describe('config', () => {
         imageOutputDir: './output',
         skipPromptEnhancement: false,
         imageQuality: 'invalid',
+        imageTimeoutMs: 300_000,
       }
 
       const result = validateConfig(config)
@@ -71,6 +74,7 @@ describe('config', () => {
         imageOutputDir: '   ',
         skipPromptEnhancement: false,
         imageQuality: 'fast',
+        imageTimeoutMs: 300_000,
       })
 
       expect(result.success).toBe(false)
@@ -90,6 +94,7 @@ describe('config', () => {
       imageOutputDir: './output',
       skipPromptEnhancement: false,
       imageQuality: 'fast' as const,
+      imageTimeoutMs: 300_000,
     }
 
     it.each([
@@ -145,6 +150,7 @@ describe('config', () => {
           arkApiKey: '',
           imageOutputDir: './output',
           imageQuality: 'fast',
+          imageTimeoutMs: 300_000,
         })
       }
     })
@@ -239,6 +245,32 @@ describe('config', () => {
         expect(result.data.imageQuality).toBe('quality')
       }
     })
+
+    it('should read IMAGE_TIMEOUT_MS env var', () => {
+      process.env.IMAGE_TIMEOUT_MS = '45000'
+
+      const result = getConfig()
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.imageTimeoutMs).toBe(45000)
+      }
+    })
+
+    it.each(['0', '-1', '1.5', 'not-a-number', '2147483648'])(
+      'should reject invalid IMAGE_TIMEOUT_MS value %s',
+      (value) => {
+        process.env.IMAGE_TIMEOUT_MS = value
+
+        const result = getConfig()
+
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error).toBeInstanceOf(ConfigError)
+          expect(result.error.message).toContain('Invalid IMAGE_TIMEOUT_MS')
+        }
+      }
+    )
 
     it('should reject invalid IMAGE_QUALITY env var', () => {
       process.env.IMAGE_QUALITY = 'ultra'

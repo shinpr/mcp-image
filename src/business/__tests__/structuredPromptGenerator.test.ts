@@ -46,6 +46,18 @@ describe('StructuredPromptGenerator', () => {
       )
     })
 
+    it('passes the request timeout to the text client', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A rainy street', { timeoutMs: 45000 })
+
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ timeout: 45000 })
+      )
+    })
+
     it('should handle feature flags correctly', async () => {
       const generator = createGenerator()
       const userPrompt = 'A warrior in the forest'

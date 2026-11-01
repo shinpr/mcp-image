@@ -18,6 +18,7 @@ const testConfig: Config = {
   imageOutputDir: './output',
   skipPromptEnhancement: false,
   imageQuality: 'fast',
+  imageTimeoutMs: 300_000,
 }
 
 function successfulResponse(outputText: string): Response {

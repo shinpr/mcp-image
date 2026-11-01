@@ -13,6 +13,7 @@ import {
   IMAGE_PROVIDER_VALUES,
   IMAGE_QUALITY_VALUES,
   IMAGE_SIZE_VALUES,
+  MAX_IMAGE_TIMEOUT_MS,
 } from '../types/mcp.js'
 import type { Result } from '../types/result.js'
 import { Err, Ok } from '../types/result.js'
@@ -271,6 +272,26 @@ function validateEnumFields(
   return Ok(fields)
 }
 
+function validateTimeoutMs(value: unknown): Result<number | undefined, InputValidationError> {
+  if (value === undefined) {
+    return Ok(undefined)
+  }
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < 1 ||
+    value > MAX_IMAGE_TIMEOUT_MS
+  ) {
+    return Err(
+      new InputValidationError(
+        `timeoutMs must be an integer from 1 to ${MAX_IMAGE_TIMEOUT_MS}`,
+        `Provide timeoutMs in milliseconds, from 1 to ${MAX_IMAGE_TIMEOUT_MS}, or omit it to use IMAGE_TIMEOUT_MS`
+      )
+    )
+  }
+  return Ok(value)
+}
+
 function assignOptional<T extends object, K extends keyof T>(
   target: T,
   key: K,
@@ -329,10 +350,16 @@ export function validateGenerateImageParams(
     return Err(enumFieldsResult.error)
   }
 
+  const timeoutMsResult = validateTimeoutMs(input['timeoutMs'])
+  if (!timeoutMsResult.success) {
+    return Err(timeoutMsResult.error)
+  }
+
   const params: GenerateImageParams = { prompt: promptResult.data, ...enumFieldsResult.data }
   assignOptional(params, 'fileName', readOptionalString(input, 'fileName'))
   assignOptional(params, 'inputImagePaths', imagePathsResult.data)
   assignOptional(params, 'purpose', readOptionalString(input, 'purpose'))
+  assignOptional(params, 'timeoutMs', timeoutMsResult.data)
   for (const { name } of OPTIONAL_BOOLEAN_FIELDS) {
     assignOptional(params, name, readOptionalBoolean(input, name))
   }

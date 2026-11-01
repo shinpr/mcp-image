@@ -31,6 +31,8 @@ export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream'] as const
 
 export type ImageProvider = (typeof IMAGE_PROVIDER_VALUES)[number]
 
+export const MAX_IMAGE_TIMEOUT_MS = 2_147_483_647
+
 export const GEMINI_MODELS = {
   FLASH: 'gemini-nano-banana-2.1',
   PRO: 'gemini-3-pro-image',
@@ -49,6 +51,7 @@ export interface GenerateImageParams {
   purpose?: string
   quality?: ImageQuality
   provider?: ImageProvider
+  timeoutMs?: number
 }
 
 export interface MCPServerConfig {

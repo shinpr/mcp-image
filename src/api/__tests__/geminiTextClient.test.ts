@@ -53,6 +53,7 @@ describe('GeminiTextClient', () => {
       imageOutputDir: './test-output',
       skipPromptEnhancement: false,
       imageQuality: 'fast',
+      imageTimeoutMs: 300_000,
     }
 
     const clientResult = createGeminiTextClient(config)

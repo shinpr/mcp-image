@@ -29,10 +29,11 @@ import {
   IMAGE_PROVIDER_VALUES,
   IMAGE_QUALITY_VALUES,
   IMAGE_SIZE_VALUES,
+  MAX_IMAGE_TIMEOUT_MS,
 } from '../types/mcp.js'
 import { unwrapOrThrow } from '../types/result.js'
 import { type Config, getConfig, validateProviderCredentials } from '../utils/config.js'
-import { InputValidationError, toError } from '../utils/errors.js'
+import { InputValidationError, NetworkError, toError } from '../utils/errors.js'
 import { Logger } from '../utils/logger.js'
 import {
   reconcileFileNameExtension,
@@ -78,9 +79,11 @@ type ImageOptions = Omit<ImageApiParams, 'prompt'>
 function buildImageOptions(
   params: GenerateImageParams,
   inputImages: ReferenceImage[],
-  preferredOutputFormat: ImageOutputFormat | undefined
+  preferredOutputFormat: ImageOutputFormat | undefined,
+  timeoutMs: number
 ): ImageOptions {
   return {
+    timeoutMs,
     ...(inputImages.length > 0 && { inputImages }),
     ...(params.aspectRatio && { aspectRatio: params.aspectRatio }),
     ...(params.imageSize && { imageSize: params.imageSize }),
@@ -124,6 +127,23 @@ function resolveOutputFileName(
       fileName !== rawFileName &&
       SUPPORTED_EXTENSIONS.includes(requestedExtension.toLowerCase()),
   }
+}
+
+function throwIfRequestAborted(signal: AbortSignal, timeoutMs: number): void {
+  if (!signal.aborted) {
+    return
+  }
+
+  const reason: unknown = signal.reason
+  if (reason instanceof Error && reason.name === 'TimeoutError') {
+    throw new NetworkError(
+      `Image request timed out after ${timeoutMs} ms`,
+      { stage: 'image generation' },
+      reason
+    )
+  }
+
+  signal.throwIfAborted()
 }
 
 export class MCPServerImpl {
@@ -223,6 +243,12 @@ export class MCPServerImpl {
                   'Set only when the user requests a specific image provider; otherwise omit to use the server default. The provider must have its API key configured on the server.',
                 enum: [...IMAGE_PROVIDER_VALUES],
               },
+              timeoutMs: {
+                type: 'integer' as const,
+                minimum: 1,
+                maximum: MAX_IMAGE_TIMEOUT_MS,
+                description: `Override IMAGE_TIMEOUT_MS for this request, in milliseconds. Applies to prompt enhancement and image generation. Omit to use the server default. Maximum: ${MAX_IMAGE_TIMEOUT_MS}.`,
+              },
             },
             required: ['prompt'],
           },
@@ -290,15 +316,18 @@ export class MCPServerImpl {
   private async enhancePrompt(
     generator: StructuredPromptGenerator,
     params: GenerateImageParams,
-    context: { inputImages: ReferenceImage[]; signal?: AbortSignal }
+    context: { inputImages: ReferenceImage[]; signal?: AbortSignal; timeoutMs: number }
   ): Promise<string> {
     const promptResult = await generator.generateStructuredPrompt(params.prompt, {
       features: buildFeatureFlags(params),
       ...(context.inputImages.length > 0 && { inputImages: context.inputImages }),
       ...(params.purpose !== undefined && { purpose: params.purpose }),
       ...(context.signal !== undefined && { signal: context.signal }),
+      timeoutMs: context.timeoutMs,
     })
-    context.signal?.throwIfAborted()
+    if (context.signal) {
+      throwIfRequestAborted(context.signal, context.timeoutMs)
+    }
 
     if (!promptResult.success) {
       this.logger.warn('mcp-server', 'Using original prompt', {
@@ -342,6 +371,10 @@ export class MCPServerImpl {
     const preferredOutputFormat = resolvePreferredOutputFormat(sanitizedFileName)
 
     const config = unwrapOrThrow(getConfig())
+    const timeoutMs = params.timeoutMs ?? config.imageTimeoutMs
+    const timeoutSignal = AbortSignal.timeout(timeoutMs)
+    const requestSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+    throwIfRequestAborted(requestSignal, timeoutMs)
 
     // Reject an unusable output path before anything is sent upstream.
     unwrapOrThrow(
@@ -369,7 +402,7 @@ export class MCPServerImpl {
     }
     const inputImages: ReferenceImage[] = []
     for (const [index, inputPath] of inputPaths.entries()) {
-      signal?.throwIfAborted()
+      throwIfRequestAborted(requestSignal, timeoutMs)
       try {
         const image = await readInputImage(inputPath)
         inputImages.push({ data: image.data.toString('base64'), mimeType: image.mimeType })
@@ -380,16 +413,17 @@ export class MCPServerImpl {
       }
     }
 
-    const imageOptions = buildImageOptions(params, inputImages, preferredOutputFormat)
+    const imageOptions = buildImageOptions(params, inputImages, preferredOutputFormat, timeoutMs)
 
     provider.validateImageOptions?.(imageOptions, config)
-    signal?.throwIfAborted()
+    throwIfRequestAborted(requestSignal, timeoutMs)
 
     let structuredPrompt = params.prompt
     if (!config.skipPromptEnhancement && structuredPromptGenerator) {
       structuredPrompt = await this.enhancePrompt(structuredPromptGenerator, params, {
         inputImages,
-        ...(signal !== undefined && { signal }),
+        signal: requestSignal,
+        timeoutMs,
       })
     } else if (config.skipPromptEnhancement) {
       this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
@@ -398,9 +432,9 @@ export class MCPServerImpl {
     const generationResult = await imageClient.generateImage({
       prompt: structuredPrompt,
       ...imageOptions,
-      ...(signal && { signal }),
+      signal: requestSignal,
     })
-    signal?.throwIfAborted()
+    throwIfRequestAborted(requestSignal, timeoutMs)
 
     const generatedImage = unwrapOrThrow(generationResult)
     const mimeType = generatedImage.metadata.mimeType

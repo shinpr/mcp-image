@@ -187,6 +187,7 @@ describe('MCP Server', () => {
       imageSize: { type: 'string', enum: ['1K', '2K', '4K'] },
       quality: { type: 'string', enum: ['fast', 'balanced', 'quality'] },
       provider: { type: 'string', enum: ['gemini', 'openai', 'seedream'] },
+      timeoutMs: { type: 'integer', minimum: 1, maximum: 2147483647 },
     })
 
     // Provider routing guidance the calling model relies on.
@@ -208,6 +209,36 @@ describe('MCP Server', () => {
     expect(readPath(responseData, 'error', 'code')).toBe('INTERNAL_ERROR')
     expect(readPath(responseData, 'error', 'message')).toContain('Unknown tool: invalid_tool')
     expect(readPath(responseData, 'error', 'suggestion')).toBe('Contact system administrator')
+  })
+
+  it('uses IMAGE_TIMEOUT_MS by default and lets timeoutMs override it per request', async () => {
+    vi.stubEnv('IMAGE_TIMEOUT_MS', '45000')
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout')
+    const mcpServer = createMCPServer()
+
+    const defaultResult = await mcpServer.callTool('generate_image', { prompt: 'default timeout' })
+    const overrideResult = await mcpServer.callTool('generate_image', {
+      prompt: 'request timeout',
+      timeoutMs: 1234,
+    })
+
+    expect(defaultResult.isError).toBe(false)
+    expect(overrideResult.isError).toBe(false)
+    expect(timeoutSpy).toHaveBeenNthCalledWith(1, 45000)
+    expect(timeoutSpy).toHaveBeenNthCalledWith(2, 1234)
+
+    const generateImage = createdImageClientMock(
+      vi.mocked(createGeminiClient).mock.results[0],
+      'gemini image client creation'
+    )
+    expect(generateImage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ timeoutMs: 45000, signal: expect.any(AbortSignal) })
+    )
+    expect(generateImage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ timeoutMs: 1234, signal: expect.any(AbortSignal) })
+    )
   })
 
   it('should name an auto-generated file after the generated MIME type', async () => {
