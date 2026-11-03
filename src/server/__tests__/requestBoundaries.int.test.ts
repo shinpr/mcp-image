@@ -106,7 +106,7 @@ async function assertImageReferences(
   provider: ImageProvider,
   call: Parameters<typeof fetch>,
   images: ReferenceImage[],
-  prompt: string
+  promptText: string
 ): Promise<void> {
   if (provider === 'openai') {
     expect(String(call[0])).toMatch(/\/images\/edits$/)
@@ -125,7 +125,7 @@ async function assertImageReferences(
       expect(file.type).toBe(image.mimeType)
       expect(Buffer.from(await file.arrayBuffer())).toEqual(Buffer.from(image.data, 'base64'))
     }
-    expect(body.get('prompt')).toBe(prompt)
+    expect(String(body.get('prompt'))).toContain(promptText)
     return
   }
   const body = serializedBody(call)
@@ -134,12 +134,15 @@ async function assertImageReferences(
       readPath(expectArray(body['contents'], 'contents')[0], 'parts'),
       'image parts'
     )
-    expect(parts).toEqual([...images.map((inlineData) => ({ inlineData })), { text: prompt }])
+    expect(parts).toEqual([
+      ...images.map((inlineData) => ({ inlineData })),
+      { text: expect.stringContaining(promptText) },
+    ])
     return
   }
   const dataUris = images.map(({ data, mimeType }) => `data:${mimeType};base64,${data}`)
   expect(body['image']).toEqual(images.length === 1 ? dataUris[0] : dataUris)
-  expect(body['prompt']).toBe(`${prompt}\n\nOutput aspect ratio: 1:1.`)
+  expect(body['prompt']).toEqual(expect.stringContaining(promptText))
 }
 
 function truncatedTextResponse(provider: ImageProvider): Response {
@@ -315,6 +318,21 @@ describe('request and output boundaries', () => {
       expect(await readFile(fileURLToPath(uri))).toEqual(PNG)
     }
   )
+
+  it('sends only the requested category material to Gemini prompt enhancement', async () => {
+    vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', 'false')
+    const apiCalls = serveProvider('gemini', textResponse)
+
+    const result = await client.callTool({
+      name: 'generate_image',
+      arguments: { provider: 'gemini', prompt: 'a sales dashboard', category: 'ui-screen' },
+    })
+
+    expect(result.isError).toBe(false)
+    const textRequest = JSON.stringify(serializedBody(expectDefined(apiCalls()[0], 'text request')))
+    expect(textRequest).toContain('The image is an app or web interface screen')
+    expect(textRequest).not.toContain('Photography:')
+  })
 
   it.each(PROVIDERS)(
     'rejects more references than %s accepts before any provider request',

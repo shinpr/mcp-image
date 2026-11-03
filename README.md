@@ -10,7 +10,7 @@ Tell it what image to create or what to change in an existing image, and what it
 
 ## What It Does
 
-Before generating an image, mcp-image rewrites short requests into more specific prompts. It keeps what you asked for and fills in details such as composition, lighting, and camera angle. The more detail you provide, the less it changes.
+Before generating an image, mcp-image rewrites short requests into more specific prompts. It keeps what you asked for and fills in what the image needs for its use, such as lighting and camera angle for a photo or layout for a poster. Text you want in the image stays as you wrote it, in your language. The more detail you provide, the less it changes.
 
 **You ask:**
 
@@ -202,6 +202,7 @@ Your MCP client calls this tool for you. Open the reference when you need to che
 | `useWorldKnowledge` | boolean | No | Add context for historical figures, landmarks, and factual scenes |
 | `useGoogleSearch` | boolean | No | Gemini only. Use Google Search grounding for current information |
 | `purpose` | string | No | Intended use, such as `cookbook cover` or `social media post` |
+| `category` | string | No | Kind of image: `photo`, `illustration`, `asset`, `ui-screen`, `graphic-design`, `diagram`, or `pattern-texture`. Your assistant sets it when the kind is clear |
 
 </details>
 

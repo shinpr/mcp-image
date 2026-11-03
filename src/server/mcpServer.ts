@@ -26,6 +26,7 @@ import type {
 } from '../types/mcp.js'
 import {
   ASPECT_RATIO_VALUES,
+  IMAGE_CATEGORY_VALUES,
   IMAGE_PROVIDER_VALUES,
   IMAGE_QUALITY_VALUES,
   IMAGE_SIZE_VALUES,
@@ -159,7 +160,7 @@ export class MCPServerImpl {
               prompt: {
                 type: 'string' as const,
                 description:
-                  'Describe the image to generate or the edit to apply. Include the subject, context, and visual style; English is recommended for prompt enhancement.',
+                  'Describe the image to generate or the edit to apply, in English. Keep any text that should appear in the image in its original language, in quotes. Details the user left open can stay open.',
               },
               fileName: {
                 type: 'string' as const,
@@ -210,6 +211,12 @@ export class MCPServerImpl {
                 type: 'string' as const,
                 description:
                   "Describe the image's intended use, such as a cookbook cover, social media post, or presentation slide, so prompt enhancement can adapt composition and detail.",
+              },
+              category: {
+                type: 'string' as const,
+                description:
+                  "Set when the kind of image is clear from the request, so prompt enhancement uses only that kind's guidance: photo, illustration, asset (icon, logo, sticker, or isolated object), ui-screen (app or web interface screen), graphic-design (poster, banner, thumbnail, or other graphic with text), diagram (diagram or infographic), pattern-texture. Omit when unsure.",
+                enum: [...IMAGE_CATEGORY_VALUES],
               },
               quality: {
                 type: 'string' as const,
@@ -296,6 +303,7 @@ export class MCPServerImpl {
       features: buildFeatureFlags(params),
       ...(context.inputImages.length > 0 && { inputImages: context.inputImages }),
       ...(params.purpose !== undefined && { purpose: params.purpose }),
+      ...(params.category !== undefined && { category: params.category }),
       ...(context.signal !== undefined && { signal: context.signal }),
     })
     context.signal?.throwIfAborted()

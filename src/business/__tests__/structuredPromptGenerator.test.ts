@@ -18,7 +18,7 @@ describe('StructuredPromptGenerator', () => {
   }
 
   describe('generateStructuredPrompt', () => {
-    it('should generate structured prompt successfully', async () => {
+    it('returns the enhanced description preceded by the image-model discipline', async () => {
       const generator = createGenerator()
       const userPrompt = 'A beautiful sunset'
       const structuredPrompt =
@@ -30,7 +30,9 @@ describe('StructuredPromptGenerator', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data).toBe(structuredPrompt)
+        expect(result.data).toBe(
+          `Draw the image this prompt describes. Its purpose sets the overall direction; everything it specifies stays as specified; anything you add only completes the picture and never works against the above. When it quotes text, the quoted text is all the text in the image.\n\n${structuredPrompt}`
+        )
       }
     })
 
@@ -46,34 +48,65 @@ describe('StructuredPromptGenerator', () => {
       )
     })
 
-    it('should handle feature flags correctly', async () => {
+    it('includes guidance only for enabled feature flags', async () => {
       const generator = createGenerator()
-      const userPrompt = 'A warrior in the forest'
-      const features = {
-        maintainCharacterConsistency: true,
-        blendImages: false,
-        useWorldKnowledge: true,
-      }
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
 
-      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(
-        Ok('A warrior with detailed character features in the forest')
-      )
-
-      const result = await generator.generateStructuredPrompt(userPrompt, { features })
+      const result = await generator.generateStructuredPrompt('A warrior in the forest', {
+        features: {
+          maintainCharacterConsistency: true,
+          blendImages: false,
+          useWorldKnowledge: true,
+        },
+      })
 
       expect(result.success).toBe(true)
+      const [request] = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0] ?? []
+      expect(request).toContain('Character consistency:')
+      expect(request).toContain('World knowledge:')
+      expect(request).not.toContain('Blending:')
+    })
+
+    it('sends the user request verbatim inside the enhancement request', async () => {
+      const generator = createGenerator()
+      const userPrompt = "a poster for next Friday's study session, theme: intro to generative AI"
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt(userPrompt)
+
       expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
-        expect.stringContaining('Character consistency is CRITICAL'),
+        expect.stringContaining(userPrompt),
         expect.any(Object)
       )
-      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
-        expect.stringContaining('Apply accurate real-world knowledge'),
-        expect.any(Object)
+    })
+
+    it('sends input images with input-image guidance to the enhancer', async () => {
+      const generator = createGenerator()
+      const image = { data: 'aGVsbG8=', mimeType: 'image/png' }
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('Draw her in this style', {
+        inputImages: [image, image],
+      })
+
+      const [, config] = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0] ?? []
+      expect(config).toEqual(
+        expect.objectContaining({
+          systemInstruction: expect.stringContaining('Image 1'),
+          inputImages: [image, image],
+        })
       )
-      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
-        expect.not.stringContaining('MUST describe spatial and visual integration'),
-        expect.any(Object)
-      )
+    })
+
+    it('omits input-image guidance when no images are given', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A simple cat')
+
+      const [, config] = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0] ?? []
+      expect(config?.systemInstruction).not.toContain('Image 1')
+      expect(config).not.toHaveProperty('inputImages')
     })
 
     it('should return error for empty prompt', async () => {
@@ -103,6 +136,30 @@ describe('StructuredPromptGenerator', () => {
       }
     })
 
+    it('offers the material for every kind of image when no category is given', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A sales dashboard')
+
+      const [, config] = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0] ?? []
+      expect(config?.systemInstruction).toContain('For a photograph:')
+      expect(config?.systemInstruction).toContain('For an app or web interface screen:')
+      expect(config?.systemInstruction).toContain('For a pattern or texture:')
+    })
+
+    it('limits the material to the given category', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A sales dashboard', { category: 'ui-screen' })
+
+      const [, config] = vi.mocked(mockGeminiTextClient.generateText).mock.calls[0] ?? []
+      expect(config?.systemInstruction).toContain('The image is an app or web interface screen')
+      expect(config?.systemInstruction).not.toContain('For a photograph:')
+      expect(config?.systemInstruction).not.toContain('Photography:')
+    })
+
     it('should include purpose context when purpose is provided', async () => {
       const generator = createGenerator()
       const userPrompt = 'Delicious pasta dish'
@@ -115,7 +172,7 @@ describe('StructuredPromptGenerator', () => {
       await generator.generateStructuredPrompt(userPrompt, { purpose })
 
       expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
-        expect.stringContaining(`INTENDED USE: ${purpose}`),
+        expect.stringContaining(`Intended use: ${purpose}`),
         expect.any(Object)
       )
     })
@@ -131,7 +188,7 @@ describe('StructuredPromptGenerator', () => {
       await generator.generateStructuredPrompt(userPrompt)
 
       expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
-        expect.not.stringContaining('INTENDED USE:'),
+        expect.not.stringContaining('Intended use:'),
         expect.any(Object)
       )
     })

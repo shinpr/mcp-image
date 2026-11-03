@@ -27,6 +27,18 @@ export const IMAGE_QUALITY_VALUES = ['fast', 'balanced', 'quality'] as const
 
 export type ImageQuality = (typeof IMAGE_QUALITY_VALUES)[number]
 
+export const IMAGE_CATEGORY_VALUES = [
+  'photo',
+  'illustration',
+  'asset',
+  'ui-screen',
+  'graphic-design',
+  'diagram',
+  'pattern-texture',
+] as const
+
+export type ImageCategory = (typeof IMAGE_CATEGORY_VALUES)[number]
+
 export const IMAGE_PROVIDER_VALUES = ['gemini', 'openai', 'seedream'] as const
 
 export type ImageProvider = (typeof IMAGE_PROVIDER_VALUES)[number]
@@ -47,6 +59,7 @@ export interface GenerateImageParams {
   aspectRatio?: AspectRatio
   imageSize?: ImageSize
   purpose?: string
+  category?: ImageCategory
   quality?: ImageQuality
   provider?: ImageProvider
 }
