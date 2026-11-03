@@ -4,12 +4,14 @@ import { MAX_INPUT_IMAGES } from '../types/image.js'
 import type {
   AspectRatio,
   GenerateImageParams,
+  ImageCategory,
   ImageProvider,
   ImageQuality,
   ImageSize,
 } from '../types/mcp.js'
 import {
   ASPECT_RATIO_VALUES,
+  IMAGE_CATEGORY_VALUES,
   IMAGE_PROVIDER_VALUES,
   IMAGE_QUALITY_VALUES,
   IMAGE_SIZE_VALUES,
@@ -139,6 +141,7 @@ function readOptionalBoolean(input: Record<string, unknown>, field: string): boo
 const OPTIONAL_STRING_FIELDS = [
   'fileName',
   'purpose',
+  'category',
   'aspectRatio',
   'imageSize',
   'quality',
@@ -205,10 +208,11 @@ interface EnumFields {
   imageSize?: ImageSize
   quality?: ImageQuality
   provider?: ImageProvider
+  category?: ImageCategory
 }
 
 /**
- * Validate the four enum-valued fields. Each keeps its own message; only the
+ * Validate the enum-valued fields. Each keeps its own message; only the
  * membership check is shared.
  */
 function validateEnumFields(
@@ -266,6 +270,19 @@ function validateEnumFields(
       )
     }
     fields.provider = provider
+  }
+
+  const category = readOptionalString(input, 'category')
+  if (category !== undefined) {
+    if (!isMemberOf(IMAGE_CATEGORY_VALUES, category)) {
+      return Err(
+        new InputValidationError(
+          `Invalid category value: "${category}". Supported values: ${IMAGE_CATEGORY_VALUES.join(', ')}`,
+          `Use one of the supported categories, or omit category: ${IMAGE_CATEGORY_VALUES.join(', ')}`
+        )
+      )
+    }
+    fields.category = category
   }
 
   return Ok(fields)

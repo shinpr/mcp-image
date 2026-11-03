@@ -98,6 +98,7 @@ describe('inputValidator', () => {
         fileName: 'landscape.png',
         inputImagePaths: [existingImagePath],
         purpose: 'blog header',
+        category: 'graphic-design',
         aspectRatio: '16:9',
         imageSize: '2K',
         quality: 'quality',
@@ -139,11 +140,19 @@ describe('inputValidator', () => {
     it.each([
       ['fileName', 42],
       ['purpose', { x: 1 }],
+      ['category', 3],
       ['imageSize', null],
       ['imageSize', { toString: null }],
       ['aspectRatio', 169],
     ])('should reject a non-string %s (value %j)', (field, value) => {
       expectRejection({ prompt: 'test', [field]: value }, `${field} must be a string`)
+    })
+
+    it('should reject a category outside the supported values', () => {
+      expectRejection(
+        { prompt: 'test', category: 'logo' },
+        'Invalid category value: "logo". Supported values: photo, illustration, asset, ui-screen, graphic-design, diagram, pattern-texture'
+      )
     })
 
     it.each([

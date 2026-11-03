@@ -165,6 +165,18 @@ describe('MCP Server', () => {
       useWorldKnowledge: { type: 'boolean' },
       useGoogleSearch: { type: 'boolean' },
       purpose: { type: 'string' },
+      category: {
+        type: 'string',
+        enum: [
+          'photo',
+          'illustration',
+          'asset',
+          'ui-screen',
+          'graphic-design',
+          'diagram',
+          'pattern-texture',
+        ],
+      },
       aspectRatio: {
         type: 'string',
         enum: [

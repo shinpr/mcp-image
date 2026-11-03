@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.6.3/schema.json",
   "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "formatter": {
     "enabled": true,
@@ -26,7 +26,8 @@
           "options": {
             "maxAllowedComplexity": 15
           }
-        }
+        },
+        "noExcessiveNestedCallbacks": "error"
       },
       "style": {
         "noNonNullAssertion": "error",
@@ -55,8 +56,7 @@
         "useExhaustiveSwitchCases": "error",
         "noUnsafeTypeAssertion": "error",
         "noBaseToString": "error",
-        "noMisleadingReturnType": "off",
-        "noExcessiveNestedCallbacks": "error"
+        "noMisleadingReturnType": "off"
       }
     }
   },

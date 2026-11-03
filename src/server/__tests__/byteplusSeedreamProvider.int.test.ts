@@ -474,10 +474,18 @@ async function prepareSupportedRowFixture(
   return fixture
 }
 
+/** Matches text that contains `start` and ends with `end`; the prompt generator may add text around `start`. */
+function stringBetween(start: string, end: string): unknown {
+  const escapeForRegExp = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return expect.stringMatching(
+    new RegExp(`${escapeForRegExp(start)}[\\s\\S]*${escapeForRegExp(end)}$`)
+  )
+}
+
 /** The exact Seedream image request body one supported row must produce. */
 function buildExpectedImageRequest(
   row: SupportedRow,
-  finalPrompt: string
+  finalPrompt: unknown
 ): Record<string, unknown> {
   return {
     model: row.expectedModel,
@@ -743,9 +751,11 @@ describe('BytePlus Seedream integration', () => {
 
       const imageRequest = observeLastImageRequest()
       const textRequest = recordOrEmpty(transports.openAIResponsesCreate.mock.calls.at(-1)?.[0])
-      const selectedPrompt =
-        row.skipPromptEnhancement || row.textFailure ? requestPrompt : enhancedPrompt
-      const finalPrompt = `${selectedPrompt}\n\nOutput aspect ratio: ${row.expectedAspectRatio}.`
+      const aspectRatioSuffix = `\n\nOutput aspect ratio: ${row.expectedAspectRatio}.`
+      const finalPrompt =
+        row.skipPromptEnhancement || row.textFailure
+          ? `${requestPrompt}${aspectRatioSuffix}`
+          : stringBetween(enhancedPrompt, aspectRatioSuffix)
       const expectedImageRequest = buildExpectedImageRequest(row, finalPrompt)
       const expectedImageKeys = Object.keys(expectedImageRequest).sort()
 
