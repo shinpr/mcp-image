@@ -1,4 +1,9 @@
-import type { GenerateContentConfig, GenerateContentParameters, ImageConfig } from '@google/genai'
+import type {
+  GenerateContentConfig,
+  GenerateContentParameters,
+  ImageConfig,
+  SearchTypes,
+} from '@google/genai'
 import { GoogleGenAI, ThinkingLevel } from '@google/genai'
 import type { ImageQuality } from '../types/mcp.js'
 import { GEMINI_MODELS } from '../types/mcp.js'
@@ -30,6 +35,11 @@ interface GeminiClientInstance {
 const THINKING_LEVEL_BY_QUALITY: Partial<Record<ImageQuality, ThinkingLevel>> = {
   fast: ThinkingLevel.MEDIUM,
   balanced: ThinkingLevel.HIGH,
+}
+
+// The Pro model rejects image search with INVALID_ARGUMENT, so it only receives web search.
+function googleSearchTypesFor(modelName: string): SearchTypes {
+  return modelName === GEMINI_MODELS.PRO ? { webSearch: {} } : { webSearch: {}, imageSearch: {} }
 }
 
 class GeminiClientImpl implements ImageClient {
@@ -66,10 +76,10 @@ class GeminiClientImpl implements ImageClient {
         ...(Object.keys(imageConfig).length > 0 && { imageConfig }),
         responseModalities: ['IMAGE'],
         ...(thinkingLevel && { thinkingConfig: { thinkingLevel } }),
-        // Google Search grounding (web + image search) must live under config.tools;
-        // a top-level `tools` field is not part of the generateContent contract.
+        // Google Search grounding must live under config.tools; a top-level `tools`
+        // field is not part of the generateContent contract.
         ...(params.useGoogleSearch && {
-          tools: [{ googleSearch: { searchTypes: { webSearch: {}, imageSearch: {} } } }],
+          tools: [{ googleSearch: { searchTypes: googleSearchTypesFor(modelName) } }],
         }),
       }
 

@@ -574,6 +574,28 @@ describe('geminiClient', () => {
       )
     })
 
+    it('sends only web search grounding to the quality preset model', async () => {
+      mockGeminiClientInstance.models.generateContent = vi
+        .fn()
+        .mockResolvedValue(mockSuccessResponse)
+
+      const qualityConfig: Config = { ...testConfig, imageQuality: 'quality' }
+      const clientResult = createGeminiClient(qualityConfig)
+      if (!clientResult.success) {
+        throw clientResult.error
+      }
+
+      const result = await clientResult.data.generateImage({
+        prompt: 'Generate this week Tokyo weather infographic',
+        useGoogleSearch: true,
+      })
+
+      expect(result.success).toBe(true)
+      const callArgs = vi.mocked(mockGeminiClientInstance.models.generateContent).mock.calls[0][0]
+      expect(callArgs.model).toBe('gemini-3-pro-image')
+      expect(callArgs.config.tools).toEqual([{ googleSearch: { searchTypes: { webSearch: {} } } }])
+    })
+
     it('should allow per-request quality override', async () => {
       mockGeminiClientInstance.models.generateContent = vi
         .fn()
