@@ -1,137 +1,52 @@
 ---
 name: image-generation
-description: Optimizes image generation prompts using Subject-Context-Style structure. Use this skill when generating images, creating illustrations, photos, visual assets, editing images, or crafting prompts for any image generation model.
+description: Writes prompts that make image models produce the image the user means. Use when generating or editing any image (photo, illustration, icon, logo, poster, banner, diagram, UI screen, pattern) or writing a prompt for an image tool.
 ---
 
-# Image Generation Prompt Best Practices
+# Image Generation Prompts
 
-## Prompt Structure
+Turn a request, casual or detailed, into one prompt an image model follows as intended.
 
-Enhance every image generation prompt around three core elements:
+## Decide in This Order
 
-### 1. SUBJECT (What)
+A later step never works against an earlier one.
 
-- Physical characteristics: textures, materials, colors, scale
-- Actions, poses, expressions if applicable
-- Distinctive features that define the subject
+1. **Purpose**: what the image is for, taken from the stated use or the request itself (for example wrapping paper, an app icon, a picture-book page). When neither shows it, ask the user before writing the prompt. The purpose sets how the picture is made: its medium, composition, tone, and level of finish.
+2. **The user's requirements**: keep every element the user specified unchanged, and make their intent explicit where the wording leaves it implicit. This clarifies what was asked; it does not add to it. Any text in the image consists only of information the user gave, in the language they gave it. When the purpose needs facts only the user has, such as the date and place on an event poster, ask for them.
+3. **Completion**: add only what the image still needs to work as a picture.
 
-### 2. CONTEXT (Where/When)
+## Completion Material
 
-- Setting, background, spatial relationships (foreground, midground, background)
-- Time of day, weather, atmospheric conditions
-- Mood and emotional tone of the scene
+Draw on the material for the kind of image the request fits best. Photographs and illustrations share the scene material:
 
-### 3. STYLE (How)
+- Subject: physical characteristics (textures, materials, colors, scale); actions, poses, expressions if applicable; distinctive features
+- Context: setting, background, spatial relationships (foreground, midground, background); time of day, weather, atmospheric conditions; mood shown through visible cues (serene: soft diffused light, muted palette; ominous: low contrast, heavy shadows)
 
-- Artistic or photographic approach: reference specific artists, movements, or styles
-- Camera/lens choices: specify focal length, aperture, and shooting angle when photographic
+| Kind of image | Material |
+|---|---|
+| Photograph | Scene material; lighting (direction, quality, color temperature, shadows) and camera choices (focal length, aperture, shooting angle) |
+| Illustration or artwork | Scene material; style: medium and technique, referencing specific artists, movements, or styles |
+| Standalone asset (icon, logo, sticker, isolated object) | The element and any lettering: shape, colors, distinctive features |
+| App or web interface screen | The screen itself, filling the frame edge to edge (a device, hands, or surroundings appear only when the request asks for a device mockup); layout, components, content, color scheme, typography |
+| Poster, banner, thumbnail, or other graphic with text | Layout, typography, imagery, color scheme |
+| Diagram or infographic | The elements and relationships the request covers, with labels; layout and reading order, color coding, visual style |
+| Pattern or texture | Motif, density and arrangement, color palette, surface detail |
 
-## Core Principles
+## When the Request Involves
 
-- **Preserve intent** — Add visual details (lighting, texture, composition) only in areas the user left unspecified; keep all user-specified elements unchanged
-- **Positive descriptions only** — Describe what should be present; rephrase any exclusion as an inclusion
-- **Specific over vague** — "golden hour sunlight at 15° angle" beats "nice lighting"
-- **Natural flow** — Weave elements into a single flowing description, not a bullet list
+- **Input images**: refer to them by number in the order they are attached (Image 1, Image 2), read their visual style, details, and atmosphere, and use each one the way the request asks. For an image the request asks to change, describe the modifications relative to it, preserve its core characteristics (color palette, lighting style, composition) outside the requested changes, and say what stays the same ("maintain the existing…", "keep the same…").
+- **A character that must stay recognizable across images**: describe the visual features that identify them concretely, drawing on the request and input images.
+- **Several elements in one composition**: describe how they relate in space and light: placement, overlap, relative scale, shared lighting.
+- **Real cultures, places, or history**: describe them with accurate, specific details.
 
-## Output Format
+## Output
 
-Return the enhanced prompt as a single flowing paragraph. When the user provides multiple requests, return each as a separate enhanced prompt under a labeled heading.
+Write the prompt in English, with any text that appears in the image quoted exactly in the language the user gave it. Describe what should be present rather than what should be absent.
 
-## Enhancement Patterns
+The prompt is the discipline sentence below, a blank line, then one natural, flowing, unambiguous description rather than a structured list. The description states what the image is for. The discipline sentence makes the image model read the description by the same priority; without it, models fill gaps by convention, such as invented dates and venues on a poster.
 
-### Hyper-Specific Details
+```text
+Draw the image this prompt describes. Its purpose sets the overall direction; everything it specifies stays as specified; anything you add only completes the picture and never works against the above. When it quotes text, the quoted text is all the text in the image.
 
-Add concrete visual details for any Subject/Context/Style element not specified by the user:
-
-- Lighting → direction, quality, color temperature, shadow behavior
-- Textures → surface materials, weathering, reflectivity
-- Atmosphere → particulates, humidity, depth haze
-- Scale → relative sizes, distances, proportions
-
-### Camera Control Terminology
-
-When a photographic look is appropriate:
-
-- Lens type: "shot with 85mm portrait lens", "wide-angle 24mm"
-- Aperture: "shallow depth of field at f/1.8", "deep focus at f/11"
-- Angle: "low angle emphasizing height", "bird's eye view"
-- Motion: "motion blur on the paws", "frozen mid-action"
-
-### Atmospheric Enhancement
-
-Convey mood through environmental details:
-
-- Emotional tone with visual indicators: "serene (soft diffused light, muted palette)", "ominous (low contrast, heavy shadows, desaturated)", "jubilant (high saturation, warm tones, dynamic motion)"
-- Weather/air: "morning mist", "dust particles in a sunbeam"
-
-### Text in Images
-
-When the image should contain readable text (signs, labels, titles, typography):
-
-- Specify the exact text content in quotes: `"OPEN 24 HOURS" in bold sans-serif`
-- Describe visual treatment: font style, weight, size relative to the scene
-- Define placement and integration: "centered on the storefront awning", "hand-lettered on the chalkboard"
-
-## Feature Patterns
-
-### Character Consistency
-
-When the same character must be recognizable across multiple images:
-
-- Include **at least 3 recognizable visual markers** (distinctive scar, signature clothing, unique hairstyle, characteristic accessory)
-- Use anchoring words: "distinctive", "signature", "always wears", "always has"
-- Be specific: "round tortoiseshell glasses" not just "glasses"
-
-### Compositional Integration
-
-When combining multiple visual elements in one scene:
-
-- Define spatial relationships with proportions: "foreground (40% of frame)", "midground", "background"
-- Define how elements interact spatially and visually: overlap, reflection, shared lighting, color echo between foreground and background
-- Specify relative scale and interaction between elements
-
-### Real-World Accuracy
-
-When depicting real places, cultures, or historical elements:
-
-- Use specific terminology: "traditional Edo-period architecture", "authentic Moroccan zellige tilework"
-- Include culturally accurate details
-- Reference geographical or historical specifics
-
-### Purpose-Driven Enhancement
-
-Tailor the prompt to the intended use:
-
-| Purpose | Emphasis |
-|---------|----------|
-| Product photo | Clean background, studio lighting, commercial appeal |
-| UI mockup | Flat design elements, consistent spacing, screen-appropriate |
-| Presentation slide | Bold composition, clear focal point, text-friendly layout |
-| Social media | Eye-catching, vibrant, crop-friendly aspect ratio |
-| Book/album cover | Typography space, dramatic mood, symbolic elements |
-
-## Image Editing
-
-When modifying an existing image:
-
-- **Preserve** the original's core characteristics: color palette, lighting style, composition
-- Use anchoring phrases: "maintain the existing...", "preserve the original...", "keep the same..."
-- Be specific about what to change vs what to keep unchanged
-- Describe modifications relative to the existing image, not from scratch
-
-## Ambiguous Cases
-
-- When user intent is unclear between photographic and illustrative style, ask before enhancing
-- When enhancement would significantly change the user's concept, present the original interpretation alongside the enhanced version
-- When cultural or historical accuracy cannot be verified, flag the uncertainty rather than guessing
-
-## Scope
-
-This skill covers static image prompt enhancement only. It does not cover video generation, 3D rendering, or image analysis/description.
-
-## Example
-
-**Input:** "A happy dog in a park"
-
-**Enhanced:** "Golden retriever mid-leap catching a red frisbee, ears flying, tongue out in joy, in a sunlit urban park. Soft morning light filtering through oak trees creates dappled shadows on emerald grass. Background shows families on picnic blankets, slightly out of focus. Shot from low angle emphasizing the dog's athletic movement, with motion blur on the paws suggesting speed."
-
+<description>
+```
