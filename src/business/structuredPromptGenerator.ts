@@ -11,9 +11,9 @@ Decide in this order. A later step never works against an earlier one.
 
 1. Purpose: what the image is for, taken from the intended use or, when none is given, from the request itself (for example wrapping paper, an app icon, a picture-book page). The purpose sets how the picture is made: its medium, composition, tone, and level of finish.
 
-2. The user's requirements: keep every element the user specified unchanged, and make their intent explicit where the wording leaves it implicit. This clarifies what was asked; it does not add to it. Any text in the image consists only of information the user gave, in the language of the request.
+2. The user's requirements: keep every element the user specified unchanged, and make their intent explicit where the wording leaves it implicit. This clarifies what was asked; it does not add to it. The image's copy comes only from what the user gave, and the prompt has no placeholder for other copy, because the image model draws whatever the prompt describes.
 
-3. Completion: add only what the image still needs to work as a picture.`
+3. Completion: decide the presentation for the purpose.`
 
 const PRESENCE_INSTRUCTION = 'Describe what should be present rather than what should be absent.'
 
@@ -83,7 +83,7 @@ function buildCompletionMaterial(category?: ImageCategory): string {
 const INPUT_IMAGE_INSTRUCTION = `Input images are attached in order as Image 1, Image 2, and so on; refer to them by number, read their visual style, details, and atmosphere, and use each one the way the request asks. For an image the request asks to change, describe the modifications relative to it, preserve its core characteristics (color palette, lighting style, composition) outside the requested changes, and say what stays the same ("maintain the existing…", "keep the same…").`
 
 const OUTPUT_INSTRUCTION =
-  'Your reply is sent to the image model unchanged, so it contains only the prompt: one natural, flowing, unambiguous description rather than a structured list.'
+  'Your reply is sent to the image model unchanged, so it contains only the prompt: one natural, flowing, unambiguous description rather than a structured list. Write it in English; copy stays in its original language, exactly, in double quotes.'
 
 /**
  * The image model reads the enhanced prompt by the same priority the enhancer
@@ -91,10 +91,23 @@ const OUTPUT_INSTRUCTION =
  * dates and venues on posters).
  */
 const IMAGE_MODEL_DISCIPLINE =
-  'Draw the image this prompt describes. Its purpose sets the overall direction; everything it specifies stays as specified; anything you add only completes the picture and never works against the above. When it quotes text, the quoted text is all the text in the image.'
+  'This prompt already describes everything the image needs, written for its purpose. Draw only what it describes, and add no elements or text of its own.'
 
-function buildImagePrompt(description: string): string {
-  return `${IMAGE_MODEL_DISCIPLINE}\n\n${description.trim()}`
+/**
+ * Constraints the image model reads last, per kind of image. Only kinds with an
+ * observed failure have one: posters and similar graphics otherwise gain copy,
+ * dates, and venues the user never gave.
+ */
+const IMAGE_CONSTRAINTS: Partial<Record<ImageCategory, string>> = {
+  'graphic-design':
+    'The quoted copy is the only text: each piece exactly as written, once. No other text, logos, or watermarks.',
+}
+
+function buildImagePrompt(description: string, category?: ImageCategory): string {
+  const constraints = category ? IMAGE_CONSTRAINTS[category] : undefined
+  return [IMAGE_MODEL_DISCIPLINE, description.trim(), ...(constraints ? [constraints] : [])].join(
+    '\n\n'
+  )
 }
 
 const FEATURE_GUIDANCE: ReadonlyArray<readonly [keyof FeatureFlags, string]> = [
@@ -190,7 +203,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         return Err(result.error)
       }
 
-      return Ok(buildImagePrompt(result.data))
+      return Ok(buildImagePrompt(result.data, category))
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
 

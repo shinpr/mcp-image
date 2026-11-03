@@ -31,10 +31,34 @@ describe('StructuredPromptGenerator', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toBe(
-          `Draw the image this prompt describes. Its purpose sets the overall direction; everything it specifies stays as specified; anything you add only completes the picture and never works against the above. When it quotes text, the quoted text is all the text in the image.\n\n${structuredPrompt}`
+          `This prompt already describes everything the image needs, written for its purpose. Draw only what it describes, and add no elements or text of its own.\n\n${structuredPrompt}`
         )
       }
     })
+
+    it.each([
+      [
+        'graphic-design',
+        'with its constraints',
+        'A study session poster\n\nThe quoted copy is the only text: each piece exactly as written, once. No other text, logos, or watermarks.',
+      ],
+      ['photo', 'unchanged, since photos have none', 'A study session poster'],
+    ] as const)(
+      'ends a %s image prompt with the description %s',
+      async (category, _reason, expectedEnding) => {
+        const generator = createGenerator()
+        vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('A study session poster'))
+
+        const result = await generator.generateStructuredPrompt('A poster for our study session', {
+          category,
+        })
+
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.endsWith(expectedEnding)).toBe(true)
+        }
+      }
+    )
 
     it('uses the configured prompt-generation token limit', async () => {
       const generator = createGenerator(384)
