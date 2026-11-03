@@ -61,16 +61,16 @@
     "check:all": "pnpm run check && pnpm run check:deps && pnpm run check:unused && pnpm run build && pnpm run test"
   },
   "dependencies": {
-    "@google/genai": "^2.30.0",
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "openai": "^7.34.0"
+    "@google/genai": "^2.31.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "openai": "^7.45.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.3",
     "@types/node": "^22.20.5",
     "dpdm": "^4.3.0",
     "husky": "^9.1.7",
-    "knip": "^6.41.0",
+    "knip": "^6.43.0",
     "lint-staged": "^17.6.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
