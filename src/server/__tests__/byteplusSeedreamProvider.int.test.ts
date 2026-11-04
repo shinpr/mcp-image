@@ -589,8 +589,9 @@ async function assertSavedPng(
     metadata: {
       model: expectedModel,
       provider: 'seedream',
-      processingTime: 0,
-      contextMethod: 'structured_prompt',
+      processingTime: expect.any(Number),
+      // Each contextMethod value is owned by requestBoundaries.int.test.ts.
+      contextMethod: expect.any(String),
       timestamp: expect.any(String),
     },
   })

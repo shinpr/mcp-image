@@ -216,5 +216,34 @@ describe('StructuredPromptGenerator', () => {
         expect.any(Object)
       )
     })
+
+    it('should state the category as the kind of image the user asks for', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('A storybook illustration'))
+
+      await generator.generateStructuredPrompt('A child in a banana costume for Halloween', {
+        category: 'illustration',
+        purpose: 'picture book page',
+      })
+
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'A child in a banana costume for Halloween\n"""\n\nKind of image the user asks for: an illustration or artwork\n\nIntended use: picture book page'
+        ),
+        expect.any(Object)
+      )
+    })
+
+    it('should not state a kind of image when category is not provided', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('A child in a costume'))
+
+      await generator.generateStructuredPrompt('A child in a banana costume for Halloween')
+
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.not.stringContaining('Kind of image'),
+        expect.any(Object)
+      )
+    })
   })
 })

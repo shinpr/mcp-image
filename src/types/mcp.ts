@@ -80,6 +80,12 @@ export interface McpToolResponse {
   isError?: boolean
 }
 
+/**
+ * Which prompt the image model received: the enhanced prompt, the caller's prompt after
+ * enhancement failed, or the caller's prompt with enhancement turned off.
+ */
+export type PromptContextMethod = 'structured_prompt' | 'original_prompt' | 'skipped'
+
 export interface ResourceContent {
   type: 'resource'
   resource: {
@@ -90,8 +96,9 @@ export interface ResourceContent {
   metadata: {
     model: string
     provider?: string
+    /** Milliseconds from receiving the request to saving the image. */
     processingTime: number
-    contextMethod: string
+    contextMethod: PromptContextMethod
     timestamp: string
   }
 }

@@ -16,11 +16,13 @@ describe('ResponseBuilder', () => {
   })
 
   describe('buildSuccessResponse', () => {
+    const report = { processingTime: 1234, contextMethod: 'original_prompt' } as const
+
     it('should create file URI structured content response when filePath is provided', () => {
       const generationResult = makeGenerationResult('image/png')
       const testFilePath = '/path/to/generated-image.png'
 
-      const response = responseBuilder.buildSuccessResponse(generationResult, testFilePath)
+      const response = responseBuilder.buildSuccessResponse(generationResult, testFilePath, report)
 
       expect(response.isError).toBe(false)
       expect(response.content).toHaveLength(1)
@@ -33,8 +35,8 @@ describe('ResponseBuilder', () => {
       expect(contentData.resource.mimeType).toBe('image/png')
       expect(contentData.metadata).toEqual({
         model: generationResult.metadata.model,
-        processingTime: 0,
-        contextMethod: 'structured_prompt',
+        processingTime: 1234,
+        contextMethod: 'original_prompt',
         timestamp: generationResult.metadata.timestamp.toISOString(),
       })
     })
@@ -46,7 +48,8 @@ describe('ResponseBuilder', () => {
     ])('resolves metadata MIME %s and path %s to %s', (metadataMime, filePath, expectedMime) => {
       const response = responseBuilder.buildSuccessResponse(
         makeGenerationResult(metadataMime),
-        filePath
+        filePath,
+        report
       )
       const contentData = JSON.parse(response.content[0].text)
       expect(contentData.resource.mimeType).toBe(expectedMime)
