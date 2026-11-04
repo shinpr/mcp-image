@@ -189,6 +189,7 @@ describe('request and output boundaries', () => {
   afterEach(async () => {
     await client.close()
     await server.close()
+    vi.useRealTimers()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
     vi.unstubAllEnvs()
@@ -332,6 +333,57 @@ describe('request and output boundaries', () => {
     const textRequest = JSON.stringify(serializedBody(expectDefined(apiCalls()[0], 'text request')))
     expect(textRequest).toContain('The image is an app or web interface screen')
     expect(textRequest).not.toContain('Photography:')
+  })
+
+  it.each([
+    {
+      condition: 'enhancement succeeds',
+      skip: 'false',
+      enhancement: textResponse,
+      contextMethod: 'structured_prompt',
+    },
+    {
+      condition: 'enhancement is truncated',
+      skip: 'false',
+      enhancement: truncatedTextResponse,
+      contextMethod: 'original_prompt',
+    },
+    {
+      condition: 'enhancement is turned off',
+      skip: 'true',
+      enhancement: undefined,
+      contextMethod: 'skipped',
+    },
+  ] as const)(
+    'reports $contextMethod as the context method when $condition',
+    async ({ skip, enhancement, contextMethod }) => {
+      vi.stubEnv('SKIP_PROMPT_ENHANCEMENT', skip)
+      serveProvider('gemini', enhancement)
+
+      const result = await client.callTool({
+        name: 'generate_image',
+        arguments: { provider: 'gemini', prompt: 'a lighthouse at dusk' },
+      })
+
+      expect(result.isError).toBe(false)
+      expect(readPath(parseToolPayload(result), 'metadata', 'contextMethod')).toBe(contextMethod)
+    }
+  )
+
+  it('reports the milliseconds from request to saved image as the processing time', async () => {
+    vi.useFakeTimers({ toFake: ['performance'] })
+    fetchMock.mockReset().mockImplementation(async () => {
+      vi.advanceTimersByTime(1500)
+      return imageResponse('gemini')
+    })
+
+    const result = await client.callTool({
+      name: 'generate_image',
+      arguments: { provider: 'gemini', prompt: 'a lighthouse at dusk' },
+    })
+
+    expect(result.isError).toBe(false)
+    expect(readPath(parseToolPayload(result), 'metadata', 'processingTime')).toBe(1500)
   })
 
   it.each(PROVIDERS)(

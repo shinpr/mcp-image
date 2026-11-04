@@ -23,6 +23,7 @@ import type {
   ImageProvider,
   MCPServerConfig,
   McpToolResponse,
+  PromptContextMethod,
 } from '../types/mcp.js'
 import {
   ASPECT_RATIO_VALUES,
@@ -74,6 +75,11 @@ interface ProviderClients {
 }
 
 type ImageOptions = Omit<ImageApiParams, 'prompt'>
+
+interface ImagePrompt {
+  prompt: string
+  contextMethod: PromptContextMethod
+}
 
 /** Assemble the provider-facing image options from validated request params. */
 function buildImageOptions(
@@ -153,14 +159,14 @@ export class MCPServerImpl {
         {
           name: 'generate_image',
           description:
-            'Generate a new image from a text prompt or edit and combine reference images using inputImagePaths. Saves the result and returns a file resource.',
+            "Generate a new image from a text prompt or edit and combine reference images using inputImagePaths. Saves the result and returns a file resource. Prompt enhancement expands these arguments into the final image prompt without seeing the conversation, filling in the details they leave open, so pass the user's intent as they gave it; anything you add is expanded too. When a guess at the image's purpose or style would likely miss what the user needs, ask them first.",
           inputSchema: {
             type: 'object' as const,
             properties: {
               prompt: {
                 type: 'string' as const,
                 description:
-                  'Describe the image to generate or the edit to apply, in English. Keep any text that should appear in the image in its original language, in quotes. Details the user left open can stay open.',
+                  "The user's request, in English. Put text that should appear in the image in quotes, exactly and in its original language; no other text is added.",
               },
               fileName: {
                 type: 'string' as const,
@@ -210,7 +216,7 @@ export class MCPServerImpl {
               purpose: {
                 type: 'string' as const,
                 description:
-                  "Describe the image's intended use, such as a cookbook cover, social media post, or presentation slide, so prompt enhancement can adapt composition and detail.",
+                  'What the image is for, such as a cookbook cover, social media post, or presentation slide. Prompt enhancement decides the medium, composition, tone, and finish from it, so set it whenever the user has stated or implied it.',
               },
               category: {
                 type: 'string' as const,
@@ -298,7 +304,7 @@ export class MCPServerImpl {
     generator: StructuredPromptGenerator,
     params: GenerateImageParams,
     context: { inputImages: ReferenceImage[]; signal?: AbortSignal }
-  ): Promise<string> {
+  ): Promise<ImagePrompt> {
     const promptResult = await generator.generateStructuredPrompt(params.prompt, {
       features: buildFeatureFlags(params),
       ...(context.inputImages.length > 0 && { inputImages: context.inputImages }),
@@ -312,14 +318,14 @@ export class MCPServerImpl {
       this.logger.warn('mcp-server', 'Using original prompt', {
         error: promptResult.error.message,
       })
-      return params.prompt
+      return { prompt: params.prompt, contextMethod: 'original_prompt' }
     }
 
     this.logger.info('mcp-server', 'Structured prompt generated', {
       originalLength: params.prompt.length,
       structuredLength: promptResult.data.length,
     })
-    return promptResult.data
+    return { prompt: promptResult.data, contextMethod: 'structured_prompt' }
   }
 
   private async handleGenerateImage(args: unknown, signal?: AbortSignal): Promise<McpToolResponse> {
@@ -341,6 +347,7 @@ export class MCPServerImpl {
    * the caller's error boundary, so a failed step throws.
    */
   private async generateImage(args: unknown, signal?: AbortSignal): Promise<McpToolResponse> {
+    const startedAt = performance.now()
     signal?.throwIfAborted()
     const params = unwrapOrThrow(validateGenerateImageParams(args))
 
@@ -393,18 +400,19 @@ export class MCPServerImpl {
     provider.validateImageOptions?.(imageOptions, config)
     signal?.throwIfAborted()
 
-    let structuredPrompt = params.prompt
-    if (!config.skipPromptEnhancement && structuredPromptGenerator) {
-      structuredPrompt = await this.enhancePrompt(structuredPromptGenerator, params, {
-        inputImages,
-        ...(signal !== undefined && { signal }),
-      })
-    } else if (config.skipPromptEnhancement) {
+    if (config.skipPromptEnhancement) {
       this.logger.info('mcp-server', 'Prompt enhancement skipped (SKIP_PROMPT_ENHANCEMENT=true)')
     }
+    const imagePrompt: ImagePrompt =
+      !config.skipPromptEnhancement && structuredPromptGenerator
+        ? await this.enhancePrompt(structuredPromptGenerator, params, {
+            inputImages,
+            ...(signal !== undefined && { signal }),
+          })
+        : { prompt: params.prompt, contextMethod: 'skipped' }
 
     const generationResult = await imageClient.generateImage({
-      prompt: structuredPrompt,
+      prompt: imagePrompt.prompt,
       ...imageOptions,
       ...(signal && { signal }),
     })
@@ -433,7 +441,10 @@ export class MCPServerImpl {
     const sanitizedPath = unwrapOrThrow(this.securityManager.sanitizeFilePath(outputPath))
     const savedPath = unwrapOrThrow(await saveImage(generatedImage.imageData, sanitizedPath))
 
-    return buildSuccessResponse(generatedImage, savedPath)
+    return buildSuccessResponse(generatedImage, savedPath, {
+      processingTime: Math.round(performance.now() - startedAt),
+      contextMethod: imagePrompt.contextMethod,
+    })
   }
 
   public initialize(): Server {

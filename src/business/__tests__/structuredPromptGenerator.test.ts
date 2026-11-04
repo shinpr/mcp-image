@@ -216,5 +216,34 @@ describe('StructuredPromptGenerator', () => {
         expect.any(Object)
       )
     })
+
+    it('should state the category as the kind of image the user asks for', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A lighthouse on a rocky coast', {
+        category: 'illustration',
+        purpose: 'travel brochure cover',
+      })
+
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'A lighthouse on a rocky coast\n"""\n\nKind of image the user asks for: an illustration or artwork\n\nIntended use: travel brochure cover'
+        ),
+        expect.any(Object)
+      )
+    })
+
+    it('should not state a kind of image when category is not provided', async () => {
+      const generator = createGenerator()
+      vi.mocked(mockGeminiTextClient.generateText).mockResolvedValue(Ok('Enhanced prompt'))
+
+      await generator.generateStructuredPrompt('A lighthouse on a rocky coast')
+
+      expect(mockGeminiTextClient.generateText).toHaveBeenCalledWith(
+        expect.not.stringContaining('Kind of image'),
+        expect.any(Object)
+      )
+    })
   })
 })

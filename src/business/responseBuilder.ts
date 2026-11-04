@@ -98,7 +98,8 @@ function convertErrorToStructured(
 
 export function buildSuccessResponse(
   generationResult: GeneratedImageResult,
-  filePath: string
+  filePath: string,
+  report: Pick<ResourceContent['metadata'], 'processingTime' | 'contextMethod'>
 ): McpToolResponse {
   const mimeType = resolveMimeType(generationResult.metadata.mimeType, filePath)
   const fileName = path.basename(filePath)
@@ -115,8 +116,8 @@ export function buildSuccessResponse(
       ...(generationResult.metadata.provider && {
         provider: generationResult.metadata.provider,
       }),
-      processingTime: 0,
-      contextMethod: 'structured_prompt',
+      processingTime: report.processingTime,
+      contextMethod: report.contextMethod,
       timestamp: generationResult.metadata.timestamp.toISOString(),
     },
   }

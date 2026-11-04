@@ -22,7 +22,10 @@ const SCENE_MATERIAL = [
   'Context: setting, background, spatial relationships (foreground, midground, background); time of day, weather, atmospheric conditions; mood shown through visible cues (serene → soft diffused light, muted palette; ominous → low contrast, heavy shadows)',
 ] as const
 
-/** Completion material per kind of image; `kind` completes "The image is …" and "For …". */
+/**
+ * Completion material per kind of image; `kind` completes "The image is …" and "For …"
+ * in the system instruction, and "Kind of image the user asks for: …" in the request.
+ */
 const CATEGORY_MATERIAL: Record<ImageCategory, { kind: string; material: readonly string[] }> = {
   photo: {
     kind: 'a photograph',
@@ -159,13 +162,26 @@ function buildSystemInstruction(hasInputImages: boolean, category?: ImageCategor
   ].join('\n\n')
 }
 
-function buildRequest(userPrompt: string, features: FeatureFlags, purpose?: string): string {
+/**
+ * The kind of image travels with the request so that the purpose and the user's
+ * requirements are read with it; in the completion material alone it loses to a
+ * purpose inferred from the request.
+ */
+function buildRequest(
+  userPrompt: string,
+  {
+    features,
+    purpose,
+    category,
+  }: { features: FeatureFlags; purpose?: string | undefined; category?: ImageCategory | undefined }
+): string {
   const featureLines = FEATURE_GUIDANCE.filter(([feature]) => features[feature]).map(
     ([, guidance]) => `- ${guidance}`
   )
 
   return [
     `Request:\n"""\n${userPrompt}\n"""`,
+    ...(category ? [`Kind of image the user asks for: ${CATEGORY_MATERIAL[category].kind}`] : []),
     ...(purpose ? [`Intended use: ${purpose}`] : []),
     ...(featureLines.length > 0 ? [`Also reflect:\n${featureLines.join('\n')}`] : []),
   ].join('\n\n')
@@ -195,7 +211,7 @@ export class StructuredPromptGeneratorImpl implements StructuredPromptGenerator 
         ...(inputImages.length > 0 && { inputImages }),
       }
       const result = await this.textClient.generateText(
-        buildRequest(userPrompt, features, purpose),
+        buildRequest(userPrompt, { features, purpose, category }),
         config
       )
 
