@@ -64,7 +64,7 @@ describe('openaiImageClient', () => {
   })
 
   describe('OpenAIImageClient.generateImage', () => {
-    it('should generate image successfully with gpt-image-2.5-flare', async () => {
+    it('should generate image successfully with gpt-image-2.6-flare', async () => {
       mockGenerate.mockResolvedValue({
         data: [
           {
@@ -85,7 +85,7 @@ describe('openaiImageClient', () => {
 
       expect(result.success).toBe(true)
       expect(expectDefined(mockGenerate.mock.calls[0], 'images.generate call')[0]).toEqual({
-        model: 'gpt-image-2.5-flare',
+        model: 'gpt-image-2.6-flare',
         prompt: 'Generate a beautiful landscape',
         n: 1,
         output_format: 'png',
@@ -94,7 +94,7 @@ describe('openaiImageClient', () => {
       })
       if (result.success) {
         expect(result.data.imageData).toEqual(PNG_BYTES)
-        expect(result.data.metadata.model).toBe('gpt-image-2.5-flare')
+        expect(result.data.metadata.model).toBe('gpt-image-2.6-flare')
         expect(result.data.metadata.provider).toBe('openai')
         expect(result.data.metadata.prompt).toBe('Generate a beautiful landscape')
         expect(result.data.metadata.mimeType).toBe('image/png')
@@ -146,21 +146,21 @@ describe('openaiImageClient', () => {
     describe.each([
       {
         preset: 'fast',
-        model: 'gpt-image-2.5-flare',
+        model: 'gpt-image-2.6-flare',
         quality: 'low',
-        configured: { preset: 'quality', model: 'gpt-image-2.5-sunburst', quality: 'max' },
+        configured: { preset: 'quality', model: 'gpt-image-2.6-sunburst', quality: 'max' },
       },
       {
         preset: 'balanced',
-        model: 'gpt-image-2.5-flare',
+        model: 'gpt-image-2.6-flare',
         quality: 'high',
-        configured: { preset: 'quality', model: 'gpt-image-2.5-sunburst', quality: 'max' },
+        configured: { preset: 'quality', model: 'gpt-image-2.6-sunburst', quality: 'max' },
       },
       {
         preset: 'quality',
-        model: 'gpt-image-2.5-sunburst',
+        model: 'gpt-image-2.6-sunburst',
         quality: 'max',
-        configured: { preset: 'fast', model: 'gpt-image-2.5-flare', quality: 'low' },
+        configured: { preset: 'fast', model: 'gpt-image-2.6-flare', quality: 'low' },
       },
     ] as const)('$preset preset', ({ preset, model, quality, configured }) => {
       it.each([

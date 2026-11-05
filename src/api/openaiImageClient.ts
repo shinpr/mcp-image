@@ -21,9 +21,9 @@ import { validateInputImages } from './inputImages.js'
 
 type OpenAIImageSize = `${number}x${number}`
 type OpenAIImageQuality = 'low' | 'high' | 'max'
-// GPT Image 2.5 supports flexible resolutions and max quality, while SDK types
+// GPT Image 2.6 supports flexible resolutions and max quality, while SDK types
 // still enumerate older sizes and quality settings. Keep this compatibility
-// boundary local: OpenAIImagesApi accepts SDK requests plus the documented 2.5 variant.
+// boundary local: OpenAIImagesApi accepts SDK requests plus the documented 2.6 variant.
 type OpenAIImageGenerateRequest = Omit<ImageGenerateParamsNonStreaming, 'size' | 'quality'> & {
   size: OpenAIImageSize
   quality: OpenAIImageQuality
@@ -69,7 +69,7 @@ function mapSize(params: ImageApiParams): OpenAIImageSize {
   const [width = 1, height = 1] = (params.aspectRatio ?? '1:1').split(':').map(Number)
   const ratio = Math.max(width, height) / Math.min(width, height)
   const requestedEdge = requestedLongEdge(params.imageSize, ratio)
-  // GPT Image 2.5: 16px increments, at most 3840px per edge and 8,294,400 pixels.
+  // GPT Image 2.6: 16px increments, at most 3840px per edge and 8,294,400 pixels.
   // Flooring keeps the pixel cap intact even for near-square 4K requests.
   const longEdge = Math.floor(Math.min(requestedEdge, Math.sqrt(8_294_400 * ratio)) / 16) * 16
   const shortEdge = Math.floor(longEdge / ratio / 16) * 16
@@ -88,8 +88,8 @@ function mimeTypeToExtension(mimeType: string): string {
 }
 
 const OPENAI_IMAGE_MODELS = {
-  FLARE: 'gpt-image-2.5-flare',
-  SUNBURST: 'gpt-image-2.5-sunburst',
+  FLARE: 'gpt-image-2.6-flare',
+  SUNBURST: 'gpt-image-2.6-sunburst',
 } as const
 
 export function validateOpenAIOptions(
@@ -268,7 +268,7 @@ class OpenAIImageClientImpl implements ImageClient {
     }
 
     if (lowerMessage.includes('model') || lowerMessage.includes('not found')) {
-      return 'Verify your OpenAI organization has access to GPT Image 2.5 and has completed verification (https://platform.openai.com/settings/organization/general)'
+      return 'Verify your OpenAI organization has access to GPT Image 2.6 and has completed verification (https://platform.openai.com/settings/organization/general)'
     }
 
     if (lowerMessage.includes('forbidden') || lowerMessage.includes('permission')) {
