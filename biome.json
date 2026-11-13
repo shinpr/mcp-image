@@ -38,6 +38,12 @@
       },
       "suspicious": {
         "noExplicitAny": "error",
+        "noImportCycles": {
+          "level": "error",
+          "options": {
+            "ignoreTypes": false
+          }
+        },
         "noUnnecessaryConditions": "error",
         "noShadow": "error",
         "noEvolvingTypes": "error",
