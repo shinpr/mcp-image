@@ -11,7 +11,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "complexity": {
         "useLiteralKeys": "off",
         "noVoid": "error",
@@ -38,6 +38,12 @@
       },
       "suspicious": {
         "noExplicitAny": "error",
+        "noImportCycles": {
+          "level": "error",
+          "options": {
+            "ignoreTypes": false
+          }
+        },
         "noUnnecessaryConditions": "error",
         "noShadow": "error",
         "noEvolvingTypes": "error",
